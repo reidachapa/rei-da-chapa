@@ -556,8 +556,8 @@
     <button class="tab ativo" data-tab="vendas">🧾 PDV</button>
     <button class="tab" data-tab="pedidos">📋 <span id="tabBadge" class="tab-badge" style="display:none">0</span></button>
     <button class="tab" data-tab="clientes">👥</button>
-    <button class="tab" data-tab="estoque">📦</button>
-    <button class="tab" data-tab="ingredientes">🥗</button>
+    <button class="tab escondido" data-tab="estoque" id="tabEstoque">📦</button>
+    <button class="tab escondido" data-tab="ingredientes" id="tabIngredientes">🥗</button>
     <button class="tab escondido" data-tab="hist" id="tabHist">📜 Histórico</button>
     <button class="tab escondido" data-tab="dre" id="tabDre">📊 DRE</button>
   </nav>
@@ -880,7 +880,7 @@
 
 <div id="toast"></div>
 
-<script>const SUPABASE_URL = 'https://etzbidgbyntiddtsarln.supabase.co';
+<script>const SUPABASE_URL = 'https://etzbidgbyntiidtsarln.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emJpZGdieW50aWlkdHNhcmxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3Mzc0ODEsImV4cCI6MjEwNjMxMzQ4MX0.HlDpYLJQymY3ELHciWDGbIKHEuztT78SVlByXZrdaC0';
 
 var CHAVE='burgercontrol_v24_reidachapa_l1';
@@ -1008,7 +1008,9 @@ let toastTimer;
 window.toast=function(msg){const el=$('#toast');el.textContent=msg;el.classList.add('mostrar');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('mostrar'),2400)};
 const toast=window.toast;
 
-function aplicarRole(){const ehGer=souGerente();const tabDre=$('#tabDre'),tabHist=$('#tabHist');if(ehGer){tabDre.classList.remove('escondido');tabHist.classList.remove('escondido');}else{tabDre.classList.add('escondido');tabHist.classList.add('escondido');}$('#roleBadge').style.display=ehGer?'inline-block':'none';$('#fabBackup').style.display=ehGer?'flex':'none';const bloq=!ehGer;const avisoEsq=$('#avisoEstoqueBloq'),avisoIng=$('#avisoIngBloq');if(bloq){if(avisoEsq){avisoEsq.textContent='🔒 Somente o gerente pode alterar o estoque';avisoEsq.style.display='block'}if(avisoIng){avisoIng.textContent='🔒 Somente o gerente pode alterar os ingredientes';avisoIng.style.display='block'}}else{if(avisoEsq)avisoEsq.style.display='none';if(avisoIng)avisoIng.style.display='none'}$$('#formProduto input, #formProduto select, #formProduto button').forEach(el=>el.disabled=bloq);$$('#formIngrediente input, #formIngrediente select, #formIngrediente button').forEach(el=>el.disabled=bloq);$('#formProduto').style.opacity=bloq?'.55':'1';$('#formIngrediente').style.opacity=bloq?'.55':'1';renderPaes();renderEstoque();renderIngredientes()}
+function aplicarRole(){const ehGer=souGerente();const tabDre=$('#tabDre'),tabHist=$('#tabHist');const tabEst=$('#tabEstoque'),tabIng=$('#tabIngredientes');
+if(ehGer){tabDre.classList.remove('escondido');tabHist.classList.remove('escondido');if(tabEst)tabEst.classList.remove('escondido');if(tabIng)tabIng.classList.remove('escondido');}
+else{tabDre.classList.add('escondido');tabHist.classList.add('escondido');if(tabEst)tabEst.classList.add('escondido');if(tabIng)tabIng.classList.add('escondido');}$('#roleBadge').style.display=ehGer?'inline-block':'none';$('#fabBackup').style.display=ehGer?'flex':'none';const bloq=!ehGer;const avisoEsq=$('#avisoEstoqueBloq'),avisoIng=$('#avisoIngBloq');if(bloq){if(avisoEsq){avisoEsq.textContent='🔒 Somente o gerente pode alterar o estoque';avisoEsq.style.display='block'}if(avisoIng){avisoIng.textContent='🔒 Somente o gerente pode alterar os ingredientes';avisoIng.style.display='block'}}else{if(avisoEsq)avisoEsq.style.display='none';if(avisoIng)avisoIng.style.display='none'}$$('#formProduto input, #formProduto select, #formProduto button').forEach(el=>el.disabled=bloq);$$('#formIngrediente input, #formIngrediente select, #formIngrediente button').forEach(el=>el.disabled=bloq);$('#formProduto').style.opacity=bloq?'.55':'1';$('#formIngrediente').style.opacity=bloq?'.55':'1';renderPaes();renderEstoque();renderIngredientes()}
 
 $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{const t=tab.dataset.tab;if((t==='dre'||t==='hist')&&!souGerente())return toast('🔒 Só o gerente acessa');$$('.tab').forEach(x=>x.classList.remove('ativo'));$$('.view').forEach(v=>v.classList.remove('ativo'));tab.classList.add('ativo');$('#view-'+t).classList.add('ativo');if(t==='vendas')renderVendas();if(t==='pedidos'){renderPedidos();setTimeout(injetarBotoesImprimir,100)}if(t==='clientes')renderClientes();if(t==='estoque'){renderPaes();renderEstoque();popularSelectPaes();setTimeout(injetarBotaoNovoPao,100)}if(t==='ingredientes')renderIngredientes();if(t==='dre')renderDRE();if(t==='hist')renderHistorico()}));
 $('#roleSelect').addEventListener('change',e=>{const novo=e.target.value;if(novo==='gerente'){abrirModalSenha(()=>{role='gerente';aplicarRole();toast('👑 Bem-vindo, Gerente!')},()=>{$('#roleSelect').value=role})}else{role=novo;aplicarRole()}});
