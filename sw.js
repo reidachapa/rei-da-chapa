@@ -1,4 +1,4 @@
-const CACHE = 'rei-da-chapa';
+const CACHE = 'rei-da-chapa-v2';
 
 self.addEventListener('install', e => {
   self.skipWaiting();
