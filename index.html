@@ -2761,7 +2761,29 @@ window.Notificacoes = {permissao: 'default',async pedirPermissao(){if(!('Notific
 (function hookNovoPedido(){const _orig = window.renderPedidos;if(typeof _orig === 'function'){let _ultimoCount = Array.isArray(pedidos) ? pedidos.length : 0;window.renderPedidos = function(){_orig.apply(this, arguments);const atual = Array.isArray(pedidos) ? pedidos.length : 0;if(atual > _ultimoCount){const novo = pedidos[pedidos.length - 1];if(novo && novo.numero && novo.status === 'recebido'){ setTimeout(() => Notificacoes.novoPedido(novo), 200); }}_ultimoCount = atual;};}})();
 setTimeout(async () => { await Notificacoes.pedirPermissao(); }, 3000);
 
-if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').then(reg=>{setInterval(()=>{reg.update()},30000)}).catch(err=>console.log('SW opcional'))});}
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      setInterval(() => { reg.update(); }, 10000);
+      
+      reg.addEventListener('updatefound', () => {
+        const newWorker = reg.installing;
+        newWorker.addEventListener('statechange', () => {
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            window.location.reload();
+          }
+        });
+      });
+    }).catch(err => console.log('SW erro:', err));
+
+    let refreshing;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      window.location.reload();
+      refreshing = true;
+    });
+  });
+}
 let _promptInstalacao = null;
 window.addEventListener('beforeinstallprompt', (e) => {e.preventDefault();_promptInstalacao = e;setTimeout(() => mostrarBotaoInstalar(), 5000);});
 function mostrarBotaoInstalar(){if(!_promptInstalacao) return;if(localStorage.getItem('pwa_instalado') === 'sim') return;if(document.getElementById('btnInstalarPwa')) return;const btn = document.createElement('button');btn.id = 'btnInstalarPwa';btn.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:999;background:linear-gradient(180deg,#d4a23c,#8a6a1e);color:#1a1206;border:0;border-radius:12px;padding:14px 24px;font-weight:800;font-family:inherit;font-size:13px;cursor:pointer;box-shadow:0 8px 30px rgba(0,0,0,.6);text-transform:uppercase;letter-spacing:.5px';
