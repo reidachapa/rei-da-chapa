@@ -193,6 +193,10 @@
   .cliente-info{display:flex;flex-direction:column;gap:3px;min-width:0}
   .cliente-info strong{font-size:14px}
   .cliente-info small{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .cliente-resumo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:3px 8px;margin-top:3px;font-size:10px;line-height:1.35;color:var(--muted)}
+  .cliente-resumo span{min-width:0;overflow-wrap:anywhere}
+  .cliente-resumo b{color:var(--txt);font-weight:700}
+  .analise-preco{background:#171719;border:1px solid var(--iron-5);border-radius:10px;padding:10px;font-size:12px;line-height:1.6;margin-top:6px}.analise-preco b{color:var(--gold-2)}
   .cliente-acoes{display:flex;gap:5px;flex-wrap:wrap}
   .cliente-acoes button{background:linear-gradient(180deg,#2a2a2e,#1a1a1c);border:1px solid var(--iron-5);color:var(--txt);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;padding:8px 11px;font-weight:700;min-height:38px}
   .stat-clientes{background:linear-gradient(180deg,#181819,#121213);border:1px solid var(--iron-5);border-radius:10px;padding:10px 14px;font-size:12px;color:var(--muted);margin-bottom:12px}
@@ -878,14 +882,14 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
       <div>
         <div class="stat-clientes">Total: <b id="statTotalClientes">0</b> · Próximo N°: <b id="statProximoCliente">001</b></div>
         <div class="barra-topo"><input id="buscaCliente" class="busca" placeholder="🔎 Buscar..."></div>
-        <div id="listaClientes" class="lista-clientes"></div>
+        <div id="listaTopClientesGasto"></div><div id="listaClientes" class="lista-clientes"></div>
       </div>
     </div>
   </section>
   <section id="view-estoque" class="view">
   <div style="padding:10px 14px 0;color:var(--muted);font-size:12px">Novos produtos são cadastrados ao lançar uma compra. Use Editar aqui para ajustar os dados do produto.</div>
   <div style="padding: 14px 14px 0;">
-    <button type="button" id="btnRevisarEstoque" style="background:linear-gradient(180deg,#a06ee5,#6b44a8);color:#fff;border:0;border-radius:10px;padding:11px 16px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.3px;min-height:44px">🔧 Revisar estoque (mover itens)</button>
+    <button type="button" id="btnLancarHamburguer" class="btn-primario" style="min-height:44px">🍔 Lançar hambúrguer</button><button type="button" id="btnRevisarEstoque" style="background:linear-gradient(180deg,#a06ee5,#6b44a8);color:#fff;border:0;border-radius:10px;padding:11px 16px;font-family:inherit;font-weight:800;font-size:12px;cursor:pointer;text-transform:uppercase;letter-spacing:.3px;min-height:44px">🔧 Revisar estoque (mover itens)</button>
   </div>
     <div class="estoque-wrap">
             <form id="formProduto" class="form-produto">
@@ -897,10 +901,10 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
         <div class="campo" id="campoPao"><label>🥖 Pão padrão</label><select id="inpPao"></select></div>
         <div class="campo" id="campoIngredientes" style="display:none"><label>🥗 Ingredientes com quantidade</label><div class="aviso-tipo" style="margin-bottom:6px">Ajuste a quantidade de cada ingrediente que vai no lanche.</div><div class="lista-stepper" id="gridIngredientesProduto"></div></div>
         <div class="dupla">
-          <div class="campo"><label>Preço venda (R$)</label><input id="inpPreco" type="text" inputmode="numeric" placeholder="0,00" required></div>
+          <div class="campo"><label>Preço de venda manual (não muda ao lançar nota)</label><input id="inpPreco" type="text" inputmode="numeric" placeholder="0,00" required></div>
           <div class="campo" id="campoEstoque" style="display:none"><label>Estoque</label><input id="inpQtd" type="number" min="0" step="1"></div>
         </div>
-        <div class="campo"><label>Custo (R$) — pra DRE</label><input id="inpCusto" type="text" inputmode="numeric" placeholder="0,00"></div>
+        <div class="campo"><label>Custo unitário (média ponderada)</label><input id="inpCusto" type="text" inputmode="numeric" placeholder="0,00"></div><button type="button" id="btnVerAnalisePreco" class="btn-fantasma" style="width:100%;margin:6px 0">📊 Analisar custo, margem e preço</button><div id="analisePrecoProduto" class="analise-preco" style="display:none"></div>
         <label class="check-linha"><input type="checkbox" id="inpPromo"><span>🔥 Em PROMOÇÃO</span></label>
         <label class="check-linha" style="border-color:rgba(77,157,229,.4)"><input type="checkbox" id="inpBebida"><span>🥤 Bebida (pula direto pra pronto)</span></label>
         <div class="campo" id="campoPrecoAntigo" style="display:none"><label>Preço antigo</label><input id="inpPrecoAntigo" type="text" inputmode="numeric" placeholder="0,00"></div>
@@ -912,7 +916,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
         <h3 class="section-titulo">🥖 Estoque de Pães</h3>
         <div id="listaPaes" class="lista-paes"></div>
         <h3 class="section-titulo">🍔 Produtos</h3>
-        <div id="listaEstoque" class="lista-estoque"></div>
+        <input id="buscaEstoqueProdutos" type="search" placeholder="🔎 Buscar produto no estoque" style="width:100%;margin:8px 0"><div id="listaEstoque" class="lista-estoque"></div>
       </div>
     </div>
   </section>
@@ -1380,7 +1384,8 @@ function parseChave(chave){const partes=chave.split('|');const produtoId=partes[
 function getItemCarrinho(chave){const p=parseChave(chave);const prod=produtos.find(x=>x.id===p.produtoId);if(!prod)return null;return{produto:prod,paoId:p.paoId,pao:p.paoId?getPao(p.paoId):null,ings:p.ings,chave}}
 function calcularDiferencas(produto,ingsFinais){const base=produto.ingredientes||{};const adicionados=[],removidos=[];const todos=new Set([...Object.keys(base),...Object.keys(ingsFinais||{})]);todos.forEach(id=>{const b=base[id]||0;const f=(ingsFinais||{})[id]||0;const ing=getIng(id);if(!ing)return;if(f>b)adicionados.push({id,nome:ing.nome,icone:ing.icone||'🍴',qtd:f-b,precoExtra:ing.precoExtra||0});else if(f<b)removidos.push({id,nome:ing.nome,icone:ing.icone||'🍴',qtd:b-f})});return{adicionados,removidos}}
 function precoExtraItem(produto,ingsFinais){const{adicionados}=calcularDiferencas(produto,ingsFinais);return adicionados.reduce((s,a)=>s+a.qtd*(a.precoExtra||0),0)}
-function custoItem(produto,ingsFinais){if(produto.pao||(produto.ingredientes&&Object.keys(produto.ingredientes).length)){let c=0;Object.entries(ingsFinais||{}).forEach(([id,q])=>{c+=custoIng(id)*q});return c}return produto.custo||0}
+function exibirAnalisePrecoProduto(){var box=document.getElementById('analisePrecoProduto');if(!box)return;var produto=editandoId?produtos.find(function(p){return String(p.id)===String(editandoId)}):null;var custo=produto?custoItem(produto,produto.ingredientes||{}):lerMoeda(document.getElementById('inpCusto').value||'');if(produto&&produto.pao){var pao=getPao(produto.pao);custo+=pao?Number(pao.custo)||0:0}var preco=lerMoeda(document.getElementById('inpPreco').value||'');var lucro=preco-custo;var margem=preco>0?lucro/preco*100:0;var markup=custo>0?lucro/custo*100:0;box.innerHTML='<b>Custo médio do produto:</b> '+moeda(custo)+'<br><b>Preço de venda atual:</b> '+moeda(preco)+'<br><b>Lucro bruto por unidade:</b> '+moeda(lucro)+'<br><b>Margem sobre a venda:</b> '+margem.toFixed(1)+'%<br><b>Acréscimo sobre o custo:</b> '+markup.toFixed(1)+'%';box.style.display='block'}
+document.getElementById('btnVerAnalisePreco')?.addEventListener('click',exibirAnalisePrecoProduto);function custoItem(produto,ingsFinais){if(produto.pao||(produto.ingredientes&&Object.keys(produto.ingredientes).length)){let c=0;Object.entries(ingsFinais||{}).forEach(([id,q])=>{c+=custoIng(id)*q});return c}return produto.custo||0}
 function reservadoPao(paoId,extra){let total=0;for(const ch in carrinho){const it=parseChave(ch);if(it.paoId===paoId&&carrinho[ch]>0)total+=carrinho[ch]}if(extra){for(const ch in extra){const it=parseChave(ch);if(it.paoId===paoId&&extra[ch]>0)total+=extra[ch]}}return total}
 function disponivelPao(paoId,extra){const p=getPao(paoId);if(!p)return 0;return Math.max(0,p.estoque-reservadoPao(paoId,extra))}
 function reservadoIng(ingId,extra){let total=0;const contar=(chave,qtd)=>{const it=parseChave(chave);const q=(it.ings||{})[ingId]||0;if(q>0)total+=q*qtd};for(const ch in carrinho){if(carrinho[ch]>0)contar(ch,carrinho[ch])}if(extra){for(const ch in extra){if(extra[ch]>0)contar(ch,extra[ch])}}return total}
@@ -2000,7 +2005,7 @@ const numeroDia = contadores.diario;
     alert('❌ Erro ao confirmar pedido:\n\n'+err.message);
   }
 });
-function renderClientes(){const cont=$('#listaClientes');cont.innerHTML='';const termo=$('#buscaCliente').value.trim().toLowerCase();const lista=clientes.filter(c=>!termo||c.nome.toLowerCase().includes(termo)||pad(c.numero).includes(termo));$('#statTotalClientes').textContent=clientes.length;$('#statProximoCliente').textContent=pad(proximoNumeroCliente);if(!lista.length){cont.innerHTML='<p class="vazio">Nenhum cliente.</p>';return}lista.slice().sort((a,b)=>b.numero-a.numero).forEach(c=>{const row=document.createElement('div');row.className='cliente-item';const partes=[];if(c.telefone)partes.push(`📞 ${esc(c.telefone)}`);if(c.endereco)partes.push(`📍 ${esc(c.endereco)}`);if(c.instagram)partes.push(`📷 ${esc(c.instagram)}`);row.innerHTML=`<div class="cliente-num">${pad(c.numero)}</div><div class="cliente-info"><strong>${esc(c.nome)}</strong><small>${partes.join(' · ')||'<i style="opacity:.5">sem dados</i>'}</small></div><div class="cliente-acoes"><button data-acao="editar" data-id="${c.id}">Editar</button><button data-acao="excluir" data-id="${c.id}" class="perigo">Excluir</button></div>`;cont.appendChild(row)})}
+function renderTopClientesGasto(){var el=document.getElementById('listaTopClientesGasto');if(!el)return;var top=(clientes||[]).map(function(c){return{cliente:c,resumo:contagemCliente(c)}}).filter(function(x){return x.resumo.gastoGeral>0}).sort(function(a,b){return b.resumo.gastoGeral-a.resumo.gastoGeral}).slice(0,10);el.innerHTML=top.length?'<div class="top-clientes-gasto"><h3>🏆 Clientes que mais gastam</h3>'+top.map(function(x,i){return '<p>'+(i+1)+'. '+esc(x.cliente.nome)+' — '+moeda(x.resumo.gastoGeral)+' <small>(mês: '+moeda(x.resumo.gastoMensal)+')</small></p>'}).join('')+'</div>':''}function renderClientes(){renderTopClientesGasto();const cont=$('#listaClientes');cont.innerHTML='';const termo=$('#buscaCliente').value.trim().toLowerCase();const lista=clientes.filter(c=>!termo||c.nome.toLowerCase().includes(termo)||pad(c.numero).includes(termo));$('#statTotalClientes').textContent=clientes.length;$('#statProximoCliente').textContent=pad(proximoNumeroCliente);if(!lista.length){cont.innerHTML='<p class="vazio">Nenhum cliente.</p>';return}lista.slice().sort((a,b)=>b.numero-a.numero).forEach(c=>{const row=document.createElement('div');row.className='cliente-item';const partes=[];if(c.telefone)partes.push(`📞 ${esc(c.telefone)}`);if(c.endereco)partes.push(`📍 ${esc(c.endereco)}`);if(c.instagram)partes.push(`📷 ${esc(c.instagram)}`);const resumo=contagemCliente(c);row.innerHTML=`<div class="cliente-num">${pad(c.numero)}</div><div class="cliente-info"><strong>${esc(c.nome)}</strong><small>${partes.join(' · ')||'<i style="opacity:.5">sem dados</i>'}</small><div class="cliente-resumo"><span>Pedidos geral: <b>${fmt3(resumo.geral)}</b></span><span>Pedidos no mês: <b>${fmt3(resumo.mensal)}</b></span><span>Gasto geral: <b>${moeda(resumo.gastoGeral)}</b></span><span>Gasto no mês: <b>${moeda(resumo.gastoMensal)}</b></span></div></div><div class="cliente-acoes"><button data-acao="editar" data-id="${c.id}">Editar</button><button data-acao="excluir" data-id="${c.id}" class="perigo">Excluir</button></div>`;cont.appendChild(row)})}
 $('#buscaCliente').addEventListener('input',renderClientes);
 $('#listaClientes').addEventListener('click',e=>{
   const btn=e.target.closest('button[data-acao]');
@@ -2265,7 +2270,7 @@ function renderEstoque(){
     return;
   }
   
-  const produtosOrdenados = [...produtos].sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const termoEstoque=(document.getElementById('buscaEstoqueProdutos')||{}).value||''; const produtosOrdenados = [...produtos].filter(p=>!termoEstoque||p.nome.toLowerCase().includes(termoEstoque.trim().toLowerCase())).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   
   produtosOrdenados.forEach(p=>{
     const isSanduiche=!!p.pao;
@@ -2393,7 +2398,8 @@ function resetarForm(){
 }
 
 $('#btnCancelar').addEventListener('click', resetarForm);
-$('#formProduto').addEventListener('submit',e=>{
+document.getElementById('btnLancarHamburguer').addEventListener('click',function(){if(!souGerente())return toast('🔒 Só o gerente cadastra produtos');resetarForm();document.getElementById('formProduto').style.display='block';document.getElementById('campoPao').style.display='flex';document.getElementById('campoIngredientes').style.display='flex';document.querySelector('#opcoesTipoProduto [data-tipo="pao"]').click();document.getElementById('formProduto').scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('inpNome').focus()});
+document.getElementById('buscaEstoqueProdutos').addEventListener('input',function(){renderEstoque()});$('#formProduto').addEventListener('submit',e=>{
   e.preventDefault();
   if(!souGerente())return toast('🔒 Só o gerente cadastra produtos');
   
@@ -2601,13 +2607,12 @@ function salvarCompraDaNota(e){
         var itemAnterior=anterior&&Array.isArray(anterior.itens)?anterior.itens.find(function(original){return original.vinc&&String(original.vinc)===String(it.vinc);}):null;
         if(itemAnterior&&normalizarNome(itemAnterior.nome)!==normalizarNome(it.nome))alvo.obj.nome=String(it.nome).trim();
         if(tipo==='prod'){
-          if(Number(it.pv)>0) alvo.obj.preco=Number(it.pv);
+          
           if(it.categoria) alvo.obj.categoria=it.categoria;
           if(it.unid) alvo.obj.unidade=it.unid;
-          alvo.obj.custo=Number(it.valor)||0;
+          
         }
-        if(tipo==='ing'){ alvo.obj.semEstoque=it.controlaEstoque===false; alvo.obj.custo=Number(it.valor)||0; if(it.unid) alvo.obj.unidade=it.unid; }
-        if(tipo==='pao') alvo.obj.custo=Number(it.valor)||0;
+        if(tipo==='ing'){ alvo.obj.semEstoque=it.controlaEstoque===false;  if(it.unid) alvo.obj.unidade=it.unid; }
       } else if(tipo==='prod'){
         var categoria=String(it.categoria||'Produtos').trim();
         var bebida=/bebida/i.test(categoria);
@@ -2869,8 +2874,8 @@ function renderDRE() {
   const margemBruta = vendasProdutos > 0 ? (lucroBruto / vendasProdutos * 100) : 0;
   const margemLiquida = vendasProdutos > 0 ? (lucroLiquido / vendasProdutos * 100) : 0;
   const ticketMedio = filtrados.length > 0 ? vendasProdutos / filtrados.length : 0;
-  const topProdutos = Object.entries(porProduto).map(([nome, d]) => ({ nome, ...d })).sort((a, b) => b.total - a.total).slice(0, 10);
-  const maxTotalProd = topProdutos.length ? topProdutos[0].total : 1;
+  const topProdutos = Object.entries(porProduto).map(([nome, d]) => ({ nome, ...d })).sort((a, b) => b.qtd - a.qtd || b.total - a.total).slice(0, 10);
+  const maxTotalProd = topProdutos.length ? topProdutos[0].qtd : 1;
 
   const html = [];
   html.push(`
@@ -2964,9 +2969,9 @@ function renderDRE() {
   html.push(`<div class="dre-secao"><h3>🏪 Por tipo de pedido</h3><div class="dre-linha"><span class="label">🛵 Entrega</span><span class="valor-dre">${moeda(porTipo.entrega || 0)}</span></div><div class="dre-linha"><span class="label">🏪 Retirada</span><span class="valor-dre">${moeda(porTipo.retirada || 0)}</span></div></div>`);
 
   if (topProdutos.length) {
-    html.push(`<div class="dre-secao"><h3>🏆 Top 10 produtos</h3>`);
+    html.push(`<div class="dre-secao"><h3>🏆 Top 10 mais vendidos (quantidade)</h3>`);
     topProdutos.forEach((p, i) => {
-      const pct = (p.total / maxTotalProd * 100).toFixed(0);
+      const pct = (p.qtd / maxTotalProd * 100).toFixed(0);
       const margemProd = p.total > 0 ? ((p.total - p.custo) / p.total * 100).toFixed(0) : 0;
       html.push(`<div class="dre-top-produto"><div class="pos">${i + 1}</div><div><div class="nome">${esc(p.nome)}</div><div class="dre-barra"><div style="width:${pct}%"></div></div></div><div class="qtd">${p.qtd}x · margem ${margemProd}%</div><div class="total">${moeda(p.total)}</div></div>`);
     });
@@ -3716,7 +3721,7 @@ function recalcContadores(){
 /* ===== N° DO CLIENTE EDITAVEL + CONTAGEM POR CLIENTE ===== */
 function proxNumCliente(){var m=0;(clientes||[]).forEach(function(c){if(c.numero>m)m=c.numero});return m+1}
 function clienteDoPedido(p){if(!p)return null;var c=p.clienteId?clientes.find(function(x){return x.id===p.clienteId}):null;if(!c&&p.cliente&&p.cliente!=='Balcão')c=clientes.find(function(x){return (x.nome||'').toLowerCase()===String(p.cliente).toLowerCase()});return c||null}
-function contagemCliente(c){var mes=mesAtual();var g=0,m=0;(historico||[]).forEach(function(p){if(!p||!(p.status==='finalizado'||p.finalizadoEm))return;var meu=p.clienteId?p.clienteId===c.id:((p.cliente||'').toLowerCase()===(c.nome||'').toLowerCase());if(!meu)return;g++;var d=new Date(p.finalizadoEm||p.data);if(!isNaN(d)&&d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')===mes)m++});return{geral:g,mensal:m}}
+function contagemCliente(c){var mes=mesAtual();var g=0,m=0,gastoGeral=0,gastoMensal=0;(historico||[]).forEach(function(p){if(!p||!(p.status==='finalizado'||p.finalizadoEm))return;var meu=p.clienteId?p.clienteId===c.id:((p.cliente||'').toLowerCase()===(c.nome||'').toLowerCase());if(!meu)return;g++;var valor=Number(p.total);if(!isFinite(valor))valor=Number(p.subtotal);if(!isFinite(valor))valor=0;gastoGeral+=valor;var d=new Date(p.finalizadoEm||p.data);if(!isNaN(d)&&d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')===mes){m++;gastoMensal+=valor}});return{geral:g,mensal:m,gastoGeral:gastoGeral,gastoMensal:gastoMensal}}
 function fichaDados(p){var c=clienteDoPedido(p);if(!c)return{numero:'---',geral:'---',mensal:'---'};var k=contagemCliente(c);return{numero:pad(c.numero),geral:fmt3(k.geral+1),mensal:fmt3(k.mensal+1)}}
 try{var _cc=document.getElementById('clCodigo');if(_cc)_cc.placeholder='automático ('+pad(proxNumCliente())+')'}catch(e){}
 
