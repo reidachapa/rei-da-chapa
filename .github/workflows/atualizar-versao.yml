@@ -1,0 +1,69 @@
+name: Atualizar versão do app
+
+on:
+  push:
+    paths:
+      - index.html
+      - .github/workflows/atualizar-versao.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar-versao:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o repositório
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Aumentar a versão
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          arquivo = Path('index.html')
+          html = arquivo.read_text(encoding='utf-8')
+          marcador = re.compile(r'<!-- APP_VERSION: (\d+)\.(\d+)\.(\d+) -->')
+          try:
+              anterior = subprocess.check_output(
+                  ['git', 'show', 'HEAD^:index.html'], text=True, stderr=subprocess.DEVNULL
+              )
+          except subprocess.CalledProcessError:
+              anterior = html
+
+          versao_anterior = marcador.search(anterior)
+          if versao_anterior:
+              major, minor, patch = map(int, versao_anterior.groups())
+          else:
+              versao_atual = marcador.search(html)
+              major, minor, patch = map(int, versao_atual.groups()) if versao_atual else (1, 0, 0)
+
+          patch += 1
+          nova = f'{major}.{minor}.{patch}'
+          html, qtd = marcador.subn(f'<!-- APP_VERSION: {nova} -->', html, count=1)
+          if not qtd:
+              html = html.replace('<meta name="theme-color"', f'<!-- APP_VERSION: {nova} -->\n<meta name="theme-color"', 1)
+          html, qtd = re.subn(
+              r'(<span id="appVersion"[^>]*>)v\d+\.\d+\.\d+(</span>)',
+              rf'\g<1>v{nova}\g<2>', html, count=1
+          )
+          if not qtd:
+              html = html.replace('</header>', f'<span id="appVersion">v{nova}</span>\n</header>', 1)
+          arquivo.write_text(html, encoding='utf-8')
+          print(f'Versão atualizada para v{nova}')
+          PY
+
+      - name: Salvar a nova versão no repositório
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore: atualizar versão do app"
+          git push
