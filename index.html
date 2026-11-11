@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.3 -->
+<!-- APP_VERSION: 1.0.4 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -453,6 +453,7 @@
   .hist-cliente{font-size:13px;font-weight:700;color:var(--txt)}
   .hist-resumo{font-size:11px;color:var(--muted);line-height:1.4}
   .hist-resumo b{color:var(--gold-2)}
+  .hist-entregador{font-size:11px;color:var(--blue);font-weight:700;line-height:1.35}
   .hist-tags{display:flex;gap:4px;flex-wrap:wrap;margin-top:3px}
   .hist-valor{text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end}
   .hist-total{font-weight:900;font-family:Georgia,serif;color:var(--gold-2);font-size:16px}
@@ -905,7 +906,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     </select>
     <span class="role-badge" id="roleBadge" style="display:none">👑</span>
   </div>
-  <span id="appVersion" title="Versão do aplicativo" style="position:absolute;right:9px;top:3px;z-index:60;font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1">v1.0.3</span>
+  <span id="appVersion" title="Versão do aplicativo" style="position:absolute;right:9px;top:3px;z-index:60;font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1">v1.0.4</span>
 </header>  
 <main>
   <section id="view-vendas" class="view ativo">
@@ -2683,7 +2684,7 @@ function pedidosFiltradosHist(){const{ini,fim}=periodoHist(histFiltro);return hi
 var comprasFiltro='hoje';
 var comprasBusca='';
 function periodoCompras(filtro){const agora=new Date();const hoje=new Date(agora.getFullYear(),agora.getMonth(),agora.getDate());if(filtro==='hoje')return{ini:hoje,fim:new Date(hoje.getTime()+86400000),label:'Hoje'};if(filtro==='ontem'){const ontem=new Date(hoje.getTime()-86400000);return{ini:ontem,fim:hoje,label:'Ontem'}}if(filtro==='semana'){const ini=new Date(hoje.getTime()-6*86400000);return{ini,fim:new Date(hoje.getTime()+86400000),label:'7 dias'}}if(filtro==='mes'){const ini=new Date(agora.getFullYear(),agora.getMonth(),1);return{ini,fim:new Date(hoje.getTime()+86400000),label:'Este mês'}}return{ini:new Date(0),fim:new Date(8640000000000),label:'Todo o período'}}
-function renderHistorico(){if(!souGerente())return;const{label}=periodoHist(histFiltro);const filtrados=pedidosFiltradosHist();const totalFat=filtrados.reduce((s,p)=>s+(p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0))),0);const totalCusto=filtrados.reduce((s,p)=>s+(p.custoTotal||0),0);const totalTaxas=filtrados.reduce((s,p)=>s+(p.taxaEntrega||0),0);const lucroReal=totalFat-totalCusto;const ticket=filtrados.length?totalFat/filtrados.length:0;$('#histStats').innerHTML=`<div class="dre-card azul"><div class="titulo">Pedidos</div><div class="valor">${filtrados.length}</div><div class="sub">${label}</div></div><div class="dre-card"><div class="titulo">Vendas (só produtos)</div><div class="valor">${moeda(totalFat)}</div><div class="sub">não conta taxa</div></div><div class="dre-card" style="border-color:rgba(77,157,229,.4)"><div class="titulo">Taxas recebidas</div><div class="valor" style="color:var(--blue)">${moeda(totalTaxas)}</div><div class="sub">repassadas ao motoboy</div></div><div class="dre-card verde"><div class="titulo">Lucro Bruto</div><div class="valor">${moeda(lucroReal)}</div><div class="sub">vendas − custo</div></div><div class="dre-card roxo"><div class="titulo">Ticket Médio</div><div class="valor">${moeda(ticket)}</div><div class="sub">por pedido</div></div>`;const cont=$('#histLista');if(!filtrados.length){cont.innerHTML='<div class="dre-vazio">Nenhum pedido encontrado neste período.<br>Finalize pedidos no PDV pra aparecerem aqui.</div>';return}cont.innerHTML=filtrados.map(p=>{const dt=new Date(p.finalizadoEm||p.data);const dataStr=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});const horaStr=dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const pgto=labelPagamentosResumo(p);const tipoTxt=p.tipo==='entrega'?'🛵':'🏪';const nItens=p.itens.reduce((s,it)=>s+it.qtd,0);const resumoItens=p.itens.map(it=>`${it.qtd}× ${esc(it.nome)}`).slice(0,2).join(', ')+(p.itens.length>2?` +${p.itens.length-2}`:'');const clienteBadge=p.clienteNumero?`<span class="cliente-badge">${pad(p.clienteNumero)}</span>`:'';const taxaHtml=p.taxaEntrega>0?`<div class="hist-taxa">🛵 taxa ${moeda(p.taxaEntrega)} (repasse)</div>`:'';const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));const totalHtml=p.taxaEntrega>0?`${moeda(p.total)}<div style="font-size:9px;color:var(--muted);font-weight:600">venda ${moeda(subtotal)}</div>`:moeda(p.total);return `<div class="hist-card ${p.pago?'pago':'nao-pago'}" data-hist-id="${p.id}"><div class="hist-num">#${p.numero}<small>Dia: ${p.numeroDia || p.numero}<br>${dataStr}<br>${horaStr}</small></div><div class="hist-info"><div class="hist-cliente">${tipoTxt} ${esc(p.cliente||'Balcão')} ${clienteBadge}</div><div class="hist-resumo">${nItens} ${nItens===1?'item':'itens'} · ${resumoItens}</div><div class="hist-tags"><span class="tag-pgto ${pgto.cls}">${pgto.txt}</span><span class="tag-pgto ${p.pago?'tag-pago':'tag-nao-pago'}">${p.pago?'Pago':'A receber'}</span></div></div><div class="hist-valor"><div class="hist-total">${totalHtml}</div>${taxaHtml}<div class="hist-acoes"><button data-acao="ver" data-id="${p.id}">👁️ Ver</button><button data-acao="reimprimir" data-id="${p.id}">🖨️</button><button data-acao="editar" data-id="${p.id}" style="color:var(--gold-2)">✏️</button><button data-acao="excluir" data-id="${p.id}" class="perigo" style="border-color:rgba(229,72,77,.3);color:var(--red)">🗑️</button></div></div></div>`}).join('')}
+function renderHistorico(){if(!souGerente())return;const{label}=periodoHist(histFiltro);const filtrados=pedidosFiltradosHist();const totalFat=filtrados.reduce((s,p)=>s+(p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0))),0);const totalCusto=filtrados.reduce((s,p)=>s+(p.custoTotal||0),0);const totalTaxas=filtrados.reduce((s,p)=>s+(p.taxaEntrega||0),0);const lucroReal=totalFat-totalCusto;const ticket=filtrados.length?totalFat/filtrados.length:0;$('#histStats').innerHTML=`<div class="dre-card azul"><div class="titulo">Pedidos</div><div class="valor">${filtrados.length}</div><div class="sub">${label}</div></div><div class="dre-card"><div class="titulo">Vendas (só produtos)</div><div class="valor">${moeda(totalFat)}</div><div class="sub">não conta taxa</div></div><div class="dre-card" style="border-color:rgba(77,157,229,.4)"><div class="titulo">Taxas recebidas</div><div class="valor" style="color:var(--blue)">${moeda(totalTaxas)}</div><div class="sub">repassadas ao motoboy</div></div><div class="dre-card verde"><div class="titulo">Lucro Bruto</div><div class="valor">${moeda(lucroReal)}</div><div class="sub">vendas − custo</div></div><div class="dre-card roxo"><div class="titulo">Ticket Médio</div><div class="valor">${moeda(ticket)}</div><div class="sub">por pedido</div></div>`;const cont=$('#histLista');if(!filtrados.length){cont.innerHTML='<div class="dre-vazio">Nenhum pedido encontrado neste período.<br>Finalize pedidos no PDV pra aparecerem aqui.</div>';return}cont.innerHTML=filtrados.map(p=>{const dt=new Date(p.finalizadoEm||p.data);const dataStr=dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});const horaStr=dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const pgto=labelPagamentosResumo(p);const tipoTxt=p.tipo==='entrega'?'🛵':'🏪';const nItens=p.itens.reduce((s,it)=>s+it.qtd,0);const resumoItens=p.itens.map(it=>`${it.qtd}× ${esc(it.nome)}`).slice(0,2).join(', ')+(p.itens.length>2?` +${p.itens.length-2}`:'');const clienteBadge=p.clienteNumero?`<span class="cliente-badge">${pad(p.clienteNumero)}</span>`:'';const taxaHtml=p.taxaEntrega>0?`<div class="hist-taxa">🛵 taxa ${moeda(p.taxaEntrega)} (repasse)</div>`:'';const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));const totalHtml=p.taxaEntrega>0?`${moeda(p.total)}<div style="font-size:9px;color:var(--muted);font-weight:600">venda ${moeda(subtotal)}</div>`:moeda(p.total);return `<div class="hist-card ${p.pago?'pago':'nao-pago'}" data-hist-id="${p.id}"><div class="hist-num">#${p.numero}<small>Dia: ${p.numeroDia || p.numero}<br>${dataStr}<br>${horaStr}</small></div><div class="hist-info"><div class="hist-cliente">${tipoTxt} ${esc(p.cliente||'Balcão')} ${clienteBadge}</div><div class="hist-resumo">${nItens} ${nItens===1?'item':'itens'} · ${resumoItens}</div>${p.motoboyNome?`<div class="hist-entregador">🛵 Entregue por: ${esc(p.motoboyNome)}</div>`:""}<div class="hist-tags"><span class="tag-pgto ${pgto.cls}">${pgto.txt}</span><span class="tag-pgto ${p.pago?'tag-pago':'tag-nao-pago'}">${p.pago?'Pago':'A receber'}</span></div></div><div class="hist-valor"><div class="hist-total">${totalHtml}</div>${taxaHtml}<div class="hist-acoes"><button data-acao="ver" data-id="${p.id}">👁️ Ver</button><button data-acao="reimprimir" data-id="${p.id}">🖨️</button><button data-acao="editar" data-id="${p.id}" style="color:var(--gold-2)">✏️</button><button data-acao="excluir" data-id="${p.id}" class="perigo" style="border-color:rgba(229,72,77,.3);color:var(--red)">🗑️</button></div></div></div>`}).join('')}
 $('#histFiltros').addEventListener('click',e=>{const btn=e.target.closest('.dre-filtro');if(!btn)return;histFiltro=btn.dataset.filtro;$$('#histFiltros .dre-filtro').forEach(b=>b.classList.toggle('ativo',b===btn));renderHistorico()});
 $('#buscaHist').addEventListener('input',e=>{histBusca=e.target.value.trim();renderHistorico()});
 
@@ -2741,12 +2742,12 @@ $('#btnEditarDet').addEventListener('click', () => {
 });
 function acharPedidoHist(id){return historico.find(p=>p.id===id)||pedidos.find(p=>p.id===id)}
 function excluirPedidoHist(id){if(!souGerente())return toast('🔒 Só o gerente');const p=acharPedidoHist(id);if(!p)return toast('Pedido não encontrado');if(!confirm(`⚠️ Excluir DEFINITIVAMENTE o pedido #${p.numero}?\n\nValor: ${moeda(p.total)}\nCliente: ${p.cliente||'Balcão'}\n\nEsta ação não pode ser desfeita!`))return;historico=historico.filter(x=>x.id!==id);pedidos=pedidos.filter(x=>x.id!==id);salvar();renderHistorico();renderTudo();$('#modalDetalhes').classList.remove('aberto');toast(`🗑️ Pedido #${p.numero} excluído do histórico`)}
-function abrirDetalhesPedido(id){const p=acharPedidoHist(id);if(!p)return toast('Pedido não encontrado');const dt=new Date(p.finalizadoEm||p.data);$('#detTitulo').textContent=`📋 Pedido #${p.numero} — ${dt.toLocaleString('pt-BR')}`;const pgto=labelPagamentosResumo(p);const pagsDet=pagamentosDoPedido(p);const pagsDetalheHtml=pagsDet.length>1?`<div class="hist-detalhe-linha"><span class="lbl">Divisão</span><span class="vl">${pagsDet.map(([k,v])=>{const L=PAGAMENTO_LABEL[k]||{txt:k};return `${L.txt}: ${moeda(v)}`}).join('<br>')}</span></div>`:'';const itensHtml=p.itens.map(it=>{const paoTxt=it.paoNome?`<div class="pao">🥖 ${esc(it.paoNome)}</div>`:'';let ingsTxt='';const ings=it.ings||{};const base=it.ingsBase||{};Object.entries(ings).filter(([_,v])=>v>0).forEach(([iid,q])=>{const bq=base[iid]||0;const dif=q-bq;const ic=iconeIng(iid);const nm=nomeIng(iid);if(dif>0)ingsTxt+=`<span class="add">+${dif} ${ic} ${esc(nm)}</span><br>`;else if(dif<0)ingsTxt+=`<span class="rem">−${Math.abs(dif)} ${ic} ${esc(nm)}</span><br>`;else ingsTxt+=`<span>${q}× ${ic} ${esc(nm)}</span><br>`});return `<div class="hist-item-bloco"><div class="nome"><span class="qtd">${it.qtd}×</span>${esc(it.nome)}</div>${paoTxt}${ingsTxt?`<div class="ings">${ingsTxt}</div>`:''}<div class="preco-item">${moeda(it.preco*it.qtd)}</div></div>`}).join('');const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));$('#detConteudo').innerHTML=`<div class="hist-detalhe-secao"><h4>👤 Cliente</h4><div class="hist-detalhe-linha"><span class="lbl">Nome</span><span class="vl">${esc(p.cliente||'Balcão')} ${p.clienteNumero?'(N° '+pad(p.clienteNumero)+')':''}</span></div>${p.telefone?`<div class="hist-detalhe-linha"><span class="lbl">Telefone</span><span class="vl">${esc(p.telefone)}</span></div>`:''}${p.endereco?`<div class="hist-detalhe-linha"><span class="lbl">Endereço</span><span class="vl">${esc(p.endereco)} ${esc(p.enderecoNumero||'')} ${esc(p.enderecoBairro||'')}</span></div>`:''}</div><div class="hist-detalhe-secao"><h4>📦 Itens</h4>${itensHtml}</div><div class="hist-detalhe-secao"><h4>💳 Pagamento & Tipo</h4><div class="hist-detalhe-linha"><span class="lbl">Tipo</span><span class="vl">${p.tipo==='entrega'?'🛵 Entrega':'🏪 Retirada'}</span></div><div class="hist-detalhe-linha"><span class="lbl">Pagamento</span><span class="vl">${pgto.txt} ${p.pago?'✅ Pago':'❌ A receber'}</span></div>${pagsDetalheHtml}${p.troco>0?`<div class="hist-detalhe-linha"><span class="lbl">💰 Troco</span><span class="vl" style="color:var(--green)">${moeda(p.troco)}</span></div>`:''}${p.obs?`<div class="hist-detalhe-linha"><span class="lbl">Observação</span><span class="vl">${esc(p.obs)}</span></div>`:''}</div><div class="hist-detalhe-secao"><h4>💰 Financeiro</h4><div class="hist-detalhe-linha"><span class="lbl">Venda de produtos</span><span class="vl">${moeda(subtotal)}</span></div>${p.taxaEntrega>0?`<div class="hist-detalhe-linha"><span class="lbl">🛵 Taxa recebida</span><span class="vl" style="color:var(--blue)">+${moeda(p.taxaEntrega)}</span></div><div class="hist-detalhe-linha"><span class="lbl">🛵 Taxa paga ao motoboy</span><span class="vl" style="color:var(--red)">−${moeda(p.taxaEntrega)}</span></div>`:''}<div class="hist-detalhe-linha"><span class="lbl"><b>Total cobrado do cliente</b></span><span class="vl" style="color:var(--gold-2)">${moeda(p.total)}</span></div><div class="hist-detalhe-linha"><span class="lbl">Custo produtos</span><span class="vl" style="color:var(--red)">−${moeda(p.custoTotal||0)}</span></div><div class="hist-detalhe-linha"><span class="lbl"><b>Lucro bruto (s/ taxa)</b></span><span class="vl" style="color:var(--green)">${moeda(subtotal-(p.custoTotal||0))}</span></div></div>`;$('#modalDetalhes').classList.add('aberto');$('#btnReimprimirDet').dataset.id=id;$('#btnExcluirDet').dataset.id=id;
+function abrirDetalhesPedido(id){const p=acharPedidoHist(id);if(!p)return toast('Pedido não encontrado');const dt=new Date(p.finalizadoEm||p.data);$('#detTitulo').textContent=`📋 Pedido #${p.numero} — ${dt.toLocaleString('pt-BR')}`;const pgto=labelPagamentosResumo(p);const pagsDet=pagamentosDoPedido(p);const pagsDetalheHtml=pagsDet.length>1?`<div class="hist-detalhe-linha"><span class="lbl">Divisão</span><span class="vl">${pagsDet.map(([k,v])=>{const L=PAGAMENTO_LABEL[k]||{txt:k};return `${L.txt}: ${moeda(v)}`}).join('<br>')}</span></div>`:'';const itensHtml=p.itens.map(it=>{const paoTxt=it.paoNome?`<div class="pao">🥖 ${esc(it.paoNome)}</div>`:'';let ingsTxt='';const ings=it.ings||{};const base=it.ingsBase||{};Object.entries(ings).filter(([_,v])=>v>0).forEach(([iid,q])=>{const bq=base[iid]||0;const dif=q-bq;const ic=iconeIng(iid);const nm=nomeIng(iid);if(dif>0)ingsTxt+=`<span class="add">+${dif} ${ic} ${esc(nm)}</span><br>`;else if(dif<0)ingsTxt+=`<span class="rem">−${Math.abs(dif)} ${ic} ${esc(nm)}</span><br>`;else ingsTxt+=`<span>${q}× ${ic} ${esc(nm)}</span><br>`});return `<div class="hist-item-bloco"><div class="nome"><span class="qtd">${it.qtd}×</span>${esc(it.nome)}</div>${paoTxt}${ingsTxt?`<div class="ings">${ingsTxt}</div>`:''}<div class="preco-item">${moeda(it.preco*it.qtd)}</div></div>`}).join('');const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));$('#detConteudo').innerHTML=`<div class="hist-detalhe-secao"><h4>👤 Cliente</h4><div class="hist-detalhe-linha"><span class="lbl">Nome</span><span class="vl">${esc(p.cliente||'Balcão')} ${p.clienteNumero?'(N° '+pad(p.clienteNumero)+')':''}</span></div>${p.telefone?`<div class="hist-detalhe-linha"><span class="lbl">Telefone</span><span class="vl">${esc(p.telefone)}</span></div>`:''}${p.endereco?`<div class="hist-detalhe-linha"><span class="lbl">Endereço</span><span class="vl">${esc(p.endereco)} ${esc(p.enderecoNumero||'')} ${esc(p.enderecoBairro||'')}</span></div>`:''}</div><div class="hist-detalhe-secao"><h4>📦 Itens</h4>${itensHtml}</div><div class="hist-detalhe-secao"><h4>💳 Pagamento & Tipo</h4><div class="hist-detalhe-linha"><span class="lbl">Tipo</span><span class="vl">${p.tipo==='entrega'?'🛵 Entrega':'🏪 Retirada'}</span></div>${p.motoboyNome?`<div class="hist-detalhe-linha"><span class="lbl">Entregue por</span><span class="vl">🛵 ${esc(p.motoboyNome)}</span></div>`:""}<div class="hist-detalhe-linha"><span class="lbl">Pagamento</span><span class="vl">${pgto.txt} ${p.pago?'✅ Pago':'❌ A receber'}</span></div>${pagsDetalheHtml}${p.troco>0?`<div class="hist-detalhe-linha"><span class="lbl">💰 Troco</span><span class="vl" style="color:var(--green)">${moeda(p.troco)}</span></div>`:''}${p.obs?`<div class="hist-detalhe-linha"><span class="lbl">Observação</span><span class="vl">${esc(p.obs)}</span></div>`:''}</div><div class="hist-detalhe-secao"><h4>💰 Financeiro</h4><div class="hist-detalhe-linha"><span class="lbl">Venda de produtos</span><span class="vl">${moeda(subtotal)}</span></div>${p.taxaEntrega>0?`<div class="hist-detalhe-linha"><span class="lbl">🛵 Taxa recebida</span><span class="vl" style="color:var(--blue)">+${moeda(p.taxaEntrega)}</span></div><div class="hist-detalhe-linha"><span class="lbl">🛵 Taxa paga ao motoboy</span><span class="vl" style="color:var(--red)">−${moeda(p.taxaEntrega)}</span></div>`:''}<div class="hist-detalhe-linha"><span class="lbl"><b>Total cobrado do cliente</b></span><span class="vl" style="color:var(--gold-2)">${moeda(p.total)}</span></div><div class="hist-detalhe-linha"><span class="lbl">Custo produtos</span><span class="vl" style="color:var(--red)">−${moeda(p.custoTotal||0)}</span></div><div class="hist-detalhe-linha"><span class="lbl"><b>Lucro bruto (s/ taxa)</b></span><span class="vl" style="color:var(--green)">${moeda(subtotal-(p.custoTotal||0))}</span></div></div>`;$('#modalDetalhes').classList.add('aberto');$('#btnReimprimirDet').dataset.id=id;$('#btnExcluirDet').dataset.id=id;
 $('#btnEditarDet').dataset.id=id;}
 $('#btnFecharDet').addEventListener('click',()=>$('#modalDetalhes').classList.remove('aberto'));
 $('#btnExcluirDet').addEventListener('click',()=>{const id=$('#btnExcluirDet').dataset.id;if(id)excluirPedidoHist(id)});
 $('#btnReimprimirDet').addEventListener('click',()=>{const id=$('#btnReimprimirDet').dataset.id;if(id)reimprimirPedidoHist(id)});
-function reimprimirPedidoHist(id){const p=acharPedidoHist(id);if(!p)return toast('Pedido não encontrado');if(printerState.conectado){enviarImpressora(gerarCupom(p)).then(()=>toast('🖨️ Reimpresso!')).catch(e=>alert('❌ '+e.message));return}conectarImpressoraParaUso().then(ok=>{if(ok)enviarImpressora(gerarCupom(p)).then(()=>toast('🖨️ Reimpresso!')).catch(e=>alert('❌ '+e.message));else if(confirm('Não conectou à impressora. Imprimir pelo navegador?'))imprimirViaNavegadorDirect(p)})}
+function reimprimirPedidoHist(id){const p=acharPedidoHist(id);if(!p)return toast('Pedido não encontrado');if(printerState.conectado){gerarCupom(p).then(bytes=>enviarImpressora(bytes)).then(()=>toast('🖨️ Reimpresso!')).catch(e=>alert('❌ '+e.message));return}conectarImpressoraParaUso().then(ok=>{if(ok)gerarCupom(p).then(bytes=>enviarImpressora(bytes)).then(()=>toast('🖨️ Reimpresso!')).catch(e=>alert('❌ '+e.message));else if(confirm('Não conectou à impressora. Imprimir pelo navegador?'))imprimirViaNavegadorDirect(p)})}
 function imprimirViaNavegadorDirect(p){
   const f=document.createElement('iframe');
   f.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
@@ -2765,22 +2766,24 @@ function imprimirViaNavegadorDirect(p){
     const L=PAGAMENTO_LABEL[pagsNav[0][0]]||{txt:pagsNav[0][0]};
     pgtoNavHtml=`<div><b>PAGAMENTO: ${L.txt.toUpperCase()}</b></div>`
   }
+  const logoNavUrl=new URL('logo-header.png',document.baseURI).href;
+  const enderecoNav=[p.endereco,p.enderecoNumero,p.enderecoBairro].filter(v=>String(v||'').trim()).map(esc).join(' ');
+  const entregaNavHtml=p.tipo==='entrega'?`<div><b>END:</b> ${enderecoNav||'NÃO INFORMADO'}</div>${p.motoboyNome?`<div><b>MOTOBOY:</b> ${esc(p.motoboyNome)}</div>`:''}`:'';
   const larguraPagina=printerState.larguraPapel===32?'58mm':'80mm',larguraConteudo=printerState.larguraPapel===32?'54mm':'74mm';  d.open();
   d.write(`<html><head><meta charset="UTF-8">
 <style>
 @page{size:${larguraPagina} auto;margin:2mm}
 body{font-family:monospace;font-size:12px;width:${larguraConteudo};margin:0}
-h1{font-size:16px;text-align:center}.c{text-align:center}.b{font-weight:bold}.big{font-size:15px;font-weight:bold}
+.c{text-align:center}.logo img{width:32mm;max-height:32mm;object-fit:contain;filter:grayscale(1) contrast(1.6)}.b{font-weight:bold}.big{font-size:15px;font-weight:bold}
 hr{border:0;border-top:1px dashed #000}table{width:100%}
 </style></head><body>
-<h1>REI DA CHAPA</h1>
-<div class="c">CONVENIENCIA DELIVERY</div><hr>
+<div class="c logo"><img src="${logoNavUrl}" alt="Rei da Chapa"></div><hr>
 <div class="c big">PEDIDO #${p.numero}</div>
 ${p.clienteNumero?`<div class="c">Cliente N° ${pad(p.clienteNumero)}</div>`:''}
 <div class="c">${new Date(p.finalizadoEm||p.data).toLocaleString('pt-BR')} - ${p.tipo==='entrega'?'ENTREGA':'RETIRADA'}</div><hr>
-<div><b>CLIENTE:</b> ${p.cliente||'Balcão'}</div>
+<div><b>CLIENTE:</b> ${esc(p.cliente||'Balcão')}</div>
 ${p.telefone?`<div><b>TEL:</b> ${p.telefone}</div>`:''}
-${p.endereco?`<div><b>END:</b> ${p.endereco} ${p.enderecoNumero||''} ${p.enderecoBairro||''}</div>`:''}
+${entregaNavHtml}
 <hr><div><b>ITENS:</b></div><table>${itens}</table><hr>
 ${p.obs?`<div><b>OBS:</b> ${p.obs}</div><hr>`:''}
 <div class="c big">TOTAL: R$ ${p.total.toFixed(2).replace('.',',')}</div><hr>
@@ -2789,8 +2792,15 @@ ${p.troco>0?`<div><b>TROCO: R$ ${p.troco.toFixed(2).replace('.',',')}</b></div>`
 <div class="c">${p.pago?'*** PAGO ***':'*** A RECEBER ***'}</div><hr>
 <div class="c">Obrigado!</div></body></html>`);
   d.close();
-  f.contentWindow.focus();
-  setTimeout(()=>{f.contentWindow.print();setTimeout(()=>document.body.removeChild(f),800)},250);
+  const iniciarImpressao=()=>{f.contentWindow.focus();f.contentWindow.print();setTimeout(()=>document.body.removeChild(f),800)};
+  const logoImpressao=d.querySelector('.logo img');
+  if(logoImpressao&&!logoImpressao.complete){
+    let logoResolvida=false;
+    const concluirLogo=()=>{if(logoResolvida)return;logoResolvida=true;setTimeout(iniciarImpressao,100)};
+    logoImpressao.addEventListener('load',concluirLogo,{once:true});
+    logoImpressao.addEventListener('error',concluirLogo,{once:true});
+    setTimeout(concluirLogo,1500);
+  }else setTimeout(iniciarImpressao,250);
 }
 $('#btnExportarCSV').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente');const filtrados=pedidosFiltradosHist();if(!filtrados.length)return toast('⚠️ Nenhum pedido pra exportar');const linhas=[];linhas.push(['Número','Data','Hora','Cliente','Tipo','Pagamento','Pago','Venda Produtos','Taxa Entrega','Total Cobrado','Custo','Lucro Bruto','Observação','Itens'].join(';'));filtrados.slice().reverse().forEach(p=>{const dt=new Date(p.finalizadoEm||p.data);const dataStr=dt.toLocaleDateString('pt-BR');const horaStr=dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const itensStr=p.itens.map(it=>`${it.qtd}x ${it.nome}`).join(' | ');const obs=(p.obs||'').replace(/;/g,',');const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));const lucroBruto=subtotal-(p.custoTotal||0);const pgtoCsv=pagamentosDoPedido(p).map(([k,v])=>`${(PAGAMENTO_LABEL[k]||{txt:k}).txt} ${v.toFixed(2).replace('.',',')}`).join(' + ')||p.pagamento;linhas.push([p.numero,dataStr,horaStr,(p.cliente||'Balcão').replace(/;/g,','),p.tipo,pgtoCsv,p.pago?'Sim':'Não',subtotal.toFixed(2).replace('.',','),(p.taxaEntrega||0).toFixed(2).replace('.',','),(p.total||0).toFixed(2).replace('.',','),(p.custoTotal||0).toFixed(2).replace('.',','),lucroBruto.toFixed(2).replace('.',','),obs,itensStr.replace(/;/g,',')].join(';'))});const csv='\uFEFF'+linhas.join('\n');try{const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`pedidos-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);toast(`📥 CSV (${filtrados.length})`)}catch(e){toast('❌ Erro')}});
 
@@ -3283,9 +3293,110 @@ async function conectarImpressoraSerial(){if(!navigator.serial){alert('Bluetooth
 async function conectarImpressoraParaUso(){if(printerState.conectado)return true;if(navigator.serial)return conectarImpressoraSerial();if(navigator.bluetooth)return conectarImpressora();alert('Conexão Bluetooth indisponível neste navegador.');return false}
 async function desconectarImpressora(){try{if(printerState.serialWriter){printerState.serialWriter.releaseLock();printerState.serialWriter=null}if(printerState.serialPort){await printerState.serialPort.close();printerState.serialPort=null}if(printerState.device&&printerState.device.gatt.connected)printerState.device.gatt.disconnect()}catch(e){console.warn('Desconexão da impressora:',e)}printerState.conectado=false;printerState.characteristic=null;printerState.transporte=null;atualizarStatusPrinter()}
 function atualizarStatusPrinter(){const el=$('#printerStatus');if(!el)return;if(printerState.conectado){el.textContent='🖨️ Conectada · '+(printerState.transporte||'Bluetooth');el.style.color='#3fb972'}else{el.textContent='🖨️ Desconectada';el.style.color='#96908a'}}
-function gerarCupom(p){const L=printerState.larguraPapel;const linha='='.repeat(L);const linha2='-'.repeat(L);const b=[];const add=(a)=>b.push(...a);const txt=(s)=>b.push(...encode(s+'\n'));add(CMD.INIT);add(CMD.ALIGN_CENTER);add(CMD.DOUBLE_ON);add(CMD.BOLD_ON);txt('REI DA CHAPA');add(CMD.DOUBLE_OFF);add(CMD.BOLD_OFF);txt('CONVENIENCIA DELIVERY');txt(linha);add(CMD.DOUBLE_ON);add(CMD.BOLD_ON);txt('PEDIDO #'+p.numero);add(CMD.DOUBLE_OFF);add(CMD.BOLD_OFF);if(p.clienteNumero)txt('CLIENTE N° '+pad(p.clienteNumero));const hora=new Date(p.finalizadoEm||p.data).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});txt(hora+' - '+(p.tipo==='entrega'?'ENTREGA':'RETIRADA'));txt(linha);add(CMD.ALIGN_LEFT);add(CMD.BOLD_ON);txt('CLIENTE: '+(p.cliente||'Balcao'));add(CMD.BOLD_OFF);if(p.telefone)txt('TEL: '+p.telefone);if(p.endereco)txt('END: '+p.endereco+' '+(p.enderecoNumero||'')+' '+(p.enderecoBairro||''));txt(linha2);add(CMD.BOLD_ON);txt('ITENS:');add(CMD.BOLD_OFF);p.itens.forEach(it=>{const preco='R$'+(it.preco*it.qtd).toFixed(2).replace('.',',');const paoTxt=it.paoNome?' ['+it.paoNome.replace('Pão ','')+']':'';txt(`${it.qtd}x ${it.nome}${paoTxt}`);txt('   '+preco)});const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));txt(linha2);if(p.taxaEntrega>0){txt('Subtotal: R$'+subtotal.toFixed(2).replace('.',','));txt('Taxa entrega: R$'+p.taxaEntrega.toFixed(2).replace('.',','))}if(p.obs){add(CMD.BOLD_ON);txt('OBS: '+p.obs);add(CMD.BOLD_OFF)}add(CMD.ALIGN_RIGHT);add(CMD.DOUBLE_ON);add(CMD.BOLD_ON);txt('R$ '+p.total.toFixed(2).replace('.',','));add(CMD.DOUBLE_OFF);add(CMD.BOLD_OFF);add(CMD.ALIGN_LEFT);txt(linha2);const pagsCupom=pagamentosDoPedido(p);add(CMD.BOLD_ON);if(pagsCupom.length>1){txt('PAGAMENTO DIVIDIDO:');pagsCupom.forEach(([k,v])=>{const Lbl=PAGAMENTO_LABEL[k]||{txt:k};txt('  '+Lbl.txt+': R$'+v.toFixed(2).replace('.',','))})}else if(pagsCupom.length===1){const Lbl=PAGAMENTO_LABEL[pagsCupom[0][0]]||{txt:pagsCupom[0][0]};txt('PAGAMENTO: '+Lbl.txt.toUpperCase())}else{txt('PAGAMENTO: '+(p.pagamento||'').toUpperCase())}if(p.troco>0)txt('TROCO: R$'+p.troco.toFixed(2).replace('.',','));txt(p.pago?'*** PAGO ***':'*** A RECEBER ***');add(CMD.BOLD_OFF);txt(linha);txt('');txt('');add(CMD.CUT);return new Uint8Array(b)}
+const logoCupomCache=new Map();
+async function gerarLogoCupomBytes(){
+  const larguraMax=printerState.larguraPapel===32?256:320;
+  const bytesCache=logoCupomCache.get(larguraMax);
+  if(bytesCache)return bytesCache;
+  const promessa=(async()=>{
+    const imagem=new Image();
+    const carregamento=new Promise((resolve,reject)=>{
+      imagem.onload=resolve;
+      imagem.onerror=()=>reject(new Error('logo-header.png indisponível'));
+    });
+    imagem.src=new URL('logo-header.png',document.baseURI).href;
+    await carregamento;
+    const largura=Math.floor(larguraMax/8)*8;
+    const altura=Math.max(1,Math.round(imagem.naturalHeight*largura/imagem.naturalWidth));
+    const canvas=document.createElement('canvas');
+    canvas.width=largura;
+    canvas.height=altura;
+    const contexto=canvas.getContext('2d',{willReadFrequently:true});
+    if(!contexto)throw new Error('Canvas indisponível');
+    contexto.fillStyle='#fff';
+    contexto.fillRect(0,0,largura,altura);
+    contexto.drawImage(imagem,0,0,largura,altura);
+    const rgba=contexto.getImageData(0,0,largura,altura).data;
+    const tons=new Float32Array(largura*altura);
+    for(let y=0;y<altura;y++)for(let x=0;x<largura;x++){
+      const i=(y*largura+x)*4;
+      tons[y*largura+x]=.299*rgba[i]+.587*rgba[i+1]+.114*rgba[i+2];
+    }
+    const bytesLinha=largura/8;
+    const pixels=new Uint8Array(bytesLinha*altura);
+    for(let y=0;y<altura;y++)for(let x=0;x<largura;x++){
+      const i=y*largura+x;
+      const preto=tons[i]<190;
+      if(preto)pixels[y*bytesLinha+(x>>3)]|=0x80>>(x&7);
+      const erro=tons[i]-(preto?0:255);
+      if(x+1<largura)tons[i+1]+=erro*7/16;
+      if(y+1<altura){
+        if(x>0)tons[i+largura-1]+=erro*3/16;
+        tons[i+largura]+=erro*5/16;
+        if(x+1<largura)tons[i+largura+1]+=erro/16;
+      }
+    }
+    const dados=[GS,0x76,0x30,0,bytesLinha&255,(bytesLinha>>8)&255,altura&255,(altura>>8)&255];
+    for(let i=0;i<pixels.length;i++)dados.push(pixels[i]);
+    return dados;
+  })();
+  logoCupomCache.set(larguraMax,promessa);
+  try{return await promessa}catch(e){
+    if(logoCupomCache.get(larguraMax)===promessa)logoCupomCache.delete(larguraMax);
+    throw new Error('Não consegui carregar a logo do comprovante. Confira a conexão e tente novamente.');
+  }
+}
+async function gerarCupom(p){
+  const L=printerState.larguraPapel;
+  const linha='='.repeat(L);
+  const linha2='-'.repeat(L);
+  const b=[];
+  const add=a=>b.push(...a);
+  const txt=s=>b.push(...encode(s+'\n'));
+  add(CMD.INIT);
+  add(CMD.ALIGN_CENTER);
+  add(await gerarLogoCupomBytes());
+  txt(linha);
+  add(CMD.DOUBLE_ON);add(CMD.BOLD_ON);txt('PEDIDO #'+p.numero);add(CMD.DOUBLE_OFF);add(CMD.BOLD_OFF);
+  if(p.clienteNumero)txt('CLIENTE N° '+pad(p.clienteNumero));
+  const hora=new Date(p.finalizadoEm||p.data).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  txt(hora+' - '+(p.tipo==='entrega'?'ENTREGA':'RETIRADA'));
+  txt(linha);
+  add(CMD.ALIGN_LEFT);add(CMD.BOLD_ON);txt('CLIENTE: '+(p.cliente||'Balcao'));add(CMD.BOLD_OFF);
+  if(p.telefone)txt('TEL: '+p.telefone);
+  if(p.tipo==='entrega'){
+    const endereco=[p.endereco,p.enderecoNumero,p.enderecoBairro].filter(v=>String(v||'').trim()).join(' ');
+    txt('END: '+(endereco||'NAO INFORMADO'));
+    if(p.motoboyNome)txt('MOTOBOY: '+p.motoboyNome);
+  }
+  txt(linha2);add(CMD.BOLD_ON);txt('ITENS:');add(CMD.BOLD_OFF);
+  p.itens.forEach(it=>{
+    const preco='R$'+(it.preco*it.qtd).toFixed(2).replace('.',',');
+    const paoTxt=it.paoNome?' ['+it.paoNome.replace('Pão ','')+']':'';
+    txt(it.qtd+'x '+it.nome+paoTxt);
+    txt('   '+preco);
+  });
+  const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));
+  txt(linha2);
+  if(p.taxaEntrega>0){txt('Subtotal: R$'+subtotal.toFixed(2).replace('.',','));txt('Taxa entrega: R$'+p.taxaEntrega.toFixed(2).replace('.',','));}
+  if(p.obs){add(CMD.BOLD_ON);txt('OBS: '+p.obs);add(CMD.BOLD_OFF);}
+  add(CMD.ALIGN_RIGHT);add(CMD.DOUBLE_ON);add(CMD.BOLD_ON);txt('R$ '+p.total.toFixed(2).replace('.',','));add(CMD.DOUBLE_OFF);add(CMD.BOLD_OFF);
+  add(CMD.ALIGN_LEFT);txt(linha2);
+  const pagsCupom=pagamentosDoPedido(p);add(CMD.BOLD_ON);
+  if(pagsCupom.length>1){
+    txt('PAGAMENTO DIVIDIDO:');
+    pagsCupom.forEach(([k,v])=>{const Lbl=PAGAMENTO_LABEL[k]||{txt:k};txt('  '+Lbl.txt+': R$'+v.toFixed(2).replace('.',','));});
+  }else if(pagsCupom.length===1){
+    const Lbl=PAGAMENTO_LABEL[pagsCupom[0][0]]||{txt:pagsCupom[0][0]};
+    txt('PAGAMENTO: '+Lbl.txt.toUpperCase());
+  }else txt('PAGAMENTO: '+(p.pagamento||'').toUpperCase());
+  if(p.troco>0)txt('TROCO: R$'+p.troco.toFixed(2).replace('.',','));
+  txt(p.pago?'*** PAGO ***':'*** A RECEBER ***');add(CMD.BOLD_OFF);
+  txt(linha);txt('');txt('');add(CMD.CUT);
+  return new Uint8Array(b);
+}
 async function enviarImpressora(bytes){if(!printerState.conectado)throw new Error('Impressora não conectada');if(printerState.transporte==='COM'&&printerState.serialWriter){const tamanho=512;for(let i=0;i<bytes.length;i+=tamanho)await printerState.serialWriter.write(bytes.slice(i,i+tamanho));return}const c=printerState.characteristic;if(!c)throw new Error('Conexão da impressora inválida');const CHUNK=180;for(let i=0;i<bytes.length;i+=CHUNK){const chunk=bytes.slice(i,i+CHUNK);if(c.properties.writeWithoutResponse)await c.writeValueWithoutResponse(chunk);else await c.writeValue(chunk);await new Promise(r=>setTimeout(r,20))}}
-window.imprimirPedido=async function(id){const p=pedidos.find(x=>x.id===id);if(!p)return alert('Não encontrado');if(!printerState.conectado){const ok=await conectarImpressoraParaUso();if(!ok){if(confirm('Não conectou à impressora. Imprimir pelo navegador?'))window.imprimirViaNavegador(id);return}}try{await enviarImpressora(gerarCupom(p));toast('🖨️ Impresso!')}catch(e){alert('❌ '+e.message)}};
+window.imprimirPedido=async function(id){const p=pedidos.find(x=>x.id===id);if(!p)return alert('Não encontrado');if(!printerState.conectado){const ok=await conectarImpressoraParaUso();if(!ok){if(confirm('Não conectou à impressora. Imprimir pelo navegador?'))window.imprimirViaNavegador(id);return}}try{await enviarImpressora(await gerarCupom(p));toast('🖨️ Impresso!')}catch(e){alert('❌ '+e.message)}};
 window.imprimirViaNavegador=function(id){const p=pedidos.find(x=>x.id===id);if(!p)return;imprimirViaNavegadorDirect(p)};
 window.__autoPrint=()=>$('#chkAutoPrint')&&$('#chkAutoPrint').checked;
 function injetarBotoesImprimir(){document.querySelectorAll('.pedido-card').forEach(card=>{if(card.querySelector('.btn-imprimir'))return;const id=card.dataset.pedidoId;if(!id)return;const acoes=card.querySelector('.pedido-acoes');if(!acoes)return;const btn=document.createElement('button');btn.className='btn-acao btn-imprimir';btn.innerHTML='🖨️ Imprimir';btn.addEventListener('click',(e)=>{e.stopPropagation();window.imprimirPedido(id)});const btnFicha=acoes.querySelector('.btn-ficha');if(btnFicha)acoes.insertBefore(btn,btnFicha);else acoes.appendChild(btn)})}
@@ -3295,7 +3406,7 @@ $('#selLarguraPapel').addEventListener('change',e=>{if(!souGerente())return toas
 $('#btnConectarPrinter').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente');conectarImpressora()});
 $('#btnConectarSerial').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente');conectarImpressoraSerial()});
 $('#btnDesconectarPrinter').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente');desconectarImpressora();toast('🔌 Desconectada')});
-$('#btnTestarPrinter').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');if(!printerState.conectado){if(!await conectarImpressoraParaUso())return}const t={numero:999,data:new Date().toISOString(),tipo:'entrega',cliente:'TESTE',clienteNumero:1,subtotal:32.90,taxaEntrega:5,total:37.90,itens:[{qtd:1,nome:'X-Tudo',preco:32.90,paoNome:'Pão Austrália'}],pagamento:'pix',pagamentos:{pix:37.90},pago:true};try{await enviarImpressora(gerarCupom(t));toast('✅ Teste enviado!')}catch(e){alert('Erro: '+e.message)}});
+$('#btnTestarPrinter').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');if(!printerState.conectado){if(!await conectarImpressoraParaUso())return}const t={numero:999,data:new Date().toISOString(),tipo:'entrega',cliente:'TESTE',clienteNumero:1,subtotal:32.90,taxaEntrega:5,total:37.90,itens:[{qtd:1,nome:'X-Tudo',preco:32.90,paoNome:'Pão Austrália'}],endereco:'Rua Exemplo',enderecoNumero:'123',enderecoBairro:'Centro',motoboyNome:'Carlos',pagamento:'pix',pagamentos:{pix:37.90},pago:true};try{await enviarImpressora(await gerarCupom(t));toast('✅ Teste enviado!')}catch(e){alert('Erro: '+e.message)}});
 
 function abrirModalMotoboy(){
   if(!souGerente()) return toast('🔒 Só o gerente pode gerenciar motoboys');
@@ -3894,7 +4005,7 @@ function aplicarCompraEstoque(itens){
   });
 }
 
-function imprimirAutoPreparo(p){if(!p||p.impresso)return;p.impresso=true;setTimeout(function(){try{if(printerState&&printerState.conectado){enviarImpressora(gerarCupom(p)).then(function(){toast('🖨️ Impresso #'+p.numero)}).catch(function(){p.impresso=false;toast('⚠️ Falha ao imprimir #'+p.numero+' (use Reimprimir)')})}else{p.impresso=false;toast('🖨️ Impressora não conectada — pedido segue sem imprimir')}}catch(e){p.impresso=false;console.warn(e)}},50)}
+function imprimirAutoPreparo(p){if(!p||p.impresso)return;p.impresso=true;setTimeout(function(){try{if(printerState&&printerState.conectado){gerarCupom(p).then(bytes=>enviarImpressora(bytes)).then(function(){toast('🖨️ Impresso #'+p.numero)}).catch(function(){p.impresso=false;toast('⚠️ Falha ao imprimir #'+p.numero+' (use Reimprimir)')})}else{p.impresso=false;toast('🖨️ Impressora não conectada — pedido segue sem imprimir')}}catch(e){p.impresso=false;console.warn(e)}},50)}
 (function(){function carregar(k){try{return JSON.parse(localStorage.getItem(k)||'[]')}catch(e){return[]}}
 function criavel(selId,key,onNova){var sel=document.getElementById(selId);if(!sel)return;carregar(key).forEach(function(c){if(!sel.querySelector('option[value="'+c.k+'"]')){var o=document.createElement('option');o.value=c.k;o.textContent=c.e+' '+c.n;sel.appendChild(o)}onNova(c)});var add=document.createElement('option');add.value='__nova__';add.textContent='➕ Nova categoria...';sel.appendChild(add);var ant=sel.value;sel.addEventListener('focus',function(){ant=sel.value});sel.addEventListener('change',function(){if(sel.value!=='__nova__'){ant=sel.value;return}var n=(prompt('Nome da nova categoria:')||'').trim();if(!n){sel.value=ant;return}var emo=(prompt('Emoji da categoria (opcional):','🏷️')||'').trim()||'🏷️';var k='c_'+n.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,'_');var c={k:k,n:n,e:emo};var l=carregar(key);if(!l.some(function(x){return x.k===k})){l.push(c);try{localStorage.setItem(key,JSON.stringify(l))}catch(e){}}var ex=sel.querySelector('option[value="'+k+'"]');if(!ex){ex=document.createElement('option');ex.value=k;ex.textContent=c.e+' '+n;sel.insertBefore(ex,add)}onNova(c);sel.value=k;ant=k})}
 criavel('despCategoria','rei_chapa_cats_desp',function(c){DESPESA_LABEL[c.k]={txt:c.n,e:c.e}});
