@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.5 -->
+<!-- APP_VERSION: 1.0.6 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -906,7 +906,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     </select>
     <span class="role-badge" id="roleBadge" style="display:none">👑</span>
   </div>
-  <span id="appVersion" title="Versão do aplicativo" style="position:absolute;right:9px;top:3px;z-index:60;font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1">v1.0.5</span>
+  <span id="appVersion" title="Versão do aplicativo" style="position:absolute;right:9px;top:3px;z-index:60;font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1">v1.0.6</span>
 </header>  
 <main>
   <section id="view-vendas" class="view ativo">
@@ -1098,22 +1098,31 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   </section>
 </main>
 
+<style id="menu-mais-icones-css">
+#modalMaisMenu .menu-mais-grid{gap:12px!important}
+#modalMaisMenu .tab{min-height:78px;padding:10px!important;gap:8px!important;border:1px solid rgba(212,162,60,.48)!important;border-radius:14px!important;background:linear-gradient(180deg,#2c2c31,#202024)!important;box-shadow:0 4px 10px rgba(0,0,0,.28),inset 0 1px rgba(255,255,255,.035);transition:transform .15s,border-color .15s,box-shadow .15s}
+#modalMaisMenu .tab:hover,#modalMaisMenu .tab:focus-visible{border-color:rgba(240,199,94,.82)!important;box-shadow:0 5px 14px rgba(0,0,0,.32),0 0 0 1px rgba(240,199,94,.08)}
+#modalMaisMenu .tab:focus-visible{outline:2px solid var(--gold-2);outline-offset:2px}
+#modalMaisMenu .tab:active{transform:scale(.97)}
+#modalMaisMenu .menu-mais-icone{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:42px;height:42px;flex:0 0 42px;border-radius:12px;border:1px solid rgba(212,162,60,.38);background:linear-gradient(145deg,#403f48,#28282e);box-shadow:inset 0 1px rgba(255,255,255,.07),0 2px 5px rgba(0,0,0,.2);font-size:22px;line-height:1}
+#modalMaisMenu .tab>span:not(.menu-mais-icone){font-size:10.5px;line-height:1.2;text-align:center;font-weight:700}
+</style>
 <div id="modalMaisMenu" class="modal">
     <div class="modal-box" style="max-width:400px">
         <h3>⚙️ Outras Opções</h3>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <button type="button" class="tab escondido" id="fabBackup" style="display:none; background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; flex-direction:column; align-items:center; gap:5px;">💾 <span>Backup</span></button>
-            <button type="button" class="tab escondido" data-tab="compras" id="tabCompras" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">🛒 <span>Compras</span></button>
-            <button type="button" class="tab escondido" data-tab="despesas" id="tabDespesas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">💸 <span>Despesas</span></button>
-            <button type="button" class="tab escondido" data-tab="dre" id="tabDre" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">📊 <span>DRE</span></button>
-            <button type="button" class="tab escondido" data-tab="estoque" id="tabEstoque" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">📦 <span>Estoque</span></button>
-            <button type="button" class="tab escondido" data-tab="hist" id="tabHist" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">📜 <span>Histórico</span></button>
-            <button type="button" class="tab escondido" data-tab="ingredientes" id="tabIngredientes" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">🥗 <span>Ingredientes</span></button>
-            <button type="button" class="tab" id="fabPrinter" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">🖨️ <span>Imprimir</span></button>
-            <button type="button" class="tab" id="menuMotoboy" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">🛵 <span>Motoboy</span></button>
-            <button type="button" class="tab" id="menuNotif" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">🔔 <span>Notificar</span></button>
-            <button type="button" class="tab escondido" data-tab="patrimonio" id="menuPatrimonio" style="background:#232326;color:var(--txt);border:1px solid var(--iron-5);padding:15px;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:5px">🏪 <span>Patrimônio</span></button>
-            <button type="button" class="tab" id="menuPerdas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;">📉 <span>Perdas</span></button>
+        <div class="menu-mais-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+            <button type="button" class="tab escondido" id="fabBackup" style="display:none; background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">💾</span><span>Backup</span></button>
+            <button type="button" class="tab escondido" data-tab="compras" id="tabCompras" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🛒</span><span>Compras</span></button>
+            <button type="button" class="tab escondido" data-tab="despesas" id="tabDespesas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">💸</span><span>Despesas</span></button>
+            <button type="button" class="tab escondido" data-tab="dre" id="tabDre" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📊</span><span>DRE</span></button>
+            <button type="button" class="tab escondido" data-tab="estoque" id="tabEstoque" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📦</span><span>Estoque</span></button>
+            <button type="button" class="tab escondido" data-tab="hist" id="tabHist" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📜</span><span>Histórico</span></button>
+            <button type="button" class="tab escondido" data-tab="ingredientes" id="tabIngredientes" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🥗</span><span>Ingredientes</span></button>
+            <button type="button" class="tab" id="fabPrinter" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🖨️</span><span>Imprimir</span></button>
+            <button type="button" class="tab" id="menuMotoboy" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🛵</span><span>Motoboy</span></button>
+            <button type="button" class="tab" id="menuNotif" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🔔</span><span>Notificar</span></button>
+            <button type="button" class="tab escondido" data-tab="patrimonio" id="menuPatrimonio" style="background:#232326;color:var(--txt);border:1px solid var(--iron-5);padding:15px;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:5px"><span class="menu-mais-icone" aria-hidden="true">🏪</span><span>Patrimônio</span></button>
+            <button type="button" class="tab" id="menuPerdas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📉</span><span>Perdas</span></button>
           </div>
         <div class="modal-acoes" style="margin-top:15px;">
             <button type="button" class="btn-fantasma" id="btnFecharMaisMenu">Fechar</button>
@@ -1253,7 +1262,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 </div></div>
 
 <div id="modalDespesa" class="modal"><div class="modal-box">
-  <h3 id="despesaTitulo">🛒 Registrar Compra/Despesa</h3>
+  <h3 id="despesaTitulo">🛒 Registrar Compra</h3>
   <div class="dupla">
     <div class="campo"><label>Data *</label><input id="despData" type="date"></div>
     <div class="campo"><label>Nº da Nota Fiscal</label><input id="despNF" placeholder="Opcional"></div>
@@ -1792,7 +1801,7 @@ function renderPersonalizar() {
     const info = persoModoAdd ? $('#persoAddPaoInfo') : $('#persoPaoInfo');
     if (info) info.textContent = persoPaoId ? nomePao(persoPaoId) : 'Selecione';
   } else {
-    paoBox.innerHTML = '<div style="grid-column:1/-1;color:var(--muted);font-size:12px;text-align:center;padding:10px">Este produto não usa pão</div>';
+    paoBox.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:10px">Este produto não usa pão</div>';
   }
 
   // 3. Ingredientes
@@ -4441,7 +4450,7 @@ function abrirModalDespesa(despesa){
   if(!souGerente()) return toast('🔒 Só o gerente pode lançar ou editar compras');
   sincronizarCategoriasFinanceiras({});
   editandoDespesaId=despesa?despesa.id:null;
-  $('#despesaTitulo').textContent=despesa?'✏️ Editar gasto':'🛒 Registrar Compra/Despesa';
+  $('#despesaTitulo').textContent=despesa?'✏️ Editar gasto':'🛒 Registrar Compra';
   $('#despData').value=despesa?despesa.data:dataHojeLocal();
   $('#despNF').value=despesa?(despesa.nf||''):'';
   $('#despCategoria').value=despesa?(despesa.categoria||'insumo'):'insumo';
@@ -5201,7 +5210,7 @@ window.salvarVendaManual = function() {
   window.abrirModalDespesa=function(despesa){
     if(!souGerente())return toast('🔒 Só o gerente pode lançar ou editar compras');
     window.editandoDespesaId=despesa?despesa.id:null;
-    document.getElementById('despesaTitulo').textContent=despesa?'✏️ Editar gasto':'🛒 Registrar Compra/Despesa';
+    document.getElementById('despesaTitulo').textContent=despesa?'✏️ Editar gasto':'🛒 Registrar Compra';
     document.getElementById('despData').value=despesa?despesa.data:dataHojeLocal();
     document.getElementById('despNF').value=despesa?(despesa.nf||''):'';
     document.getElementById('despCategoria').value=despesa?(despesa.categoria||'insumo'):'insumo';
@@ -8517,7 +8526,8 @@ window.salvarVendaManual = function() {
       } 
       else if(it.tipoItem === 'prod'){
         extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
-            '<select class="ic-cat" data-idx="'+i+'" style="grid-column:1/-1;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOpts+'</select>'+
+            '<select class="ic-cat" data-idx="'+i+'" style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOpts+'</select>'+
+            '<div aria-hidden="true"></div>'+
             '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Percentual acrescentado ao custo unitário para calcular a venda" value="'+lucroStr+'" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none">'+
             '<input type="text" class="ic-pv" data-idx="'+i+'" placeholder="Venda R$" value="'+pvStr+'" inputmode="numeric" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--green);border-radius:8px;padding:10px;color:var(--green);font-family:inherit;font-size:13px;font-weight:800;text-align:right;outline:none">'+
           '</div>';
