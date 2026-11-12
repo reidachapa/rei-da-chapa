@@ -882,6 +882,17 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <style id="consumo-media-checkbox-css">#campoConsumoMediaIng>label{align-items:center!important;gap:10px!important;padding:10px 12px;border:1px solid rgba(212,162,60,.35);border-radius:10px;background:linear-gradient(180deg,rgba(212,162,60,.09),rgba(24,24,25,.82));cursor:pointer}#ingConsumoMedia{appearance:none!important;-webkit-appearance:none!important;display:grid!important;place-items:center;flex:0 0 20px!important;width:20px!important;height:20px!important;min-width:20px!important;min-height:20px!important;margin:0!important;padding:0!important;border:1px solid var(--gold)!important;border-radius:5px!important;background:#151516!important;cursor:pointer}#ingConsumoMedia:checked{background:linear-gradient(180deg,#3fb972,#25834c)!important;border-color:#55d28a!important}#ingConsumoMedia:checked:after{content:"✓";color:#fff;font-size:15px;font-weight:900;line-height:1}</style>
 
 <style id="modal-compra-scrollbar-css">#modalDespesa,#modalDespesa .modal-box,#modalDespesa .lista-itens-compra{scrollbar-width:none!important;-ms-overflow-style:none!important}#modalDespesa::-webkit-scrollbar,#modalDespesa .modal-box::-webkit-scrollbar,#modalDespesa .lista-itens-compra::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
+<style id="modal-saida-css">
+  #modalConfirmarSaida{z-index:260;background:rgba(5,5,7,.82);backdrop-filter:blur(7px)}
+  #modalConfirmarSaida .saida-box{position:relative;overflow:hidden;max-width:390px;align-items:center;text-align:center;padding:24px 22px 20px;gap:14px;border-color:rgba(212,162,60,.48);background:radial-gradient(ellipse at 50% 0%,rgba(212,162,60,.14),transparent 58%),linear-gradient(170deg,#252529 0%,#171719 100%);box-shadow:0 24px 70px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.06)}
+  #modalConfirmarSaida .saida-emblema{width:58px;height:58px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(212,162,60,.58);background:radial-gradient(circle at 35% 28%,#494345,#242327 72%);box-shadow:0 0 24px rgba(212,162,60,.16),inset 0 1px rgba(255,255,255,.1);font-size:29px}
+  #modalConfirmarSaida .saida-box h3{width:100%;border:0;padding:0;text-align:center;font-size:16px;letter-spacing:.1px}
+  #modalConfirmarSaida .saida-box p{max-width:300px;color:var(--muted);font-size:13px;line-height:1.5}
+  #modalConfirmarSaida .modal-acoes{width:100%;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}
+  #modalConfirmarSaida .modal-acoes button{min-width:0;min-height:46px;padding:10px 8px;font-size:11px;letter-spacing:.25px}
+  #modalConfirmarSaida #btnSairDoApp{border-color:rgba(229,72,77,.35);color:#e5a4a6}
+  @media(max-width:380px){#modalConfirmarSaida .saida-box{padding:22px 16px 18px}}
+</style>
 </head><body>
 <div id="conexaoGate" role="dialog" aria-modal="true" aria-labelledby="conexaoTitulo">
   <div class="conexao-caixa">
@@ -1213,6 +1224,17 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   </div>
 </div>
 
+<div id="modalConfirmarSaida" class="modal" role="dialog" aria-modal="true" aria-labelledby="tituloConfirmarSaida" aria-describedby="descricaoConfirmarSaida">
+  <div class="modal-box saida-box">
+    <div class="saida-emblema" aria-hidden="true">👑</div>
+    <h3 id="tituloConfirmarSaida">Deseja sair do aplicativo?</h3>
+    <p id="descricaoConfirmarSaida">O Rei da Chapa Delivery continuará aberto se você escolher ficar.</p>
+    <div class="modal-acoes">
+      <button type="button" class="btn-primario" id="btnFicarNoApp">Continuar no app</button>
+      <button type="button" class="btn-fantasma" id="btnSairDoApp">🚪 Sair</button>
+    </div>
+  </div>
+</div>
 <div id="modalSenha" class="modal senha-modal"><div class="modal-box">
   <div class="senha-icone">🔒</div>
   <h3 style="border:0;padding:0;text-align:center">Acesso Restrito</h3>
@@ -1632,7 +1654,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 (function instalarNavegacaoVoltarAndroid(){
   if(window.__reiChapaVoltarInstalado)return;
   window.__reiChapaVoltarInstalado=true;
-  var pilhaTelas=[],aplicandoVolta=false;
+  var pilhaTelas=[],aplicandoVolta=false,confirmandoSaida=false,passosSaida=0;
   var telasGerente=['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
 
   document.addEventListener('click',function(e){
@@ -1673,6 +1695,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   }
 
   window.addEventListener('popstate',function(){
+    if(confirmandoSaida){passosSaida--;if(passosSaida<=0)confirmandoSaida=false;return}
     var modal=modalAbertoNoTopo();
     if(modal){modal.classList.remove('aberto');protegerVolta();return}
 
@@ -1687,8 +1710,22 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
       return;
     }
 
-    if(!window.confirm('Deseja sair do aplicativo Rei da Chapa Delivery?'))protegerVolta();
+    var modalSaida=document.getElementById('modalConfirmarSaida');if(modalSaida){protegerVolta();modalSaida.classList.add('aberto');var btnFicar=document.getElementById('btnFicarNoApp');if(btnFicar)btnFicar.focus({preventScroll:true})}
   });
+
+  function fecharModalSaida(){var modal=document.getElementById('modalConfirmarSaida');if(modal)modal.classList.remove('aberto')}
+  var btnFicarNoApp=document.getElementById('btnFicarNoApp');
+  if(btnFicarNoApp)btnFicarNoApp.addEventListener('click',fecharModalSaida);
+  var btnSairDoApp=document.getElementById('btnSairDoApp');
+  if(btnSairDoApp)btnSairDoApp.addEventListener('click',function(){
+    fecharModalSaida();confirmandoSaida=true;passosSaida=2;
+    try{window.close()}catch(e){}
+    try{history.back()}catch(e){}
+    setTimeout(function(){if(confirmandoSaida&&passosSaida>0){try{history.back()}catch(e){}}},100);
+    setTimeout(function(){confirmandoSaida=false;passosSaida=0;if(!document.hidden&&typeof toast==='function')toast('Se o app continuar aberto, toque em Voltar mais uma vez para sair.')},800);
+  });
+  var modalConfirmarSaida=document.getElementById('modalConfirmarSaida');
+  if(modalConfirmarSaida)modalConfirmarSaida.addEventListener('click',function(e){if(e.target===modalConfirmarSaida)fecharModalSaida()});
 
   protegerVolta();
 })();
@@ -4435,7 +4472,7 @@ function getCategoriasCustom(){try{return JSON.parse(localStorage.getItem('rei_c
 function listaCategoriaCompraLocal(k){try{var a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
 function objetoCategoriaCompraLocal(k){try{var o=JSON.parse(localStorage.getItem(k)||'{}');return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}catch(e){return{}}}
 function categoriaLabelSelecionada(id){var sel=document.getElementById('despCategoria');if(!sel)return String(id||'');var op=Array.prototype.find.call(sel.options,function(x){return x.value===String(id||'')});return op?String(op.textContent||'').trim():String(id||'')}
-function rotuloCategoriaFinanceira(d){return d&&d.categoriaNome?String(d.categoriaNome):nomeCatCompra(d&&d.categoria)}
+function rotuloCategoriaFinanceira(d){if(!d)return'—';var categoria=String(d.categoria||'').trim(),nome=String(d.categoriaNome||'').trim();return nome&&nome!==categoria?nome:nomeCatCompra(categoria)}
 function rotuloCategoriaItem(it){if(!it)return'';if(it.categoriaNome)return String(it.categoriaNome);return String(it.categoria||'').trim()}
 function categoriasDaNota(d){var saida=[],vistos={};(d&&Array.isArray(d.itens)?d.itens:[]).forEach(function(it){var rot=rotuloCategoriaItem(it).trim();if(!rot)return;var chave=normalizarNomeCadastro(rot);if(!vistos[chave]){vistos[chave]=1;saida.push(rot)}});return saida}
 function guardarCategoriaCompraLocal(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
@@ -4474,9 +4511,9 @@ var k=comprasSort.c,dir=comprasSort.d;arr.sort(function(a,b){var r;if(k==='total
 function montarFiltrosCompras(){var sm=document.getElementById('comprasMes'),sc=document.getElementById('comprasCat');if(!sm||!sc)return;var set={};set[new Date().toISOString().slice(0,7)]=1;(despesas||[]).forEach(function(d){if(d.data&&!ehDespesaAvulsa(d))set[String(d.data).slice(0,7)]=1});var meses=Object.keys(set).sort().reverse();sm.innerHTML='<option value="">Todos os meses</option>'+meses.map(function(m){return '<option value="'+m+'">'+rotuloMes(m)+'</option>'}).join('');sm.value=comprasMes;var dc=document.getElementById('despCategoria');var o='<option value="">Todas categorias financeiras</option>'; if(dc)Array.prototype.forEach.call(dc.options,function(op){if(op.value&&op.value!=='__nova__')o+='<option value="'+op.value+'">'+esc(op.textContent)+'</option>'});var vistos={};if(dc)Array.prototype.forEach.call(dc.options,function(op){vistos[op.value]=1});(despesas||[]).forEach(function(d){if(d.categoria&&!vistos[d.categoria]){vistos[d.categoria]=1;o+='<option value="'+d.categoria+'">'+esc(nomeCatCompra(d.categoria))+'</option>'}});sc.innerHTML=o;sc.value=comprasCat}
 function renderCompras(){if(!souGerente())return;sincronizarCategoriasFinanceiras({});montarFiltrosCompras();var f=comprasFiltradas();var soma=function(a){return a.reduce(function(s,d){return s+(d.valor||0)},0)};var total=soma(f),pago=soma(f.filter(function(d){return d.status!=='pendente'})),pend=soma(f.filter(function(d){return d.status==='pendente'}));var lab=comprasMes?rotuloMes(comprasMes):'Todos os meses';var st=document.getElementById('comprasStats');if(st)st.innerHTML='<div class="dre-card azul"><div class="titulo">Compras</div><div class="valor">'+f.length+'</div><div class="sub">'+lab+'</div></div><div class="dre-card"><div class="titulo">Total em compras</div><div class="valor">'+moeda(total)+'</div><div class="sub">no filtro</div></div><div class="dre-card verde"><div class="titulo">✅ Pago</div><div class="valor">'+moeda(pago)+'</div><div class="sub">quitado</div></div><div class="dre-card vermelho"><div class="titulo">⏳ A pagar</div><div class="valor">'+moeda(pend)+'</div><div class="sub">pendente</div></div><div class="dre-card roxo"><div class="titulo">Ticket médio</div><div class="valor">'+moeda(f.length?total/f.length:0)+'</div><div class="sub">por compra</div></div>';
 var lista=document.getElementById('comprasLista');if(!lista)return;var seta=function(c,pad){return comprasSort.c===c?(comprasSort.d>0?' ▲':' ▼'):(pad?' ⇅':'')};
-var cab='<table class="reg-tab"><thead><tr><th data-sort="data">Data'+seta('data',0)+'</th><th data-sort="forn">Fornecedor'+seta('forn',1)+'</th><th data-sort="nf">NF'+seta('nf',1)+'</th><th>Categoria dos itens</th><th>Itens</th><th>Status</th><th class="num">Desconto</th><th class="num" data-sort="total">Total'+seta('total',1)+'</th><th></th></tr></thead><tbody>';
+var cab='<table class="reg-tab"><thead><tr><th data-sort="data">Data'+seta('data',0)+'</th><th data-sort="forn">Fornecedor'+seta('forn',1)+'</th><th data-sort="nf">NF'+seta('nf',1)+'</th><th>Categoria da nota</th><th>Itens</th><th>Status</th><th class="num">Desconto</th><th class="num" data-sort="total">Total'+seta('total',1)+'</th><th></th></tr></thead><tbody>';
 if(!f.length){lista.innerHTML=cab+'<tr><td colspan="9" style="text-align:center;padding:26px;color:var(--muted)">Nenhuma compra neste filtro.<br>Clique em <b>➕ Nova Compra</b> pra lançar.</td></tr></tbody></table>';return}
-lista.innerHTML=cab+f.map(function(d){var dt=new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR');var n=(d.itens||[]).length;var res=n?d.itens.slice(0,2).map(function(i){return i.qtd+'x '+esc(i.nome)}).join(', ')+(n>2?' +'+(n-2):''):'—';var catsNota=categoriasDaNota(d);var categoriaFinanceira=rotuloCategoriaFinanceira(d);return '<tr><td>'+dt+'</td><td>'+(d.fornecedor?'<span class="reg-pill">'+esc(d.fornecedor)+'</span>':'<span class="mut">—</span>')+'</td><td class="mut">'+esc(d.nf||'—')+'</td><td>'+esc(catsNota.join(', ')||'—')+'<small style="display:block;color:var(--muted)">Financeiro: '+esc(categoriaFinanceira)+'</small></td><td class="mut">'+res+'</td><td>'+(d.status==='pendente'?'<span class="reg-st pend">⏳ A PAGAR</span>':'<span class="reg-st ok">✅ PAGO</span>')+'</td><td class="num mut">'+(d.desconto>0?moeda(d.desconto):'—')+'</td><td class="num"><b>'+moeda(d.valor||0)+'</b></td><td class="acoes"><button data-acao="ver" data-id="'+d.id+'">👁️</button><button data-acao="editar" data-id="'+d.id+'">✏️</button><button data-acao="excluir" data-id="'+d.id+'" style="color:var(--red)">🗑️</button></td></tr>'}).join('')+'</tbody></table>'}
+lista.innerHTML=cab+f.map(function(d){var dt=new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR');var n=(d.itens||[]).length;var res=n?d.itens.slice(0,2).map(function(i){return i.qtd+'x '+esc(i.nome)}).join(', ')+(n>2?' +'+(n-2):''):'—';var categoriaFinanceira=rotuloCategoriaFinanceira(d);return '<tr><td>'+dt+'</td><td>'+(d.fornecedor?'<span class="reg-pill">'+esc(d.fornecedor)+'</span>':'<span class="mut">—</span>')+'</td><td class="mut">'+esc(d.nf||'—')+'</td><td><span class="reg-pill" style="text-transform:none">'+esc(categoriaFinanceira||'—')+'</span></td><td class="mut">'+res+'</td><td>'+(d.status==='pendente'?'<span class="reg-st pend">⏳ A PAGAR</span>':'<span class="reg-st ok">✅ PAGO</span>')+'</td><td class="num mut">'+(d.desconto>0?moeda(d.desconto):'—')+'</td><td class="num"><b>'+moeda(d.valor||0)+'</b></td><td class="acoes"><button data-acao="ver" data-id="'+d.id+'">👁️</button><button data-acao="editar" data-id="'+d.id+'">✏️</button><button data-acao="excluir" data-id="'+d.id+'" style="color:var(--red)">🗑️</button></td></tr>'}).join('')+'</tbody></table>'}
 var despesaAvulsaEditandoId=null,despesasAvulsasMes='';
 function popularCategoriasDespesaAvulsa(){var sel=document.getElementById('despAvulsaCategoria'),orig=document.getElementById('despCategoria');if(!sel||!orig)return;var atual=sel.value;sel.innerHTML='';Array.prototype.forEach.call(orig.options,function(op){if(!op.value||op.value==='insumo'||op.value==='__nova__')return;var n=document.createElement('option');n.value=op.value;n.textContent=op.textContent;sel.appendChild(n)});if(!sel.options.length){[['aluguel','🏠 Aluguel'],['luz','💡 Luz'],['agua','💧 Água'],['gas','🔥 Gás'],['internet','📶 Internet/Telefone'],['funcionario','👤 Salário/Diária'],['motoboy','🛵 Motoboy'],['marketing','📣 Marketing'],['manutencao','🔧 Manutenção'],['outro','🍴 Outro']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.appendChild(o)})}if(Array.prototype.some.call(sel.options,function(o){return o.value===atual}))sel.value=atual}
 function abrirModalDespesaAvulsa(id){if(!souGerente())return toast('🔒 Só o gerente pode lançar despesas');popularCategoriasDespesaAvulsa();var d=id?(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)}):null;if(id&&!d)return toast('⚠️ Despesa não encontrada');despesaAvulsaEditandoId=d?d.id:null;document.getElementById('tituloDespesaAvulsa').textContent=d?'✏️ Editar despesa':'💸 Lançar despesa';document.getElementById('despAvulsaData').value=d?d.data:dataHojeLocal();document.getElementById('despAvulsaCategoria').value=d?d.categoria:(document.getElementById('despAvulsaCategoria').options[0]||{}).value||'outro';document.getElementById('despAvulsaDescricao').value=d?(d.subcategoria||d.descricao||''):'';document.getElementById('despAvulsaValor').value=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';document.getElementById('despAvulsaStatus').value=d?(d.status||'pago'):'pago';document.getElementById('despAvulsaObs').value=d?(d.obs||''):'';document.getElementById('modalDespesaAvulsa').classList.add('aberto')}
