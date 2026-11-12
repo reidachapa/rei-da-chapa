@@ -2900,13 +2900,14 @@ ${p.troco>0?`<div><b>TROCO: R$ ${p.troco.toFixed(2).replace('.',',')}</b></div>`
 }
 $('#btnExportarCSV').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente');const filtrados=pedidosFiltradosHist();if(!filtrados.length)return toast('⚠️ Nenhum pedido pra exportar');const linhas=[];linhas.push(['Número','Data','Hora','Cliente','Tipo','Pagamento','Pago','Venda Produtos','Taxa Entrega','Total Cobrado','Custo','Lucro Bruto','Observação','Itens'].join(';'));filtrados.slice().reverse().forEach(p=>{const dt=new Date(p.finalizadoEm||p.data);const dataStr=dt.toLocaleDateString('pt-BR');const horaStr=dt.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});const itensStr=p.itens.map(it=>`${it.qtd}x ${it.nome}`).join(' | ');const obs=(p.obs||'').replace(/;/g,',');const subtotal=p.subtotal!==undefined?p.subtotal:(p.total-(p.taxaEntrega||0));const lucroBruto=subtotal-(p.custoTotal||0);const pgtoCsv=pagamentosDoPedido(p).map(([k,v])=>`${(PAGAMENTO_LABEL[k]||{txt:k}).txt} ${v.toFixed(2).replace('.',',')}`).join(' + ')||p.pagamento;linhas.push([p.numero,dataStr,horaStr,(p.cliente||'Balcão').replace(/;/g,','),p.tipo,pgtoCsv,p.pago?'Sim':'Não',subtotal.toFixed(2).replace('.',','),(p.taxaEntrega||0).toFixed(2).replace('.',','),(p.total||0).toFixed(2).replace('.',','),(p.custoTotal||0).toFixed(2).replace('.',','),lucroBruto.toFixed(2).replace('.',','),obs,itensStr.replace(/;/g,',')].join(';'))});const csv='\uFEFF'+linhas.join('\n');try{const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`pedidos-${new Date().toISOString().slice(0,10)}.csv`;document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),1000);toast(`📥 CSV (${filtrados.length})`)}catch(e){toast('❌ Erro')}});
 
-var despItensTemp=[];function getSugestoes(tipo){try{var raw=localStorage.getItem('rei_chapa_sug_'+tipo);return raw?JSON.parse(raw):[]}catch(e){return[]}}
+var despItensTemp=[],compraNotaEmAndamento=false;function getSugestoes(tipo){try{var raw=localStorage.getItem('rei_chapa_sug_'+tipo);return raw?JSON.parse(raw):[]}catch(e){return[]}}
 function addSugestao(tipo,valor){if(!valor||!valor.trim())return;valor=valor.trim();var arr=getSugestoes(tipo);var existe=arr.some(function(v){return v.toLowerCase()===valor.toLowerCase()});if(existe)return;arr.push(valor);if(arr.length>200)arr=arr.slice(-200);try{localStorage.setItem('rei_chapa_sug_'+tipo,JSON.stringify(arr))}catch(e){}}
 function popularSugestoes(tipo,idDatalist){var dl=document.getElementById(idDatalist);if(!dl)return;var arr=getSugestoes(tipo);dl.innerHTML=arr.map(function(v){return '<option value="'+esc(v)+'">'}).join('')}
 function popularTodasSugestoes(){popularSugestoes('fornecedor','listaFornecedores');popularSugestoes('subcategoria','listaSubcategorias');popularSugestoes('produto','listaProdutos')}
 function popularFornecedoresDatalist(){var dl=document.getElementById('listaFornecedores');if(!dl)return;var set={};(despesas||[]).forEach(function(d){if(d.fornecedor)set[d.fornecedor]=1});dl.innerHTML=Object.keys(set).sort().map(function(f){return '<option value="'+esc(f)+'">'}).join('')}
 async function salvarCompraDaNota(e){
   if(e){e.preventDefault();e.stopImmediatePropagation();}
+  if(compraNotaEmAndamento)return;
   if(!souGerente()) return toast('Apenas o gerente pode salvar compras');
   var arr=window.despItensTemp||despItensTemp||[];
   var dataEl=document.getElementById('despData');
@@ -2919,6 +2920,7 @@ async function salvarCompraDaNota(e){
    if(rendimentoApagado)return toast('O item "'+rendimentoApagado.nome+'" já tem rendimento salvo. Informe o valor para preservar a ficha e o estoque.');
   var botaoSalvarNota=document.getElementById('btnSalvarDespesa');
   if(botaoSalvarNota&&botaoSalvarNota.disabled)return;
+  compraNotaEmAndamento=true;
   var textoBotaoSalvarNota=botaoSalvarNota?botaoSalvarNota.textContent:'';
   if(botaoSalvarNota){botaoSalvarNota.disabled=true;botaoSalvarNota.textContent='⏳ Confirmando no servidor...'}
   var editId=window.editandoDespesaId||editandoDespesaId;
@@ -3015,7 +3017,7 @@ async function salvarCompraDaNota(e){
     console.error('Falha ao salvar compra:',err);
     if(estadoAntes&&!compraConfirmadaNoServidor){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
     alert('Não foi possível salvar a compra: '+(err&&err.message||err));
-  }finally{if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
+  }finally{compraNotaEmAndamento=false;if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
 }
 // Um único ponto de gravação controla produto, custo, estoque e nota da compra.
 document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('#btnSalvarDespesa'):null;if(b)salvarCompraDaNota(e);},true);
