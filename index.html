@@ -3730,7 +3730,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
       (r||[]).concat(l||[],b||[]).forEach(function(x){var id=String(x.id);if(ids.indexOf(id)<0)ids.push(id)});
       var saida=[],inventario=/\.(produtos|paes|ingredientes)$/.test(caminho);
       ids.forEach(function(id){var vb=mb.get(id),vl=ml.get(id),vr=mr.get(id),p=caminho+'['+id+']';
-        if(vb===undefined){if(vl!==undefined&&vr!==undefined&&!dadosIguais(vl,vr))conflito(p);var novo=vl!==undefined?vl:vr;if(novo!==undefined)saida.push(clonarDadosEstado(novo));return}
+        if(vb===undefined){if(/\.despesas$/.test(caminho)&&vl!==undefined&&vr!==undefined&&notaCompraIgual(vl,vr)){saida.push(clonarDadosEstado(vr));return}if(vl!==undefined&&vr!==undefined&&!dadosIguais(vl,vr))conflito(p);var novo=vl!==undefined?vl:vr;if(novo!==undefined)saida.push(clonarDadosEstado(novo));return}
         if(vl===undefined){if(vr===undefined||dadosIguais(vr,vb))return;conflito(p+' removido enquanto era editado')}
         if(vr===undefined){if(dadosIguais(vl,vb))return;conflito(p+' removido enquanto era editado')}
         if(/\.despesas$/.test(caminho)&&ehNotaCompraSalva(vb)){
@@ -3738,7 +3738,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
           if(notaLocalMudou&&notaRemotaMudou&&notaCompraIgual(vl,vr)){saida.push(clonarDadosEstado(vr));return}
           if(notaLocalMudou&&notaRemotaMudou&&!dadosIguais(vl,vr))conflito('nota de compra '+id+' editada em dois aparelhos');
         }
-        var lojaInventario=(caminho.match(/\.porLoja\.([^.]+)\./)||[])[1],tipoInventario=/\.produtos$/.test(caminho)?'prod':/\.paes$/.test(caminho)?'pao':/\.ingredientes$/.test(caminho)?'ing':null,chaveDelta=lojaInventario&&tipoInventario?lojaInventario+'|'+tipoInventario+':'+id+'|':'',opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario,sharedInventoryDelta:null};if(chaveDelta)opcoesRegistro.sharedInventoryDelta={estoque:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoque')||{qtd:0,valor:0},estoqueEstimado:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoqueEstimado')||{qtd:0,valor:0}}
+        var lojaInventario=(caminho.match(/\.porLoja\.([^.]+)\./)||[])[1],tipoInventario=/\.produtos$/.test(caminho)?'prod':/\.paes$/.test(caminho)?'pao':/\.ingredientes$/.test(caminho)?'ing':null,chaveDelta=lojaInventario&&tipoInventario?lojaInventario+'|'+tipoInventario+':'+id+'|':'',opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario,inventoryType:tipoInventario,sharedInventoryDelta:null};if(chaveDelta)opcoesRegistro.sharedInventoryDelta={estoque:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoque')||{qtd:0,valor:0},estoqueEstimado:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoqueEstimado')||{qtd:0,valor:0}}
         saida.push(opcoesRegistro.mergeInventory?mesclarObjeto(vb,vl,vr,p,opcoesRegistro):mesclarValor(vb,vl,vr,p,opcoesRegistro));
       });
       return saida;
@@ -3753,6 +3753,10 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     var out={},keys=new Set(Object.keys(b||{}).concat(Object.keys(l||{}),Object.keys(r||{})));
     var campoQtd=(b&&b.semEstoque||l&&l.semEstoque||r&&r.semEstoque)?'estoqueEstimado':'estoque';
     keys.forEach(function(k){var vb=b?b[k]:undefined,vl=l?l[k]:undefined,vr=r?r[k]:undefined,p=caminho+'.'+k;
+      if(k==='comprasDesdeContagem'&&opts.inventoryType==='ing'&&(b&&b.consumoMedia||l&&l.consumoMedia||r&&r.consumoMedia)&&typeof vl==='number'&&typeof vr==='number'){
+        var deltaCompraContagem=opts.sharedInventoryDelta&&opts.sharedInventoryDelta.estoqueEstimado||{qtd:0};
+        if(deltaCompraContagem.qtd){out[k]=num(vb)+(vl-num(vb))+(vr-num(vb))-num(deltaCompraContagem.qtd);return}
+      }
       if(k==='custo'&&opts.inventoryEntity&&opts.mergeInventory&&typeof vb==='number'&&typeof vl==='number'&&typeof vr==='number'){
         var qb=num(b[campoQtd]),ql=num(l[campoQtd]),qr=num(r[campoQtd]),deltaDuplicado=opts.sharedInventoryDelta&&opts.sharedInventoryDelta[campoQtd]||{qtd:0,valor:0},qtdDuplicada=num(deltaDuplicado.qtd),valorDuplicado=num(deltaDuplicado.valor);
         if(qb!==ql||qb!==qr||qtdDuplicada||valorDuplicado){var qFinal=qb+(ql-qb)+(qr-qb)-qtdDuplicada,valorFinal=ql*vl+qr*vr-qb*vb-valorDuplicado;if(qFinal>0){out[k]=Math.max(0,valorFinal/qFinal);return}}
