@@ -160,6 +160,16 @@
   .ing-stepper .stepper button:disabled{opacity:.35}
   .ing-stepper .stepper span{min-width:26px;text-align:center;font-weight:900;font-size:17px;font-family:Georgia,serif}
   .lista-estoque,.lista-clientes{display:flex;flex-direction:column;gap:9px}
+  .estoque-busca{display:flex;align-items:center;gap:9px;width:100%;margin:8px 0 10px;padding:0 12px;min-height:44px;background:linear-gradient(180deg,#1c1c1f,#141416);border:1px solid var(--iron-5);border-radius:10px;box-shadow:inset 0 1px rgba(255,255,255,.025);transition:border-color .15s,box-shadow .15s}
+  .estoque-busca:focus-within{border-color:rgba(212,162,60,.75);box-shadow:0 0 0 2px rgba(212,162,60,.12)}
+  .estoque-busca svg{width:19px;height:19px;flex:0 0 19px;stroke:var(--gold-2);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .estoque-busca input{width:100%;min-width:0;margin:0!important;padding:10px 0!important;border:0!important;outline:0!important;background:transparent!important;box-shadow:none!important;color:var(--txt)!important;font:inherit;color-scheme:dark}
+  .estoque-busca input::placeholder{color:var(--muted);opacity:1}
+  .estoque-busca input::-webkit-search-cancel-button{filter:invert(.75) sepia(.5) saturate(1.5);cursor:pointer}
+  .categorias-estoque{display:flex;align-items:center;gap:7px;min-width:0;overflow-x:auto;padding:2px 1px 9px;margin-bottom:3px;scrollbar-width:thin;scrollbar-color:var(--gold-dark) transparent;-webkit-overflow-scrolling:touch}
+  .categorias-estoque button{flex:0 0 auto;min-height:36px;padding:8px 12px;border:1px solid var(--iron-5);border-radius:9px;background:linear-gradient(180deg,#202023,#171719);color:var(--muted);font-family:inherit;font-size:11px;font-weight:800;text-transform:uppercase;white-space:nowrap;cursor:pointer;transition:.15s}
+  .categorias-estoque button.ativa{border-color:rgba(240,200,98,.8);background:linear-gradient(180deg,var(--gold),var(--gold-dark));color:#1a1206;box-shadow:0 2px 8px rgba(212,162,60,.16)}
+  .categorias-estoque button:active{transform:scale(.97)}
   .item-estoque{background:linear-gradient(170deg,#232326,#18181a);border:1px solid var(--iron-5);border-radius:12px;padding:11px;display:grid;grid-template-columns:52px 1fr auto auto;gap:12px;align-items:center}
   .item-estoque.eh-sanduiche{border-left:3px solid var(--bread)}
   .ie-img{width:52px;height:52px;border-radius:10px;background:linear-gradient(180deg,#2a2a2e,#1a1a1c);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:22px;border:1px solid var(--iron-5)}
@@ -990,7 +1000,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
         <h3 class="section-titulo">🥖 Estoque de Pães</h3>
         <div id="listaPaes" class="lista-paes"></div>
         <h3 class="section-titulo">🍔 Produtos</h3>
-        <input id="buscaEstoqueProdutos" type="search" placeholder="🔎 Buscar produto no estoque" style="width:100%;margin:8px 0"><div id="listaEstoque" class="lista-estoque"></div>
+        <label class="estoque-busca"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"></circle><path d="m16 16 4.5 4.5"></path></svg><input id="buscaEstoqueProdutos" type="search" aria-label="Buscar produto no estoque" placeholder="Buscar produto no estoque"></label><div id="categoriasEstoque" class="categorias-estoque" aria-label="Filtrar produtos por categoria"></div><div id="listaEstoque" class="lista-estoque"></div>
       </div>
     </div>
   </section>
@@ -1111,7 +1121,6 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <div class="modal-box" style="max-width:400px">
         <h3>⚙️ Outras Opções</h3>
         <div class="menu-mais-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-            <button type="button" class="tab escondido" id="fabBackup" style="display:none; background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">💾</span><span>Backup</span></button>
             <button type="button" class="tab escondido" data-tab="compras" id="tabCompras" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🛒</span><span>Compras</span></button>
             <button type="button" class="tab escondido" data-tab="despesas" id="tabDespesas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">💸</span><span>Despesas</span></button>
             <button type="button" class="tab escondido" data-tab="dre" id="tabDre" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📊</span><span>DRE</span></button>
@@ -1123,6 +1132,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
             <button type="button" class="tab" id="menuNotif" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">🔔</span><span>Notificar</span></button>
             <button type="button" class="tab escondido" data-tab="patrimonio" id="menuPatrimonio" style="background:#232326;color:var(--txt);border:1px solid var(--iron-5);padding:15px;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:5px"><span class="menu-mais-icone" aria-hidden="true">🏪</span><span>Patrimônio</span></button>
             <button type="button" class="tab" id="menuPerdas" style="background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; display:flex; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">📉</span><span>Perdas</span></button>
+            <button type="button" class="tab escondido" id="fabBackup" style="display:none; background:#232326; color:var(--txt); border:1px solid var(--iron-5); padding:15px; border-radius:10px; flex-direction:column; align-items:center; gap:5px;"><span class="menu-mais-icone" aria-hidden="true">💾</span><span>Backup</span></button>
           </div>
         <div class="modal-acoes" style="margin-top:15px;">
             <button type="button" class="btn-fantasma" id="btnFecharMaisMenu">Fechar</button>
@@ -1589,9 +1599,10 @@ let toastTimer;
 window.toast=function(msg){const el=$('#toast');el.textContent=msg;el.classList.add('mostrar');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('mostrar'),2400)};
 const toast=window.toast;
 
+function atualizarVisibilidadeBackup(){var botao=document.getElementById('fabBackup');if(!botao)return;var mostrar=!!window.__authPermitido&&souGerente();botao.classList.toggle('escondido',!mostrar);botao.style.display=mostrar?'flex':'none'}
 function aplicarRole(){const ehGer=souGerente();const menuPatrimonio=$('#menuPatrimonio');const tabDre=$('#tabDre'),tabHist=$('#tabHist');const tabEst=$('#tabEstoque'),tabIng=$('#tabIngredientes'),tabDesp=$('#tabDespesas');
 if(ehGer){tabDre.classList.remove('escondido');var tabC=document.getElementById('tabCompras');if(tabC)tabC.classList.remove('escondido');if(tabDesp)tabDesp.classList.remove('escondido');tabHist.classList.remove('escondido');if(tabEst)tabEst.classList.remove('escondido');if(tabIng)tabIng.classList.remove('escondido');}
-else{tabDre.classList.add('escondido');var tabC2=document.getElementById('tabCompras');if(tabC2)tabC2.classList.add('escondido');if(tabDesp)tabDesp.classList.add('escondido');tabHist.classList.add('escondido');if(tabEst)tabEst.classList.add('escondido');if(tabIng)tabIng.classList.add('escondido');}if(menuPatrimonio)menuPatrimonio.classList.toggle('escondido',!ehGer);$('#roleBadge').style.display=ehGer?'inline-block':'none';var backupButton=$('#fabBackup');backupButton.classList.toggle('escondido',!ehGer);backupButton.style.display=ehGer?'flex':'none';const bloq=!ehGer;const avisoEsq=$('#avisoEstoqueBloq'),avisoIng=$('#avisoIngBloq');if(bloq){if(avisoEsq){avisoEsq.textContent='🔒 Somente o gerente pode alterar o estoque';avisoEsq.style.display='block'}if(avisoIng){avisoIng.textContent='🔒 Somente o gerente pode alterar os ingredientes';avisoIng.style.display='block'}}else{if(avisoEsq)avisoEsq.style.display='none';if(avisoIng)avisoIng.style.display='none'}$$('#formProduto input, #formProduto select, #formProduto button').forEach(el=>el.disabled=bloq);$$('#formIngrediente input, #formIngrediente select, #formIngrediente button').forEach(el=>el.disabled=bloq);$('#formProduto').style.opacity=bloq?'.55':'1';$('#formIngrediente').style.opacity=bloq?'.55':'1';renderPaes();renderEstoque();renderIngredientes();if(typeof atualizarCamposEstoqueIng==='function')atualizarCamposEstoqueIng()}
+else{tabDre.classList.add('escondido');var tabC2=document.getElementById('tabCompras');if(tabC2)tabC2.classList.add('escondido');if(tabDesp)tabDesp.classList.add('escondido');tabHist.classList.add('escondido');if(tabEst)tabEst.classList.add('escondido');if(tabIng)tabIng.classList.add('escondido');}if(menuPatrimonio)menuPatrimonio.classList.toggle('escondido',!ehGer);$('#roleBadge').style.display=ehGer?'inline-block':'none';atualizarVisibilidadeBackup();const bloq=!ehGer;const avisoEsq=$('#avisoEstoqueBloq'),avisoIng=$('#avisoIngBloq');if(bloq){if(avisoEsq){avisoEsq.textContent='🔒 Somente o gerente pode alterar o estoque';avisoEsq.style.display='block'}if(avisoIng){avisoIng.textContent='🔒 Somente o gerente pode alterar os ingredientes';avisoIng.style.display='block'}}else{if(avisoEsq)avisoEsq.style.display='none';if(avisoIng)avisoIng.style.display='none'}$$('#formProduto input, #formProduto select, #formProduto button').forEach(el=>el.disabled=bloq);$$('#formIngrediente input, #formIngrediente select, #formIngrediente button').forEach(el=>el.disabled=bloq);$('#formProduto').style.opacity=bloq?'.55':'1';$('#formIngrediente').style.opacity=bloq?'.55':'1';renderPaes();renderEstoque();renderIngredientes();if(typeof atualizarCamposEstoqueIng==='function')atualizarCamposEstoqueIng()}
 
 $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   const t=tab.dataset.tab;
@@ -2483,16 +2494,25 @@ $('#listaIngredientes').addEventListener('click',e=>{const btn=e.target.closest(
  atualizarCamposEstoqueIng();
  $('#btnCancelarIng').addEventListener('click',resetarFormIng);
 
+let categoriaEstoqueSelecionada='__todas__';
 function renderEstoque(){
   const cont=$('#listaEstoque');
+  if(!cont)return;
   cont.innerHTML='';
+  const barraCategorias=document.getElementById('categoriasEstoque');
+  const categoriasMap=new Map();
+  produtos.forEach(function(p){var nome=String(p.categoria||'Sem categoria').trim()||'Sem categoria',chave=normalizarNomeCadastro(nome)||nome.toLocaleLowerCase('pt-BR');if(!categoriasMap.has(chave))categoriasMap.set(chave,nome)});
+  const categorias=Array.from(categoriasMap.values()).sort(function(a,b){return a.localeCompare(b,'pt-BR',{sensitivity:'base',numeric:true})});
+  if(categoriaEstoqueSelecionada!=='__todas__'&&!categorias.some(function(c){return normalizarNomeCadastro(c)===normalizarNomeCadastro(categoriaEstoqueSelecionada)}))categoriaEstoqueSelecionada='__todas__';
+  if(barraCategorias)barraCategorias.innerHTML='<button type="button" data-categoria="__todas__" class="'+(categoriaEstoqueSelecionada==='__todas__'?'ativa':'')+'" aria-pressed="'+(categoriaEstoqueSelecionada==='__todas__')+'">Todos</button>'+categorias.map(function(c){var ativa=normalizarNomeCadastro(c)===normalizarNomeCadastro(categoriaEstoqueSelecionada);return '<button type="button" data-categoria="'+esc(c)+'" class="'+(ativa?'ativa':'')+'" aria-pressed="'+ativa+'">'+esc(c)+'</button>'}).join('');
   const bloq=!souGerente();
   if(!produtos.length){
     cont.innerHTML='<p class="vazio">Nenhum produto.</p>';
     return;
   }
   
-  const termoEstoque=(document.getElementById('buscaEstoqueProdutos')||{}).value||''; const produtosOrdenados = [...produtos].filter(p=>!termoEstoque||p.nome.toLowerCase().includes(termoEstoque.trim().toLowerCase())).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  const termoEstoque=normalizarNomeCadastro((document.getElementById('buscaEstoqueProdutos')||{}).value||''); const produtosOrdenados = [...produtos].filter(function(p){var nome=normalizarNomeCadastro(p.nome),categoria=normalizarNomeCadastro(p.categoria||'Sem categoria');return (!termoEstoque||nome.includes(termoEstoque))&&(categoriaEstoqueSelecionada==='__todas__'||categoria===normalizarNomeCadastro(categoriaEstoqueSelecionada))}).sort((a,b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+  if(!produtosOrdenados.length){cont.innerHTML='<p class="vazio">Nenhum produto encontrado nessa categoria.</p>';return}
   
   produtosOrdenados.forEach(p=>{
     const isSanduiche=tipoCadastroProduto(p)==='pao';
@@ -2555,6 +2575,7 @@ $('#listaEstoque').addEventListener('click',e=>{
   }
   salvar();renderTudo();
 });
+$('#categoriasEstoque').addEventListener('click',function(e){var botao=e.target.closest('button[data-categoria]');if(!botao)return;categoriaEstoqueSelecionada=botao.dataset.categoria||'__todas__';renderEstoque()});
 function produzirRefeicao(id){
   if(!souGerente())return toast('🔒 Só o gerente');
   const p=produtos.find(x=>x.id===id);if(!ehRefeicao(p))return;
@@ -3687,12 +3708,16 @@ function dadosIguais(a,b){if(a===b)return true;if(typeof a!==typeof b||a===null|
 function ehNotaCompraSalva(n){return!!(n&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)&&n.itens.length)}
 function comprasAlteradasNoEstado(base,dados){var ids=new Set(),lojasBase=base&&base.porLoja||{},lojasDados=dados&&dados.porLoja||{},lojas=new Set(Object.keys(lojasBase).concat(Object.keys(lojasDados)));lojas.forEach(function(loja){var antigas=mapaNotas((lojasBase[loja]||{}).despesas),atuais=mapaNotas((lojasDados[loja]||{}).despesas);atuais.forEach(function(n,id){var anterior=antigas.get(id);if(ehNotaCompraSalva(n)&&(!anterior||!dadosIguais(anterior,n)))ids.add(loja+'|'+id)});antigas.forEach(function(n,id){if(ehNotaCompraSalva(n)&&!atuais.has(id))ids.add(loja+'|'+id)})});return ids}
 function pedidosAlteradosNoEstado(base,dados){var ids=new Set(),lojasBase=base&&base.porLoja||{},lojasDados=dados&&dados.porLoja||{},lojas=new Set(Object.keys(lojasBase).concat(Object.keys(lojasDados)));lojas.forEach(function(loja){['pedidos','historico'].forEach(function(campo){var antigas=mapaNotas((lojasBase[loja]||{})[campo]),atuais=mapaNotas((lojasDados[loja]||{})[campo]);atuais.forEach(function(p,id){if(!antigas.has(id)||!dadosIguais(antigas.get(id),p))ids.add(loja+'|'+campo+'|'+id)});antigas.forEach(function(p,id){if(!atuais.has(id))ids.add(loja+'|'+campo+'|'+id)})})});return ids}
+function comprasAplicadasEmDuplicidade(base,local,remoto){var saida=new Map(),lojasBase=base&&base.porLoja||{},lojasLocal=local&&local.porLoja||{},lojasRemoto=remoto&&remoto.porLoja||{},lojas=new Set(Object.keys(lojasBase).concat(Object.keys(lojasLocal),Object.keys(lojasRemoto)));function aplicacoes(nota){var mapa=new Map();(nota&&nota.itens||[]).forEach(function(it){var ap=it&&it.aplicado;if(!ap||!ap.vinc)return;var campo=String(ap.vinc).indexOf('ing:')===0&&ap.semEstoque?'estoqueEstimado':'estoque',chave=String(ap.vinc)+'|'+campo,qtd=Number(ap.qtdEst)||0,custo=Number(ap.custoUnitario)||0,atual=mapa.get(chave)||{vinc:String(ap.vinc),campo:campo,qtd:0,valor:0};atual.qtd+=qtd;atual.valor+=qtd*custo;mapa.set(chave,atual)});return mapa}lojas.forEach(function(loja){var antigas=mapaNotas((lojasBase[loja]||{}).despesas),notasLocais=mapaNotas((lojasLocal[loja]||{}).despesas),notasRemotas=mapaNotas((lojasRemoto[loja]||{}).despesas);notasLocais.forEach(function(nota,id){var anterior=antigas.get(id),notaRemota=notasRemotas.get(id);if(!ehNotaCompraSalva(nota)||!ehNotaCompraSalva(notaRemota)||dadosIguais(nota,anterior)||dadosIguais(notaRemota,anterior)||!notaCompraIgual(nota,notaRemota))return;var ant=aplicacoes(anterior),nova=aplicacoes(nota),chaves=new Set(Array.from(ant.keys()).concat(Array.from(nova.keys())));chaves.forEach(function(k){var a=ant.get(k)||{},n=nova.get(k)||{},v=n.vinc||a.vinc,campo=n.campo||a.campo;if(!v||!campo)return;var chave=loja+'|'+v+'|'+campo,delta=saida.get(chave)||{qtd:0,valor:0};delta.qtd+=(Number(n.qtd)||0)-(Number(a.qtd)||0);delta.valor+=(Number(n.valor)||0)-(Number(a.valor)||0);saida.set(chave,delta)})})});return saida}
 function mapaNotas(lista){var m=new Map();(lista||[]).forEach(function(n){if(n&&n.id!=null)m.set(String(n.id),n)});return m}
 function mesclarEstadosConcorrentes(base,local,remoto){
   var comprasLocais=comprasAlteradasNoEstado(base,local),comprasRemotas=comprasAlteradasNoEstado(base,remoto);
   var pedidosLocais=pedidosAlteradosNoEstado(base,local),pedidosRemotos=pedidosAlteradosNoEstado(base,remoto);
-  var temComprasIndependentes=Array.from(comprasLocais).some(function(id){return!comprasRemotas.has(id)})&&Array.from(comprasRemotas).some(function(id){return!comprasLocais.has(id)});
-  var temCompraEVendaIndependentes=(comprasLocais.size>0&&pedidosRemotos.size>0)||(comprasRemotas.size>0&&pedidosLocais.size>0);
+  var comprasLocaisUnicas=new Set(Array.from(comprasLocais).filter(function(id){return!comprasRemotas.has(id)})),comprasRemotasUnicas=new Set(Array.from(comprasRemotas).filter(function(id){return!comprasLocais.has(id)}));
+  var duplicadas=comprasAplicadasEmDuplicidade(base,local,remoto);
+  var temComprasIndependentes=comprasLocaisUnicas.size>0&&comprasRemotasUnicas.size>0;
+  var temCompraEVendaIndependentes=(comprasLocaisUnicas.size>0&&pedidosRemotos.size>0)||(comprasRemotasUnicas.size>0&&pedidosLocais.size>0);
+  var temCompraDuplicadaEVenda=duplicadas.size>0&&(pedidosLocais.size>0||pedidosRemotos.size>0);
   var camposAdicionais=new Set(['estoque','estoqueEstimado','comprasDesdeContagem','perdasDesdeContagem','pesoVendidoDesdeContagem','pesoHistorico','kgHistorico']);
   function conflito(caminho){throw new Error('Conflito simultâneo em '+caminho+'. Nenhuma cópia foi substituída.')}
   function num(v){return v===null||v===undefined||v===''?0:Number(v)||0}
@@ -3713,7 +3738,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
           if(notaLocalMudou&&notaRemotaMudou&&notaCompraIgual(vl,vr)){saida.push(clonarDadosEstado(vr));return}
           if(notaLocalMudou&&notaRemotaMudou&&!dadosIguais(vl,vr))conflito('nota de compra '+id+' editada em dois aparelhos');
         }
-        var opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario};
+        var lojaInventario=(caminho.match(/\.porLoja\.([^.]+)\./)||[])[1],tipoInventario=/\.produtos$/.test(caminho)?'prod':/\.paes$/.test(caminho)?'pao':/\.ingredientes$/.test(caminho)?'ing':null,chaveDelta=lojaInventario&&tipoInventario?lojaInventario+'|'+tipoInventario+':'+id+'|':'',opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario,sharedInventoryDelta:null};if(chaveDelta)opcoesRegistro.sharedInventoryDelta={estoque:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoque')||{qtd:0,valor:0},estoqueEstimado:opts.duplicadas&&opts.duplicadas.get(chaveDelta+'estoqueEstimado')||{qtd:0,valor:0}}
         saida.push(opcoesRegistro.mergeInventory?mesclarObjeto(vb,vl,vr,p,opcoesRegistro):mesclarValor(vb,vl,vr,p,opcoesRegistro));
       });
       return saida;
@@ -3729,8 +3754,8 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     var campoQtd=(b&&b.semEstoque||l&&l.semEstoque||r&&r.semEstoque)?'estoqueEstimado':'estoque';
     keys.forEach(function(k){var vb=b?b[k]:undefined,vl=l?l[k]:undefined,vr=r?r[k]:undefined,p=caminho+'.'+k;
       if(k==='custo'&&opts.inventoryEntity&&opts.mergeInventory&&typeof vb==='number'&&typeof vl==='number'&&typeof vr==='number'){
-        var qb=num(b[campoQtd]),ql=num(l[campoQtd]),qr=num(r[campoQtd]);
-        if(qb!==ql&&qb!==qr){var qFinal=qb+(ql-qb)+(qr-qb),valorFinal=ql*vl+qr*vr-qb*vb;if(qFinal>0){out[k]=Math.max(0,valorFinal/qFinal);return}}
+        var qb=num(b[campoQtd]),ql=num(l[campoQtd]),qr=num(r[campoQtd]),deltaDuplicado=opts.sharedInventoryDelta&&opts.sharedInventoryDelta[campoQtd]||{qtd:0,valor:0},qtdDuplicada=num(deltaDuplicado.qtd),valorDuplicado=num(deltaDuplicado.valor);
+        if(qb!==ql||qb!==qr||qtdDuplicada||valorDuplicado){var qFinal=qb+(ql-qb)+(qr-qb)-qtdDuplicada,valorFinal=ql*vl+qr*vr-qb*vb-valorDuplicado;if(qFinal>0){out[k]=Math.max(0,valorFinal/qFinal);return}}
         if(!dadosIguais(vl,vb)&&!dadosIguais(vr,vb))conflito(p+' atualizado em dois aparelhos');
       }
       out[k]=mesclarValor(vb,vl,vr,p,opts);
@@ -3738,9 +3763,10 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     return out;
   }
   function mesclarValor(b,l,r,caminho,opts){
+    var chave=caminho.slice(caminho.lastIndexOf('.')+1);
+    if(opts.mergeInventory&&opts.inventoryEntity&&camposAdicionais.has(chave)&&typeof l==='number'&&typeof r==='number'){var deltaDuplicado=opts.sharedInventoryDelta&&opts.sharedInventoryDelta[chave]||{qtd:0,valor:0};if(deltaDuplicado.qtd)return num(b)+(l-num(b))+(r-num(b))-num(deltaDuplicado.qtd)}
     if(dadosIguais(l,b))return clonarDadosEstado(r);
     if(dadosIguais(r,b))return clonarDadosEstado(l);
-    var chave=caminho.slice(caminho.lastIndexOf('.')+1);
     if(opts.mergeInventory&&opts.inventoryEntity&&camposAdicionais.has(chave)&&typeof l==='number'&&typeof r==='number')return num(b)+(l-num(b))+(r-num(b));
     if(opts.mergeInventory&&/\.(produtos|paes|ingredientes)$/.test(caminho)&&Array.isArray(b)&&Array.isArray(l)&&Array.isArray(r))return mesclarArray(b,l,r,caminho,opts);
     if(dadosIguais(l,r))return clonarDadosEstado(l);
@@ -3748,7 +3774,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     if(b&&l&&r&&typeof b==='object'&&typeof l==='object'&&typeof r==='object')return mesclarObjeto(b,l,r,caminho,opts);
     conflito(caminho);
   }
-  return mesclarValor(base,local,remoto,'dados',{mergeInventory:temComprasIndependentes||temCompraEVendaIndependentes,inventoryEntity:false});
+  return mesclarValor(base,local,remoto,'dados',{mergeInventory:temComprasIndependentes||temCompraEVendaIndependentes||temCompraDuplicadaEVenda,inventoryEntity:false,duplicadas:duplicadas});
 }
 function buscarNotaPorId(dados,id){var lojasDados=dados&&dados.porLoja||{};for(var lojaId in lojasDados){var nota=((lojasDados[lojaId]||{}).despesas||[]).find(function(n){return String(n.id)===String(id)});if(nota)return nota}return null}
 function notaCompraIgual(a,b){if(!ehNotaCompraSalva(a)||!ehNotaCompraSalva(b)||String(a.id)!==String(b.id))return false;var limpar=function(n){var c=clonarDadosEstado(n);delete c.criadoEm;(c.itens||[]).forEach(function(it){delete it.aplicado;delete it._indiceOriginalNota});return c};return dadosIguais(limpar(a),limpar(b))}
@@ -3830,13 +3856,22 @@ async function subirParaServidor(){
           const notaId=notaCompraEmSincronizacaoId;
           if(notaId&&revisaoEnviada===revisaoLocal&&notaCompraIgual(buscarNotaPorId(dadosLocal,notaId),buscarNotaPorId(remoto.dados,notaId))){
             notaCompraConfirmadaNoEnvio=true;
-            dadosLocal=clonarDadosEstado(remoto.dados);
+            const estadoIdempotente=mesclarEstadosConcorrentes(dadosBase,dadosLocal,remoto.dados);
+            if(dadosIguais(estadoIdempotente,remoto.dados)){
+              dadosLocal=clonarDadosEstado(remoto.dados);
+              dadosBase=clonarDadosEstado(remoto.dados);
+              ultimaAtualizacao=remoto.atualizado_em;
+              estadoBaseSincronizado=clonarDadosEstado(remoto.dados);
+              aplicarDadosEstadoAtual(dadosLocal);
+              confirmada=true;
+              break;
+            }
+            dadosLocal=estadoIdempotente;
             dadosBase=clonarDadosEstado(remoto.dados);
-            ultimaAtualizacao=remoto.atualizado_em;
-            estadoBaseSincronizado=clonarDadosEstado(remoto.dados);
-            aplicarDadosEstadoAtual(dadosLocal);
-            confirmada=true;
-            break;
+            versaoBase=remoto.atualizado_em;
+            mesclouDados=true;
+            if(tentativa<23)await new Promise(function(resolve){setTimeout(resolve,Math.min(40*(tentativa+1),400)+Math.floor(Math.random()*80))});
+            continue;
           }
           dadosLocal=mesclarEstadosConcorrentes(dadosBase,dadosLocal,remoto.dados);
           dadosBase=clonarDadosEstado(remoto.dados);
@@ -4214,6 +4249,7 @@ setTimeout(function() {
   if(btnMais) {
     btnMais.addEventListener('click', function(e) {
       e.preventDefault();
+      atualizarVisibilidadeBackup();
       document.getElementById('modalMaisMenu').classList.add('aberto');
     });
   }
@@ -9569,18 +9605,24 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
 
   window.__confirmarRascunhoCompraSincronizado = function () {
     if (!pendentes.size) return;
+    var restantes=new Map();
     pendentes.forEach(function (updatedAt, k) {
       var registro = lerChave(k);
-      if (registro && registro.updatedAt === updatedAt) {
+      var notaConfirmada=registro&&registro.savedRecordId&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(registro.savedRecordId):null;
+      var compraConfirmada=!!(registro&&registro.savedNote&&notaConfirmada&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
+      if (registro && registro.updatedAt === updatedAt && compraConfirmada) {
         try { localStorage.removeItem(k); } catch (e) {}
         if (k === chave(lojaRascunho, idRascunho)) sujo = false;
-      } else if (registro && registro.savedNote) {
+      } else if (registro && compraConfirmada) {
         registro.baseNota = clonar(registro.savedNote);
         registro.editId = registro.savedRecordId || registro.editId;
         try { localStorage.setItem(k, JSON.stringify(registro)); } catch (e) {}
+        restantes.set(k,updatedAt);
+      } else if (registro) {
+        restantes.set(k,updatedAt);
       }
     });
-    pendentes.clear();
+    pendentes=restantes;
   };
   window.__falharRascunhoCompraSincronizacao = function () { pendentes.clear(); };
 
