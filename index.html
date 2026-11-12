@@ -3003,6 +3003,7 @@ async function salvarCompraDaNota(e){
     if(typeof window.marcarRascunhoCompraPendente==='function')window.marcarRascunhoCompraPendente(editId,dados.id);
     notaCompraEmSincronizacaoId=dados.id;
     var resultadoSync=await salvar();
+    if(resultadoSync&&resultadoSync.persisted)compraConfirmadaNoServidor=true;
     if(!resultadoSync||!resultadoSync.ok)throw resultadoSync&&resultadoSync.error||new Error('A compra não foi confirmada no servidor. O rascunho foi mantido neste aparelho.');
     compraConfirmadaNoServidor=true;
     if(typeof refrescarEstoqueUI==='function') refrescarEstoqueUI();
@@ -3019,8 +3020,9 @@ async function salvarCompraDaNota(e){
   }catch(err){
     console.error('Falha ao salvar compra:',err);
     if(estadoAntes&&!compraConfirmadaNoServidor){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
-    if(resultadoSync&&resultadoSync.conflict){try{await baixarDoServidor()}catch(erroAtualizacao){console.warn('Não consegui recarregar o estado após conflito:',erroAtualizacao)}}
-    alert('Não foi possível salvar a compra: '+(err&&err.message||err));
+    if(resultadoSync&&resultadoSync.conflict&&!resultadoSync.persisted){try{await baixarDoServidor()}catch(erroAtualizacao){console.warn('Não consegui recarregar o estado após conflito:',erroAtualizacao)}}
+    if(resultadoSync&&resultadoSync.persisted)alert('A compra já foi confirmada no servidor. Mantive as alterações feitas durante o envio neste aparelho. Deixe o app aberto e tente salvar novamente para sincronizar o restante.');
+    else alert('Não foi possível salvar a compra: '+(err&&err.message||err));
   }finally{compraNotaEmAndamento=false;notaCompraEmSincronizacaoId=null;if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
 }
 // Um único ponto de gravação controla produto, custo, estoque e nota da compra.
@@ -3680,10 +3682,13 @@ function clonarDadosEstado(valor){return valor==null?valor:JSON.parse(JSON.strin
 function dadosIguais(a,b){if(a===b)return true;if(typeof a!==typeof b||a===null||b===null)return false;if(Array.isArray(a)||Array.isArray(b))return Array.isArray(a)&&Array.isArray(b)&&a.length===b.length&&a.every(function(v,i){return dadosIguais(v,b[i])});if(typeof a==='object'){var ka=Object.keys(a).sort(),kb=Object.keys(b).sort();return ka.length===kb.length&&ka.every(function(k,i){return k===kb[i]&&dadosIguais(a[k],b[k])})}return false}
 function ehNotaCompraSalva(n){return!!(n&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)&&n.itens.length)}
 function comprasAlteradasNoEstado(base,dados){var ids=new Set(),lojasBase=base&&base.porLoja||{},lojasDados=dados&&dados.porLoja||{},lojas=new Set(Object.keys(lojasBase).concat(Object.keys(lojasDados)));lojas.forEach(function(loja){var antigas=mapaNotas((lojasBase[loja]||{}).despesas),atuais=mapaNotas((lojasDados[loja]||{}).despesas);atuais.forEach(function(n,id){var anterior=antigas.get(id);if(ehNotaCompraSalva(n)&&(!anterior||!dadosIguais(anterior,n)))ids.add(loja+'|'+id)});antigas.forEach(function(n,id){if(ehNotaCompraSalva(n)&&!atuais.has(id))ids.add(loja+'|'+id)})});return ids}
+function pedidosAlteradosNoEstado(base,dados){var ids=new Set(),lojasBase=base&&base.porLoja||{},lojasDados=dados&&dados.porLoja||{},lojas=new Set(Object.keys(lojasBase).concat(Object.keys(lojasDados)));lojas.forEach(function(loja){['pedidos','historico'].forEach(function(campo){var antigas=mapaNotas((lojasBase[loja]||{})[campo]),atuais=mapaNotas((lojasDados[loja]||{})[campo]);atuais.forEach(function(p,id){if(!antigas.has(id)||!dadosIguais(antigas.get(id),p))ids.add(loja+'|'+campo+'|'+id)});antigas.forEach(function(p,id){if(!atuais.has(id))ids.add(loja+'|'+campo+'|'+id)})})});return ids}
 function mapaNotas(lista){var m=new Map();(lista||[]).forEach(function(n){if(n&&n.id!=null)m.set(String(n.id),n)});return m}
 function mesclarEstadosConcorrentes(base,local,remoto){
   var comprasLocais=comprasAlteradasNoEstado(base,local),comprasRemotas=comprasAlteradasNoEstado(base,remoto);
+  var pedidosLocais=pedidosAlteradosNoEstado(base,local),pedidosRemotos=pedidosAlteradosNoEstado(base,remoto);
   var temComprasIndependentes=Array.from(comprasLocais).some(function(id){return!comprasRemotas.has(id)})&&Array.from(comprasRemotas).some(function(id){return!comprasLocais.has(id)});
+  var temCompraEVendaIndependentes=(comprasLocais.size>0&&pedidosRemotos.size>0)||(comprasRemotas.size>0&&pedidosLocais.size>0);
   var camposAdicionais=new Set(['estoque','estoqueEstimado','comprasDesdeContagem','perdasDesdeContagem','pesoVendidoDesdeContagem','pesoHistorico','kgHistorico']);
   function conflito(caminho){throw new Error('Conflito simultâneo em '+caminho+'. Nenhuma cópia foi substituída.')}
   function num(v){return v===null||v===undefined||v===''?0:Number(v)||0}
@@ -3739,7 +3744,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     if(b&&l&&r&&typeof b==='object'&&typeof l==='object'&&typeof r==='object')return mesclarObjeto(b,l,r,caminho,opts);
     conflito(caminho);
   }
-  return mesclarValor(base,local,remoto,'dados',{mergeInventory:temComprasIndependentes,inventoryEntity:false});
+  return mesclarValor(base,local,remoto,'dados',{mergeInventory:temComprasIndependentes||temCompraEVendaIndependentes,inventoryEntity:false});
 }
 function buscarNotaPorId(dados,id){var lojasDados=dados&&dados.porLoja||{};for(var lojaId in lojasDados){var nota=((lojasDados[lojaId]||{}).despesas||[]).find(function(n){return String(n.id)===String(id)});if(nota)return nota}return null}
 function notaCompraIgual(a,b){if(!ehNotaCompraSalva(a)||!ehNotaCompraSalva(b)||String(a.id)!==String(b.id))return false;var limpar=function(n){var c=clonarDadosEstado(n);delete c.criadoEm;(c.itens||[]).forEach(function(it){delete it.aplicado;delete it._indiceOriginalNota});return c};return dadosIguais(limpar(a),limpar(b))}
@@ -3777,6 +3782,7 @@ async function subirParaServidor(){
   salvarPendente=true;
   if(salvandoRemoto)return promessaSincronizacao;
   salvandoRemoto=true;
+  let gravacaoConfirmadaNoEnvio=false;
   promessaSincronizacao=(async function(){
     try{
       do{
@@ -3795,6 +3801,7 @@ async function subirParaServidor(){
           if(error){atualizacoesProprias.delete(agora);throw error}
           if(data&&data.length){
             confirmada=true;
+            gravacaoConfirmadaNoEnvio=true;
             if(revisaoEnviada===revisaoLocal){
               ultimaAtualizacao=agora;
               estadoBaseSincronizado=clonarDadosEstado(dadosLocal);
@@ -3838,9 +3845,9 @@ async function subirParaServidor(){
     }catch(e){
       console.warn('Falha ao sincronizar estado:',e);
       salvarPendente=false;
-      toast('⚠️ Não consegui confirmar a gravação. A nota continua como rascunho; mantenha o app aberto e tente novamente.');
+      toast(gravacaoConfirmadaNoEnvio?'⚠️ Uma gravação já foi confirmada. Mantive as alterações posteriores neste aparelho; mantenha o app aberto e tente sincronizar novamente.':'⚠️ Não consegui confirmar a gravação. A nota continua como rascunho; mantenha o app aberto e tente novamente.');
       if(typeof window.__falharRascunhoCompraSincronizacao==='function')window.__falharRascunhoCompraSincronizacao();
-      return{ok:false,conflict:!!(e&&/Conflito|editada em dois aparelhos/.test(e.message||'')),error:e};
+      return{ok:false,conflict:!!(e&&/Conflito|editada em dois aparelhos/.test(e.message||'')),persisted:gravacaoConfirmadaNoEnvio,error:e};
     }finally{
       salvandoRemoto=false;
       promessaSincronizacao=null;
