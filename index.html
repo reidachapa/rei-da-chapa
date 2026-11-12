@@ -1260,7 +1260,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   <div class="modal-box saida-box">
     <div class="saida-emblema" aria-hidden="true">🔄</div>
     <h3 id="tituloConfirmarAtualizacao">Atualizar o aplicativo?</h3>
-    <p id="descricaoConfirmarAtualizacao">Sua compra fica salva neste aparelho. Depois da atualização, você pode continuar de onde parou.</p>
+    <p id="descricaoConfirmarAtualizacao">Se atualizar, sua compra ficará salva neste aparelho. Ao abrir o app novamente e entrar como gerente, você continua de onde parou.</p>
     <div class="modal-acoes">
       <button type="button" class="btn-primario" id="btnContinuarLancando">Continuar lançando</button>
       <button type="button" class="btn-fantasma" id="btnAtualizarSite">🔄 Atualizar agora</button>
@@ -1812,7 +1812,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
     try{window.close()}catch(e){}
     try{history.back()}catch(e){}
     setTimeout(function(){if(confirmandoSaida&&passosSaida>0){try{history.back()}catch(e){}}},100);
-    setTimeout(function(){confirmandoSaida=false;passosSaida=0;if(!document.hidden&&typeof toast==='function')toast('Se o app continuar aberto, toque em Voltar mais uma vez para sair.')},800);
+    setTimeout(function(){confirmandoSaida=false;passosSaida=0;if(closeWatcherDisponivel&&!closeWatcher)armarCloseWatcher();if(!document.hidden&&typeof toast==='function')toast('Se o app continuar aberto, toque em Voltar mais uma vez para sair.')},800);
   });
   var modalConfirmarSaida=document.getElementById('modalConfirmarSaida');
   if(modalConfirmarSaida)modalConfirmarSaida.addEventListener('click',function(e){if(e.target===modalConfirmarSaida)fecharModalSaida()});
