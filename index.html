@@ -664,6 +664,7 @@
 .reg-tab .acoes button{background:transparent;border:1px solid var(--iron-5);border-radius:7px;color:var(--txt);padding:5px 8px;cursor:pointer;font-size:12px;margin-left:3px}
 #comprasLista .compras-itens-lista{display:flex;flex-direction:column;gap:3px;min-width:130px}
 #comprasLista .compras-item-linha{line-height:1.3;overflow-wrap:anywhere}
+#comprasLista .compras-item-mais{color:var(--muted);font-style:italic}
 @media(max-width:700px){
   #comprasLista{overflow-x:hidden;border:0;background:transparent}
   #comprasLista .reg-tab{display:block;width:100%;min-width:0;border-collapse:separate}
@@ -4578,7 +4579,10 @@ function renderCompras(){
   lista.innerHTML=cab+f.map(function(d){
     var dt=new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR');
     var itens=(d.itens||[]);
-    var res=itens.length?'<div class="compras-itens-lista">'+itens.map(function(i){return '<div class="compras-item-linha"><b>'+esc(i.qtd||0)+'×</b> '+esc(i.nome||'Item')+'</div>'}).join('')+'</div>':'<span class="mut">—</span>';
+    var itensVisiveis=itens.slice(0,2);
+    var quantidadeOculta=Math.max(0,itens.length-itensVisiveis.length);
+    var resumoOculto=quantidadeOculta===1?'+ 1 item':(quantidadeOculta>1?'+ '+quantidadeOculta+' itens':'');
+    var res=itens.length?'<div class="compras-itens-lista">'+itensVisiveis.map(function(i){return '<div class="compras-item-linha"><b>'+esc(i.qtd||0)+'×</b> '+esc(i.nome||'Item')+'</div>'}).join('')+(resumoOculto?'<div class="compras-item-linha compras-item-mais">'+resumoOculto+'</div>':'')+'</div>':'<span class="mut">—</span>';
     var categoriaFinanceira=rotuloCategoriaFinanceira(d);
     return '<tr><td data-label="Data">'+dt+'</td><td data-label="Fornecedor">'+(d.fornecedor?'<span class="reg-pill">'+esc(d.fornecedor)+'</span>':'<span class="mut">—</span>')+'</td><td data-label="NF" class="mut">'+esc(d.nf||'—')+'</td><td data-label="Categoria da nota"><span class="reg-pill" style="text-transform:none">'+esc(categoriaFinanceira||'—')+'</span></td><td data-label="Itens" class="mut">'+res+'</td><td data-label="Status">'+(d.status==='pendente'?'<span class="reg-st pend">⏳ A PAGAR</span>':'<span class="reg-st ok">✅ PAGO</span>')+'</td><td data-label="Desconto" class="num mut">'+(d.desconto>0?moeda(d.desconto):'—')+'</td><td data-label="Total" class="num"><b>'+moeda(d.valor||0)+'</b></td><td data-label="Ações" class="acoes"><button data-acao="ver" data-id="'+d.id+'">👁️</button><button data-acao="editar" data-id="'+d.id+'">✏️</button><button data-acao="excluir" data-id="'+d.id+'" style="color:var(--red)">🗑️</button></td></tr>'
   }).join('')+'</tbody></table>'
