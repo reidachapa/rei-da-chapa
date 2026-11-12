@@ -3019,6 +3019,7 @@ async function salvarCompraDaNota(e){
   }catch(err){
     console.error('Falha ao salvar compra:',err);
     if(estadoAntes&&!compraConfirmadaNoServidor){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
+    if(resultadoSync&&resultadoSync.conflict){try{await baixarDoServidor()}catch(erroAtualizacao){console.warn('Não consegui recarregar o estado após conflito:',erroAtualizacao)}}
     alert('Não foi possível salvar a compra: '+(err&&err.message||err));
   }finally{compraNotaEmAndamento=false;notaCompraEmSincronizacaoId=null;if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
 }
@@ -3699,7 +3700,8 @@ function mesclarEstadosConcorrentes(base,local,remoto){
         if(vl===undefined){if(vr===undefined||dadosIguais(vr,vb))return;conflito(p+' removido enquanto era editado')}
         if(vr===undefined){if(dadosIguais(vl,vb))return;conflito(p+' removido enquanto era editado')}
         if(/\.despesas$/.test(caminho)&&ehNotaCompraSalva(vb)&&!dadosIguais(vl,vb)&&!dadosIguais(vr,vb)&&!dadosIguais(vl,vr))conflito('nota de compra '+id+' editada em dois aparelhos');
-        saida.push(mesclarValor(vb,vl,vr,p,{mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario}));
+        var opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario};
+        saida.push(opcoesRegistro.mergeInventory?mesclarObjeto(vb,vl,vr,p,opcoesRegistro):mesclarValor(vb,vl,vr,p,opcoesRegistro));
       });
       return saida;
     }
@@ -3727,6 +3729,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
     if(dadosIguais(r,b))return clonarDadosEstado(l);
     var chave=caminho.slice(caminho.lastIndexOf('.')+1);
     if(opts.mergeInventory&&opts.inventoryEntity&&camposAdicionais.has(chave)&&typeof l==='number'&&typeof r==='number')return num(b)+(l-num(b))+(r-num(b));
+    if(opts.mergeInventory&&/\.(produtos|paes|ingredientes)$/.test(caminho)&&Array.isArray(b)&&Array.isArray(l)&&Array.isArray(r))return mesclarArray(b,l,r,caminho,opts);
     if(dadosIguais(l,r))return clonarDadosEstado(l);
     if(Array.isArray(b)||Array.isArray(l)||Array.isArray(r))return mesclarArray(b,l,r,caminho,opts);
     if(b&&l&&r&&typeof b==='object'&&typeof l==='object'&&typeof r==='object')return mesclarObjeto(b,l,r,caminho,opts);
