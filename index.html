@@ -9668,7 +9668,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   function estaAberto() { return modal.classList.contains('aberto'); }
   function temConteudoRascunho(registro) { return !!(registro && (registro.temRascunho === true || (registro.campos && Object.keys(registro.campos).length > 0) || (Array.isArray(registro.itens) && registro.itens.length > 0))); }
   function salvarRascunho() {
-    if (!estaAberto() || !sujo) return;
+    if (!estaAberto()) return;
     try {
       var campos = {};
       camposIds.forEach(function (id) { var el = document.getElementById(id); if (el) campos[id] = el.value; });
@@ -9682,7 +9682,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         campos: campos,
         descontoTipo: window._descontoNotaTipo || 'valor',
         itens: itensAtuais(),
-        retomarAoVoltar: anterior.retomarAoVoltar === true,
+        retomarAoVoltar: estaAberto(),
         telaAtiva: viewAtiva ? viewAtiva.id.replace(/^view-/, '') : 'compras',
         scrollJanela: window.scrollY || 0,
         scrollModal: modal.scrollTop || 0,
@@ -9724,7 +9724,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     try { localStorage.setItem(chaveAlvo, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
   }
   function guardarRetomadaAoSair() {
-    if (!estaAberto() || !sujo) return;
+    if (!estaAberto()) return;
     salvarRascunho();
     salvarFlagRetomada(true);
   }
@@ -9911,7 +9911,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   document.addEventListener('change', observarInteracao, true);
   document.addEventListener('click', observarInteracao, true);
   function salvarPosicaoAtual() {
-    if (!estaAberto() || !sujo) return;
+    if (!estaAberto()) return;
     var caixa = modal.querySelector('.modal-box');
     var lista = modal.querySelector('.lista-itens-compra');
     var k = chaveRascunhoAtivo || chave(lojaRascunho, idRascunho);
