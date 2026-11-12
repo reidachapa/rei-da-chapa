@@ -903,15 +903,16 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 
 <style id="modal-compra-scrollbar-css">#modalDespesa,#modalDespesa .modal-box,#modalDespesa .lista-itens-compra{scrollbar-width:none!important;-ms-overflow-style:none!important}#modalDespesa::-webkit-scrollbar,#modalDespesa .modal-box::-webkit-scrollbar,#modalDespesa .lista-itens-compra::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}</style>
 <style id="modal-saida-css">
-  #modalConfirmarSaida{z-index:260;background:rgba(5,5,7,.82);backdrop-filter:blur(7px)}
-  #modalConfirmarSaida .saida-box{position:relative;overflow:hidden;max-width:390px;align-items:center;text-align:center;padding:24px 22px 20px;gap:14px;border-color:rgba(212,162,60,.48);background:radial-gradient(ellipse at 50% 0%,rgba(212,162,60,.14),transparent 58%),linear-gradient(170deg,#252529 0%,#171719 100%);box-shadow:0 24px 70px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.06)}
-  #modalConfirmarSaida .saida-emblema{width:58px;height:58px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(212,162,60,.58);background:radial-gradient(circle at 35% 28%,#494345,#242327 72%);box-shadow:0 0 24px rgba(212,162,60,.16),inset 0 1px rgba(255,255,255,.1);font-size:29px}
-  #modalConfirmarSaida .saida-box h3{width:100%;border:0;padding:0;text-align:center;font-size:16px;letter-spacing:.1px}
-  #modalConfirmarSaida .saida-box p{max-width:300px;color:var(--muted);font-size:13px;line-height:1.5}
-  #modalConfirmarSaida .modal-acoes{width:100%;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}
-  #modalConfirmarSaida .modal-acoes button{min-width:0;min-height:46px;padding:10px 8px;font-size:11px;letter-spacing:.25px}
+  #modalConfirmarSaida,#modalConfirmarAtualizacao{z-index:260;background:rgba(5,5,7,.82);backdrop-filter:blur(7px)}
+  #modalConfirmarSaida .saida-box,#modalConfirmarAtualizacao .saida-box{position:relative;overflow:hidden;max-width:390px;align-items:center;text-align:center;padding:24px 22px 20px;gap:14px;border-color:rgba(212,162,60,.48);background:radial-gradient(ellipse at 50% 0%,rgba(212,162,60,.14),transparent 58%),linear-gradient(170deg,#252529 0%,#171719 100%);box-shadow:0 24px 70px rgba(0,0,0,.62),inset 0 1px rgba(255,255,255,.06)}
+  #modalConfirmarSaida .saida-emblema,#modalConfirmarAtualizacao .saida-emblema{width:58px;height:58px;display:grid;place-items:center;border-radius:50%;border:1px solid rgba(212,162,60,.58);background:radial-gradient(circle at 35% 28%,#494345,#242327 72%);box-shadow:0 0 24px rgba(212,162,60,.16),inset 0 1px rgba(255,255,255,.1);font-size:29px}
+  #modalConfirmarSaida .saida-box h3,#modalConfirmarAtualizacao .saida-box h3{width:100%;border:0;padding:0;text-align:center;font-size:16px;letter-spacing:.1px}
+  #modalConfirmarSaida .saida-box p,#modalConfirmarAtualizacao .saida-box p{max-width:300px;color:var(--muted);font-size:13px;line-height:1.5}
+  #modalConfirmarSaida .modal-acoes,#modalConfirmarAtualizacao .modal-acoes{width:100%;display:grid;grid-template-columns:1.2fr .8fr;gap:10px}
+  #modalConfirmarSaida .modal-acoes button,#modalConfirmarAtualizacao .modal-acoes button{min-width:0;min-height:46px;padding:10px 8px;font-size:11px;letter-spacing:.25px}
   #modalConfirmarSaida #btnSairDoApp{border-color:rgba(229,72,77,.35);color:#e5a4a6}
-  @media(max-width:380px){#modalConfirmarSaida .saida-box{padding:22px 16px 18px}}
+  #modalConfirmarAtualizacao #btnAtualizarSite{border-color:rgba(212,162,60,.55);color:#f0cf76;background:linear-gradient(180deg,rgba(212,162,60,.12),rgba(212,162,60,.05))}
+  @media(max-width:380px){#modalConfirmarSaida .saida-box,#modalConfirmarAtualizacao .saida-box{padding:22px 16px 18px}}
 </style>
 </head><body>
 <div id="conexaoGate" role="dialog" aria-modal="true" aria-labelledby="conexaoTitulo">
@@ -1252,6 +1253,17 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <div class="modal-acoes">
       <button type="button" class="btn-primario" id="btnFicarNoApp">Continuar no app</button>
       <button type="button" class="btn-fantasma" id="btnSairDoApp">🚪 Sair</button>
+    </div>
+  </div>
+</div>
+<div id="modalConfirmarAtualizacao" class="modal" role="dialog" aria-modal="true" aria-labelledby="tituloConfirmarAtualizacao" aria-describedby="descricaoConfirmarAtualizacao">
+  <div class="modal-box saida-box">
+    <div class="saida-emblema" aria-hidden="true">🔄</div>
+    <h3 id="tituloConfirmarAtualizacao">Atualizar o aplicativo?</h3>
+    <p id="descricaoConfirmarAtualizacao">Se atualizar, sua compra ficará salva neste aparelho. Ao abrir o app novamente e entrar como gerente, você continua de onde parou.</p>
+    <div class="modal-acoes">
+      <button type="button" class="btn-primario" id="btnContinuarLancando">Continuar lançando</button>
+      <button type="button" class="btn-fantasma" id="btnAtualizarSite">🔄 Atualizar agora</button>
     </div>
   </div>
 </div>
@@ -1674,7 +1686,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 (function instalarNavegacaoVoltarAndroid(){
   if(window.__reiChapaVoltarInstalado)return;
   window.__reiChapaVoltarInstalado=true;
-  var pilhaTelas=[],aplicandoVolta=false,confirmandoSaida=false,passosSaida=0,guardaVoltaArmada=false;
+  var pilhaTelas=[],aplicandoVolta=false,confirmandoSaida=false,passosSaida=0,guardaVoltaArmada=false,closeWatcher=null,closeWatcherDisponivel=false,backbuttonFallbackInstalado=false;
   var telasGerente=['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
 
   document.addEventListener('click',function(e){
@@ -1711,9 +1723,31 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
     return true;
   }
   function protegerVolta(){
+    if(closeWatcherDisponivel)return;
     if(guardaVoltaArmada)return;
     try{history.pushState({reiChapaBackGuard:true},'',location.href);guardaVoltaArmada=true}
     catch(e){console.warn('Não foi possível preparar o voltar do app',e)}
+  }
+  function ativarFallbackVolta(){
+    closeWatcherDisponivel=false;
+    try{guardaVoltaArmada=!!(history.state&&history.state.reiChapaBackGuard)}catch(e){guardaVoltaArmada=false}
+    protegerVolta();
+    if(!backbuttonFallbackInstalado){document.addEventListener('backbutton',function(e){if(e.preventDefault)e.preventDefault();tratarVolta()},false);backbuttonFallbackInstalado=true}
+  }
+  function armarCloseWatcher(){
+    if(typeof window.CloseWatcher!=='function'){ativarFallbackVolta();return false}
+    try{
+      var watcher=new window.CloseWatcher();
+      closeWatcher=watcher;closeWatcherDisponivel=true;
+      watcher.addEventListener('cancel',function(e){e.preventDefault();tratarVolta()});
+      watcher.addEventListener('close',function(){
+        if(closeWatcher!==watcher)return;
+        closeWatcher=null;
+        tratarVolta();
+        window.setTimeout(function(){if(!confirmandoSaida&&!closeWatcher)armarCloseWatcher()},0);
+      });
+      return true;
+    }catch(e){closeWatcher=null;console.warn('CloseWatcher indisponível; usando fallback de navegação',e);ativarFallbackVolta();return false}
   }
   function tratarVolta(){
     if(confirmandoSaida)return true;
@@ -1741,30 +1775,32 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   window.addEventListener('popstate',function(){
     guardaVoltaArmada=false;
     if(confirmandoSaida){passosSaida--;if(passosSaida<=0)confirmandoSaida=false;return}
+    if(closeWatcherDisponivel){protegerVolta();return}
     tratarVolta();
   });
 
   window.addEventListener('beforeunload',function(e){
     try{if(typeof window.__prepararRascunhoCompraParaSaida==='function')window.__prepararRascunhoCompraParaSaida()}catch(erro){console.warn('Não consegui proteger o rascunho antes de sair:',erro)}
-    if(confirmandoSaida||window.__reiChapaAtualizacaoAutomatica)return;
+    if(confirmandoSaida||window.__reiChapaAtualizacaoAutomatica||window.__reiChapaAtualizacaoConfirmada)return;
     e.preventDefault();
-    e.returnValue='';
+    e.returnValue=' ';
   });
 
   function eventoVoltarDeTeclado(e){
     var alvo=e.target;
     if(alvo&&alvo.closest&&alvo.closest('input,textarea,select,[contenteditable="true"]'))return;
     var ehVoltar=e.key==='Escape'||e.key==='BrowserBack'||e.key==='GoBack'||e.keyCode===4;
-    if(!ehVoltar||e.defaultPrevented)return;
+    if(!ehVoltar||e.defaultPrevented||closeWatcherDisponivel)return;
     e.preventDefault();e.stopPropagation();
     if(e.stopImmediatePropagation)e.stopImmediatePropagation();
     tratarVolta();
   }
   window.addEventListener('keydown',eventoVoltarDeTeclado,true);
-  document.addEventListener('backbutton',function(e){if(e.preventDefault)e.preventDefault();tratarVolta()},false);
+  if(typeof window.CloseWatcher!=='function')ativarFallbackVolta();
 
   function rearmarAoRetomar(){
     if(document.visibilityState==='hidden')return;
+    if(closeWatcherDisponivel){if(!closeWatcher)armarCloseWatcher();return}
     try{guardaVoltaArmada=!!(history.state&&history.state.reiChapaBackGuard)}catch(e){guardaVoltaArmada=false}
     protegerVolta();
   }
@@ -1778,16 +1814,16 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   var btnSairDoApp=document.getElementById('btnSairDoApp');
   if(btnSairDoApp)btnSairDoApp.addEventListener('click',function(){
     fecharModalSaida();confirmandoSaida=true;passosSaida=2;guardaVoltaArmada=false;
+    if(closeWatcher){try{closeWatcher.destroy()}catch(e){}closeWatcher=null}
     try{window.close()}catch(e){}
     try{history.back()}catch(e){}
     setTimeout(function(){if(confirmandoSaida&&passosSaida>0){try{history.back()}catch(e){}}},100);
-    setTimeout(function(){confirmandoSaida=false;passosSaida=0;if(!document.hidden&&typeof toast==='function')toast('Se o app continuar aberto, toque em Voltar mais uma vez para sair.')},800);
+    setTimeout(function(){confirmandoSaida=false;passosSaida=0;if(closeWatcherDisponivel&&!closeWatcher)armarCloseWatcher();if(!document.hidden&&typeof toast==='function')toast('Se o app continuar aberto, toque em Voltar mais uma vez para sair.')},800);
   });
   var modalConfirmarSaida=document.getElementById('modalConfirmarSaida');
   if(modalConfirmarSaida)modalConfirmarSaida.addEventListener('click',function(e){if(e.target===modalConfirmarSaida)fecharModalSaida()});
 
-  try{guardaVoltaArmada=!!(history.state&&history.state.reiChapaBackGuard)}catch(e){}
-  protegerVolta();
+  armarCloseWatcher();
 })();
 let senhaBuffer='';
 var roleSalva=null;role='atendente';
@@ -9952,6 +9988,62 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   window.addEventListener('reiChapaGerenteAutorizado', retomarRascunhoAposAutorizacao);
   window.addEventListener('pagehide', guardarRetomadaAoSair);
   document.addEventListener('visibilitychange', function () { if (document.hidden) guardarRetomadaAoSair(); });
+
+  var modalAtualizacao = document.getElementById('modalConfirmarAtualizacao');
+  var btnContinuarLancando = document.getElementById('btnContinuarLancando');
+  var btnAtualizarSite = document.getElementById('btnAtualizarSite');
+  function fecharConfirmacaoAtualizacao() { if (modalAtualizacao) modalAtualizacao.classList.remove('aberto'); }
+  window.__mostrarConfirmacaoAtualizacao = function () { if (estaAberto() && modalAtualizacao) modalAtualizacao.classList.add('aberto'); };
+  if (btnContinuarLancando) btnContinuarLancando.addEventListener('click', fecharConfirmacaoAtualizacao);
+  if (btnAtualizarSite) btnAtualizarSite.addEventListener('click', function () {
+    guardarRetomadaAoSair();
+    window.__reiChapaAtualizacaoConfirmada = true;
+    window.location.reload();
+  });
+  if (modalAtualizacao) modalAtualizacao.addEventListener('click', function (e) { if (e.target === modalAtualizacao) fecharConfirmacaoAtualizacao(); });
+
+  var gestoAtualizacao = null;
+  function podeIniciarGestoAtualizacao(alvo) {
+    if (!estaAberto() || !modal.classList.contains('aberto')) return false;
+    if (alvo && alvo.closest && alvo.closest('input,textarea,select,button,a,[contenteditable="true"]')) return false;
+    var caixa = modal.querySelector('.modal-box');
+    if ((window.scrollY || 0) > 1 || (modal.scrollTop || 0) > 1 || (caixa && caixa.scrollTop > 1)) return false;
+    var no = alvo;
+    while (no && no !== modal) {
+      if (no.nodeType === 1) {
+        var estilo = window.getComputedStyle(no);
+        if (/(auto|scroll)/.test(estilo.overflowY || '') && no.scrollHeight > no.clientHeight + 1 && no.scrollTop > 1) return false;
+      }
+      no = no.parentElement;
+    }
+    return true;
+  }
+  document.addEventListener('touchstart', function (e) {
+    if (!e.touches || e.touches.length !== 1 || !podeIniciarGestoAtualizacao(e.target)) { gestoAtualizacao = null; return; }
+    gestoAtualizacao = { x: e.touches[0].clientX, y: e.touches[0].clientY, ativado: false };
+  }, { capture: true, passive: true });
+  document.addEventListener('touchmove', function (e) {
+    if (!gestoAtualizacao || !e.touches || e.touches.length !== 1) return;
+    var dx = e.touches[0].clientX - gestoAtualizacao.x;
+    var dy = e.touches[0].clientY - gestoAtualizacao.y;
+    if (dy >= 86 && dy > Math.abs(dx) * 1.35) {
+      gestoAtualizacao.ativado = true;
+      if (e.cancelable) e.preventDefault();
+    }
+  }, { capture: true, passive: false });
+  document.addEventListener('touchend', function (e) {
+    if (!gestoAtualizacao) return;
+    var inicio = gestoAtualizacao; gestoAtualizacao = null;
+    var toque = e.changedTouches && e.changedTouches[0];
+    if (!toque) return;
+    var dx = toque.clientX - inicio.x;
+    var dy = toque.clientY - inicio.y;
+    if (inicio.ativado && dy >= 86 && dy > Math.abs(dx) * 1.35 && typeof window.__mostrarConfirmacaoAtualizacao === 'function') {
+      e.preventDefault();
+      window.__mostrarConfirmacaoAtualizacao();
+    }
+  }, true);
+  document.addEventListener('touchcancel', function () { gestoAtualizacao = null; }, true);
 })();
 </script>
 </body>
