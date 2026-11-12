@@ -1,4 +1,4 @@
-const CACHE = 'rei-da-chapa-v1.0.12';
+const CACHE = 'rei-da-chapa-v1.0.13';
 const CACHE_PREFIX = 'rei-da-chapa';
 
 self.addEventListener('install', e => {
