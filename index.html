@@ -4616,10 +4616,12 @@ function abrirGerenciadorCategorias(selId, tipo){
 
   function pegarCats(){
     var arr = [];
+    var ocultas = ler(key);
     Array.prototype.forEach.call(sel.options, function(op){
       if(!op.value) return;
       if(op.value === '__editar__' || op.value === '__excluir__' || op.value === '__nova__') return;
       if(op.value.indexOf('__') === 0) return;
+      if(ocultas.indexOf(op.value) >= 0) return;
       arr.push({ valor: op.value, texto: op.textContent });
     });
     return arr;
