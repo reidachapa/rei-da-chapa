@@ -1701,15 +1701,13 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 
     var ativa=document.querySelector('.view.ativo');
     var atual=ativa?ativa.id.replace(/^view-/,''):'vendas';
-    if(atual!=='vendas'||pilhaTelas.length){
-      var anterior=pilhaTelas.pop()||'vendas';
-      while(anterior===atual&&pilhaTelas.length)anterior=pilhaTelas.pop();
-      if(anterior===atual)anterior='vendas';
-      voltarParaTela(anterior);
+    if(atual!=='vendas'){
+      pilhaTelas.length=0;
+      voltarParaTela('vendas');
       protegerVolta();
       return;
     }
-
+    pilhaTelas.length=0;
     var modalSaida=document.getElementById('modalConfirmarSaida');if(modalSaida){protegerVolta();modalSaida.classList.add('aberto');var btnFicar=document.getElementById('btnFicarNoApp');if(btnFicar)btnFicar.focus({preventScroll:true})}
   });
 
