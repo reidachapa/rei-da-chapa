@@ -1744,6 +1744,13 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
     tratarVolta();
   });
 
+  window.addEventListener('beforeunload',function(e){
+    try{if(typeof window.__prepararRascunhoCompraParaSaida==='function')window.__prepararRascunhoCompraParaSaida()}catch(erro){console.warn('Não consegui proteger o rascunho antes de sair:',erro)}
+    if(confirmandoSaida||window.__reiChapaAtualizacaoAutomatica)return;
+    e.preventDefault();
+    e.returnValue='';
+  });
+
   function eventoVoltarDeTeclado(e){
     var alvo=e.target;
     if(alvo&&alvo.closest&&alvo.closest('input,textarea,select,[contenteditable="true"]'))return;
@@ -1790,7 +1797,7 @@ function abrirModalSenha(ok,cancel){senhaBuffer='';senhaCallbackOk=ok;senhaCallb
 function fecharModalSenha(){$('#modalSenha').classList.remove('aberto')}
 $('#btnFecharSenha').addEventListener('click',()=>{fecharModalSenha();if(senhaCallbackCancel)senhaCallbackCancel()});
 $('#tecladoNum').addEventListener('click',e=>{const btn=e.target.closest('button');if(!btn)return;if(btn.dataset.num){if(senhaBuffer.length<6){senhaBuffer+=btn.dataset.num;$('#senhaInput').value=senhaBuffer}$('#senhaErro').textContent=''}else if(btn.dataset.acao==='del'){senhaBuffer=senhaBuffer.slice(0,-1);$('#senhaInput').value=senhaBuffer}else if(btn.dataset.acao==='ok'){verificarSenha()}});
-function verificarSenha(){if(!window.__authPermitido){$('#senhaErro').textContent='⏳ Aguarde a conexão com o Supabase.';senhaBuffer='';$('#senhaInput').value='';return}if(senhaBuffer!==SENHA_GERENTE){$('#senhaErro').textContent='Senha incorreta';senhaBuffer='';$('#senhaInput').value='';return}fecharModalSenha();role='gerente';$('#roleSelect').value='gerente';aplicarRole();if(senhaCallbackOk)senhaCallbackOk()}
+function verificarSenha(){if(!window.__authPermitido){$('#senhaErro').textContent='⏳ Aguarde a conexão com o Supabase.';senhaBuffer='';$('#senhaInput').value='';return}if(senhaBuffer!==SENHA_GERENTE){$('#senhaErro').textContent='Senha incorreta';senhaBuffer='';$('#senhaInput').value='';return}fecharModalSenha();role='gerente';$('#roleSelect').value='gerente';aplicarRole();if(senhaCallbackOk)senhaCallbackOk();window.dispatchEvent(new Event('reiChapaGerenteAutorizado'))}
 
 function adicionarProdutosUnicosTemporariosPDV(lista){const ids=new Set(produtos.map(p=>String(p.id)));const novos=[];(lista||[]).forEach(p=>{if(!p||p.id==null)return;const id=String(p.id);if(ids.has(id))return;ids.add(id);novos.push(p)});produtos.push.apply(produtos,novos)}
 function renderVendas(preservarCategorias){
@@ -4359,6 +4366,7 @@ if ('serviceWorker' in navigator) {
         const newWorker = reg.installing;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+            window.__reiChapaAtualizacaoAutomatica=true;
             window.location.reload();
           }
         });
@@ -4368,6 +4376,7 @@ if ('serviceWorker' in navigator) {
     let refreshing;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (refreshing) return;
+      window.__reiChapaAtualizacaoAutomatica=true;
       window.location.reload();
       refreshing = true;
     });
@@ -9618,6 +9627,10 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
 @media screen and (orientation:landscape) and (min-width:760px) and (max-width:899px){.vendas-wrap{grid-template-columns:minmax(0,1fr) minmax(280px,36vw)!important;align-items:start}.vendas-wrap .carrinho{position:sticky;top:8px;max-height:calc(100dvh - 88px);overflow-y:auto}#btnPedidoMobile.visivel{display:none!important}}
 @media screen and (orientation:landscape) and (min-width:901px){#btnPedidoMobile.visivel{display:none!important}}
 </style>
+<style id="rascunho-compra-proteger-atualizacao">
+html.nota-compra-aberta,html.nota-compra-aberta body{overscroll-behavior-y:none!important}
+html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .modal-box,html.nota-compra-aberta #modalDespesa .lista-itens-compra{overscroll-behavior:contain}
+</style>
 <script>
 (function () {
   'use strict';
@@ -9660,6 +9673,8 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
       var campos = {};
       camposIds.forEach(function (id) { var el = document.getElementById(id); if (el) campos[id] = el.value; });
       var anterior = lerChave(chaveRascunhoAtivo || chave(lojaRascunho, idRascunho)) || {};
+      var caixaModal = modal.querySelector('.modal-box');
+      var viewAtiva = document.querySelector('.view.ativo');
       var registro = {
         versao: 1,
         temRascunho: true,
@@ -9667,6 +9682,12 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
         campos: campos,
         descontoTipo: window._descontoNotaTipo || 'valor',
         itens: itensAtuais(),
+        retomarAoVoltar: anterior.retomarAoVoltar === true,
+        telaAtiva: viewAtiva ? viewAtiva.id.replace(/^view-/, '') : 'compras',
+        scrollJanela: window.scrollY || 0,
+        scrollModal: modal.scrollTop || 0,
+        scrollFormulario: caixaModal ? caixaModal.scrollTop || 0 : 0,
+        scrollListaItens: (modal.querySelector('.lista-itens-compra') || {}).scrollTop || 0,
         updatedAt: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
       };
       var baseNota=anterior.baseNota||baseNotaAtiva;
@@ -9684,6 +9705,67 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
     var lista = typeof despesas !== 'undefined' && Array.isArray(despesas) ? despesas : (Array.isArray(window.despesas) ? window.despesas : []);
     return lista.find(function (d) { return d && String(d.id) === String(id); }) || null;
   }
+  function salvarFlagRetomada(ativo, k, preservarPosicao) {
+    var chaveAlvo = k || chaveRascunhoAtivo || chave(lojaRascunho || lojaAtual(), idRascunho);
+    var registro = lerChave(chaveAlvo);
+    if (!registro) return;
+    registro.retomarAoVoltar = !!ativo;
+    if (preservarPosicao === false) {
+      try { localStorage.setItem(chaveAlvo, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui atualizar o rascunho da compra:', e); }
+      return;
+    }
+    var viewAtiva = document.querySelector('.view.ativo');
+    var caixa = modal.querySelector('.modal-box');
+    registro.telaAtiva = viewAtiva ? viewAtiva.id.replace(/^view-/, '') : (registro.telaAtiva || 'compras');
+    registro.scrollJanela = window.scrollY || 0;
+    registro.scrollModal = modal.scrollTop || 0;
+    registro.scrollFormulario = caixa ? caixa.scrollTop || 0 : 0;
+    registro.scrollListaItens = (modal.querySelector('.lista-itens-compra') || {}).scrollTop || 0;
+    try { localStorage.setItem(chaveAlvo, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
+  }
+  function guardarRetomadaAoSair() {
+    if (!estaAberto() || !sujo) return;
+    salvarRascunho();
+    salvarFlagRetomada(true);
+  }
+  function localizarRascunhoParaRetomar() {
+    var prefixoLoja = prefixo + encodeURIComponent(lojaAtual()) + ':';
+    var melhor = null, melhorData = -1;
+    try {
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (!k || k.indexOf(prefixoLoja) !== 0) continue;
+        var registro = lerChave(k);
+        if (!registro || registro.retomarAoVoltar !== true || !temConteudoRascunho(registro)) continue;
+        var data = parseInt(String(registro.updatedAt || '').split('-')[0], 36) || 0;
+        if (data >= melhorData) { melhor = { chave: k, registro: registro }; melhorData = data; }
+      }
+    } catch (e) { console.warn('Não consegui localizar o rascunho da compra:', e); }
+    return melhor;
+  }
+  function retomarRascunhoAposAutorizacao() {
+    if (!window.__authPermitido || typeof souGerente !== 'function' || !souGerente() || estaAberto()) return;
+    var pendente = localizarRascunhoParaRetomar();
+    if (!pendente) return;
+    var tela = pendente.registro.telaAtiva;
+    var tab = tela && document.querySelector('.tabs .tab[data-tab="' + tela + '"]');
+    if (tab && !tab.classList.contains('ativo')) tab.click();
+    window.setTimeout(function () {
+      if (!window.__authPermitido || !souGerente() || estaAberto()) return;
+      var editId = pendente.registro.editId;
+      var compra = editId != null ? obterCompraLocal(editId) : null;
+      if (editId != null && !compra) {
+        if (typeof window.toast === 'function') window.toast('📝 O rascunho continua salvo neste aparelho; a nota original não foi encontrada para reabri-lo.');
+        return;
+      }
+      if (editId == null && pendente.registro.savedRecordId && !obterCompraLocal(pendente.registro.savedRecordId)) {
+        if (typeof window.toast === 'function') window.toast('📝 O rascunho continua salvo neste aparelho. Estou aguardando a nota aparecer para evitar lançar a mesma compra duas vezes.');
+        return;
+      }
+      salvarFlagRetomada(false, pendente.chave, false);
+      if (typeof window.abrirModalDespesa === 'function') window.abrirModalDespesa(compra || null);
+    }, 80);
+  }
   function restaurarRascunho(loja, id) {
     var k = chave(loja, id);
     var registro = lerChave(k);
@@ -9698,6 +9780,16 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
     if (typeof despItensTemp !== 'undefined') despItensTemp = itens;
     if (typeof window.renderDespItens === 'function') window.renderDespItens();
     if (typeof window.atualizarTotaisDesp === 'function') window.atualizarTotaisDesp();
+    window.requestAnimationFrame(function () {
+      window.requestAnimationFrame(function () {
+        var caixa = modal.querySelector('.modal-box');
+        var lista = modal.querySelector('.lista-itens-compra');
+        modal.scrollTop = Number(registro.scrollModal) || 0;
+        if (caixa) caixa.scrollTop = Number(registro.scrollFormulario) || 0;
+        if (lista) lista.scrollTop = Number(registro.scrollListaItens) || 0;
+        if (Number.isFinite(Number(registro.scrollJanela))) window.scrollTo(0, Number(registro.scrollJanela) || 0);
+      });
+    });
     sujo = true;
     if (typeof window.toast === 'function') window.toast('📝 Rascunho da compra recuperado neste aparelho.');
   }
@@ -9818,8 +9910,48 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
   document.addEventListener('input', observarInteracao, true);
   document.addEventListener('change', observarInteracao, true);
   document.addEventListener('click', observarInteracao, true);
-  window.addEventListener('pagehide', salvarRascunho);
-  document.addEventListener('visibilitychange', function () { if (document.hidden) salvarRascunho(); });
+  function salvarPosicaoAtual() {
+    if (!estaAberto() || !sujo) return;
+    var caixa = modal.querySelector('.modal-box');
+    var lista = modal.querySelector('.lista-itens-compra');
+    var k = chaveRascunhoAtivo || chave(lojaRascunho, idRascunho);
+    var registro = lerChave(k);
+    if (!registro) { salvarRascunho(); registro = lerChave(k); }
+    if (!registro) return;
+    var viewAtiva = document.querySelector('.view.ativo');
+    registro.telaAtiva = viewAtiva ? viewAtiva.id.replace(/^view-/, '') : 'compras';
+    registro.scrollJanela = window.scrollY || 0;
+    registro.scrollModal = modal.scrollTop || 0;
+    registro.scrollFormulario = caixa ? caixa.scrollTop || 0 : 0;
+    registro.scrollListaItens = lista ? lista.scrollTop || 0 : 0;
+    try { localStorage.setItem(k, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
+  }
+  var quadroScroll = 0;
+  function agendarSalvamentoPosicao() {
+    if (quadroScroll) return;
+    quadroScroll = window.requestAnimationFrame(function () { quadroScroll = 0; salvarPosicaoAtual(); });
+  }
+  modal.addEventListener('scroll', agendarSalvamentoPosicao, { passive: true });
+  var caixaScroll = modal.querySelector('.modal-box');
+  var listaScroll = modal.querySelector('.lista-itens-compra');
+  if (caixaScroll) caixaScroll.addEventListener('scroll', agendarSalvamentoPosicao, { passive: true });
+  if (listaScroll) listaScroll.addEventListener('scroll', agendarSalvamentoPosicao, { passive: true });
+  window.addEventListener('scroll', agendarSalvamentoPosicao, { passive: true });
+
+  var modalEstavaAberto = estaAberto();
+  function observarEstadoModal() {
+    var aberto = estaAberto();
+    document.documentElement.classList.toggle('nota-compra-aberta', aberto);
+    if (modalEstavaAberto && !aberto) salvarFlagRetomada(false);
+    modalEstavaAberto = aberto;
+  }
+  observarEstadoModal();
+  new MutationObserver(observarEstadoModal).observe(modal, { attributes: true, attributeFilter: ['class'] });
+
+  window.__prepararRascunhoCompraParaSaida = guardarRetomadaAoSair;
+  window.addEventListener('reiChapaGerenteAutorizado', retomarRascunhoAposAutorizacao);
+  window.addEventListener('pagehide', guardarRetomadaAoSair);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) guardarRetomadaAoSair(); });
 })();
 </script>
 </body>
