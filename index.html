@@ -1629,6 +1629,74 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   if(t==='hist')renderHistorico();
 }));
 
+(function instalarNavegacaoVoltarAndroid(){
+  if(window.__reiChapaVoltarInstalado)return;
+  window.__reiChapaVoltarInstalado=true;
+  var pilhaTelas=[],aplicandoVolta=false,ultimoVoltarRaiz=0;
+  var telasGerente=['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
+
+  document.addEventListener('click',function(e){
+    if(aplicandoVolta)return;
+    var botao=e.target.closest('.tab[data-tab]');
+    if(!botao)return;
+    var destino=botao.dataset.tab;
+    var ativa=document.querySelector('.view.ativo');
+    var atual=ativa?ativa.id.replace(/^view-/,''):'';
+    if(!atual||!destino||destino===atual)return;
+    if(telasGerente.indexOf(destino)>=0&&!souGerente())return;
+    pilhaTelas.push(atual);
+    if(pilhaTelas.length>20)pilhaTelas.shift();
+  },true);
+
+  function modalAbertoNoTopo(){
+    var topo=null,zTopo=-Infinity;
+    document.querySelectorAll('.modal.aberto').forEach(function(modal){
+      var estilo=getComputedStyle(modal);
+      if(estilo.display==='none'||estilo.visibility==='hidden')return;
+      var z=parseInt(estilo.zIndex,10);if(!Number.isFinite(z))z=0;
+      if(z>=zTopo){topo=modal;zTopo=z}
+    });
+    return topo;
+  }
+  function voltarParaTela(nome){
+    if(!nome||telasGerente.indexOf(nome)>=0&&!souGerente())nome='vendas';
+    var seletor='.tabs .tab[data-tab="'+nome+'"], #modalMaisMenu .tab[data-tab="'+nome+'"]';
+    var botao=document.querySelector(seletor);
+    if(!botao&&nome!=='vendas')botao=document.querySelector('.tabs .tab[data-tab="vendas"]');
+    if(!botao)return false;
+    aplicandoVolta=true;
+    try{botao.click()}finally{aplicandoVolta=false}
+    return true;
+  }
+  function protegerVolta(){
+    try{history.pushState({reiChapaBackGuard:true},'',location.href)}catch(e){console.warn('Não foi possível preparar o voltar do app',e)}
+  }
+
+  window.addEventListener('popstate',function(){
+    var modal=modalAbertoNoTopo();
+    if(modal){modal.classList.remove('aberto');ultimoVoltarRaiz=0;protegerVolta();return}
+
+    var ativa=document.querySelector('.view.ativo');
+    var atual=ativa?ativa.id.replace(/^view-/,''):'vendas';
+    if(atual!=='vendas'||pilhaTelas.length){
+      var anterior=pilhaTelas.pop()||'vendas';
+      while(anterior===atual&&pilhaTelas.length)anterior=pilhaTelas.pop();
+      if(anterior===atual)anterior='vendas';
+      voltarParaTela(anterior);
+      ultimoVoltarRaiz=0;
+      protegerVolta();
+      return;
+    }
+
+    var agora=Date.now();
+    if(agora-ultimoVoltarRaiz<2200)return;
+    ultimoVoltarRaiz=agora;
+    toast('Você está no início. Toque voltar novamente para sair.');
+    protegerVolta();
+  });
+
+  protegerVolta();
+})();
 let senhaBuffer='';
 var roleSalva=null;role='atendente';
 let senhaCallbackOk=null,senhaCallbackCancel=null;
