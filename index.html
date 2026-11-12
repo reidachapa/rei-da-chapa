@@ -1632,7 +1632,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 (function instalarNavegacaoVoltarAndroid(){
   if(window.__reiChapaVoltarInstalado)return;
   window.__reiChapaVoltarInstalado=true;
-  var pilhaTelas=[],aplicandoVolta=false,ultimoVoltarRaiz=0;
+  var pilhaTelas=[],aplicandoVolta=false;
   var telasGerente=['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
 
   document.addEventListener('click',function(e){
@@ -1674,7 +1674,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 
   window.addEventListener('popstate',function(){
     var modal=modalAbertoNoTopo();
-    if(modal){modal.classList.remove('aberto');ultimoVoltarRaiz=0;protegerVolta();return}
+    if(modal){modal.classList.remove('aberto');protegerVolta();return}
 
     var ativa=document.querySelector('.view.ativo');
     var atual=ativa?ativa.id.replace(/^view-/,''):'vendas';
@@ -1683,16 +1683,11 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
       while(anterior===atual&&pilhaTelas.length)anterior=pilhaTelas.pop();
       if(anterior===atual)anterior='vendas';
       voltarParaTela(anterior);
-      ultimoVoltarRaiz=0;
       protegerVolta();
       return;
     }
 
-    var agora=Date.now();
-    if(agora-ultimoVoltarRaiz<2200)return;
-    ultimoVoltarRaiz=agora;
-    toast('Você está no início. Toque voltar novamente para sair.');
-    protegerVolta();
+    if(!window.confirm('Deseja sair do aplicativo Rei da Chapa Delivery?'))protegerVolta();
   });
 
   protegerVolta();
