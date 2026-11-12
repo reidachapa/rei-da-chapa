@@ -3699,7 +3699,11 @@ function mesclarEstadosConcorrentes(base,local,remoto){
         if(vb===undefined){if(vl!==undefined&&vr!==undefined&&!dadosIguais(vl,vr))conflito(p);var novo=vl!==undefined?vl:vr;if(novo!==undefined)saida.push(clonarDadosEstado(novo));return}
         if(vl===undefined){if(vr===undefined||dadosIguais(vr,vb))return;conflito(p+' removido enquanto era editado')}
         if(vr===undefined){if(dadosIguais(vl,vb))return;conflito(p+' removido enquanto era editado')}
-        if(/\.despesas$/.test(caminho)&&ehNotaCompraSalva(vb)&&!dadosIguais(vl,vb)&&!dadosIguais(vr,vb)&&!dadosIguais(vl,vr))conflito('nota de compra '+id+' editada em dois aparelhos');
+        if(/\.despesas$/.test(caminho)&&ehNotaCompraSalva(vb)){
+          var notaLocalMudou=!dadosIguais(vl,vb),notaRemotaMudou=!dadosIguais(vr,vb);
+          if(notaLocalMudou&&notaRemotaMudou&&notaCompraIgual(vl,vr)){saida.push(clonarDadosEstado(vr));return}
+          if(notaLocalMudou&&notaRemotaMudou&&!dadosIguais(vl,vr))conflito('nota de compra '+id+' editada em dois aparelhos');
+        }
         var opcoesRegistro={mergeInventory:opts.mergeInventory&&inventario,inventoryEntity:inventario};
         saida.push(opcoesRegistro.mergeInventory?mesclarObjeto(vb,vl,vr,p,opcoesRegistro):mesclarValor(vb,vl,vr,p,opcoesRegistro));
       });
@@ -3779,6 +3783,7 @@ async function subirParaServidor(){
         salvarPendente=false;
         const revisaoEnviada=revisaoLocal;
         let dadosLocal=clonarDadosEstado(capturarEstado());
+        const dadosEnviados=clonarDadosEstado(dadosLocal);
         let dadosBase=estadoBaseSincronizado&&clonarDadosEstado(estadoBaseSincronizado);
         let versaoBase=ultimaAtualizacao,mesclouDados=false,confirmada=false;
         if(!versaoBase||!dadosBase)throw new Error('Não foi possível confirmar a versão atual do servidor.');
@@ -3789,10 +3794,18 @@ async function subirParaServidor(){
           const{data,error}=await supa.from('estado').update({dados:dadosLocal,atualizado_em:agora}).eq('id','atual').eq('atualizado_em',versaoBase).select('id');
           if(error){atualizacoesProprias.delete(agora);throw error}
           if(data&&data.length){
-            ultimaAtualizacao=agora;
-            estadoBaseSincronizado=clonarDadosEstado(dadosLocal);
             confirmada=true;
-            if(mesclouDados)aplicarDadosEstadoAtual(dadosLocal);
+            if(revisaoEnviada===revisaoLocal){
+              ultimaAtualizacao=agora;
+              estadoBaseSincronizado=clonarDadosEstado(dadosLocal);
+              if(mesclouDados)aplicarDadosEstadoAtual(dadosLocal);
+            }else{
+              if(mesclouDados){var estadoAtual=clonarDadosEstado(capturarEstado()),estadoRebaseado=mesclarEstadosConcorrentes(dadosEnviados,estadoAtual,dadosLocal);aplicarDadosEstadoAtual(estadoRebaseado)}
+              ultimaAtualizacao=agora;
+              estadoBaseSincronizado=clonarDadosEstado(dadosLocal);
+              estadoLocalSujo=true;
+              salvarPendente=true;
+            }
             break;
           }
           atualizacoesProprias.delete(agora);
@@ -3801,7 +3814,7 @@ async function subirParaServidor(){
           if(!remoto||!remoto.dados)throw new Error('O estado atual não pôde ser relido; nenhuma cópia foi substituída.');
           if(remoto.atualizado_em===versaoBase)throw new Error('O Supabase não confirmou a gravação. Confira a conexão e a permissão de atualização; sua nota continua como rascunho.');
           const notaId=notaCompraEmSincronizacaoId;
-          if(notaId&&notaCompraIgual(buscarNotaPorId(dadosLocal,notaId),buscarNotaPorId(remoto.dados,notaId))){
+          if(notaId&&revisaoEnviada===revisaoLocal&&notaCompraIgual(buscarNotaPorId(dadosLocal,notaId),buscarNotaPorId(remoto.dados,notaId))){
             dadosLocal=clonarDadosEstado(remoto.dados);
             dadosBase=clonarDadosEstado(remoto.dados);
             ultimaAtualizacao=remoto.atualizado_em;
@@ -9385,6 +9398,7 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
   var lojaRascunho = 'padrao';
   var idRascunho = null;
   var chaveRascunhoAtivo = null;
+  var baseNotaAtiva = null;
   var sujo = false;
   var sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   var pendentes = new Map();
@@ -9406,6 +9420,7 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
     return clonar(listaA && listaA.length ? listaA : (listaB || listaA || []));
   }
   function estaAberto() { return modal.classList.contains('aberto'); }
+  function temConteudoRascunho(registro) { return !!(registro && (registro.temRascunho === true || (registro.campos && Object.keys(registro.campos).length > 0) || (Array.isArray(registro.itens) && registro.itens.length > 0))); }
   function salvarRascunho() {
     if (!estaAberto() || !sujo) return;
     try {
@@ -9414,12 +9429,15 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
       var anterior = lerChave(chaveRascunhoAtivo || chave(lojaRascunho, idRascunho)) || {};
       var registro = {
         versao: 1,
+        temRascunho: true,
         editId: idRascunho,
         campos: campos,
         descontoTipo: window._descontoNotaTipo || 'valor',
         itens: itensAtuais(),
         updatedAt: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2)
       };
+      var baseNota=anterior.baseNota||baseNotaAtiva;
+      if(baseNota)registro.baseNota=clonar(baseNota);
       if (anterior.savedRecordId) registro.savedRecordId = anterior.savedRecordId;
       if (anterior.savedSession) registro.savedSession = anterior.savedSession;
       if (anterior.baseNota) registro.baseNota = clonar(anterior.baseNota);
@@ -9436,7 +9454,7 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
   function restaurarRascunho(loja, id) {
     var k = chave(loja, id);
     var registro = lerChave(k);
-    if (!registro || registro.versao !== 1 || String(registro.editId == null ? '' : registro.editId) !== String(id == null ? '' : id)) return;
+    if (!registro || registro.versao !== 1 || String(registro.editId == null ? '' : registro.editId) !== String(id == null ? '' : id) || !temConteudoRascunho(registro)) return;
     camposIds.forEach(function (campoId) {
       var el = document.getElementById(campoId);
       if (el && registro.campos && Object.prototype.hasOwnProperty.call(registro.campos, campoId)) el.value = registro.campos[campoId];
@@ -9484,10 +9502,13 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
     idRascunho = recuperadoComoEdicao ? null : (despesa ? despesa.id : null);
     chaveRascunhoAtivo = recuperadoComoEdicao ? chaveNova : chave(lojaRascunho, idRascunho);
     var k = chaveRascunhoAtivo;
+    var registroBase=lerChave(k);
+    baseNotaAtiva=despesa?(registroBase&&registroBase.baseNota?clonar(registroBase.baseNota):notaInicial):null;
     if (despesa) {
-      var registroBase = lerChave(k) || { versao: 1, editId: idRascunho, campos: {}, itens: [], updatedAt: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) };
-      if (!registroBase.baseNota) registroBase.baseNota = notaInicial;
-      try { localStorage.setItem(k, JSON.stringify(registroBase)); } catch (e) {}
+      if (registroBase && !registroBase.baseNota && (temConteudoRascunho(registroBase) || registroBase.savedRecordId)) {
+        registroBase.baseNota = notaInicial;
+        try { localStorage.setItem(k, JSON.stringify(registroBase)); } catch (e) {}
+      }
     }
     var pendente = pendentes.has(k);
     if (pendente) {
@@ -9522,7 +9543,7 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
   };
   window.__obterBaseNotaRascunho = function () {
     var registro = lerChave(chaveRascunhoAtivo || chave(lojaAtual(), idRascunho));
-    return registro && registro.baseNota ? clonar(registro.baseNota) : null;
+    return registro && registro.baseNota ? clonar(registro.baseNota) : (baseNotaAtiva ? clonar(baseNotaAtiva) : null);
   };
   window.__obterIdRascunhoCompra = function () {
     var registro = lerChave(chaveRascunhoAtivo || chave(lojaAtual(), idRascunho));
