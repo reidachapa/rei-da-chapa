@@ -15,7 +15,7 @@
 <style>
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   :root{--iron-5:#3a3a3f;--txt:#f0ece8;--muted:#96908a;--gold:#d4a23c;--gold-2:#f0c862;--gold-dark:#8a6a1e;--fire:#ff6a1a;--fire-2:#ff8a3a;--green:#3fb972;--red:#e5484d;--blue:#4d9de5;--purple:#a06ee5;--bread:#c98a4c;--veg:#6abf69;--meat:#d9744a}
-  html,body{height:100%;overflow-x:hidden}
+  html,body{height:100%;overflow-x:hidden;overscroll-behavior-y:none}
   body{font-family:'Segoe UI',system-ui,-apple-system,Roboto,sans-serif;color:var(--txt);background:repeating-linear-gradient(0deg,rgba(255,255,255,.012) 0px,rgba(255,255,255,.012) 1px,transparent 1px,transparent 3px),repeating-linear-gradient(90deg,rgba(0,0,0,.15) 0px,rgba(0,0,0,.15) 1px,transparent 1px,transparent 14px),radial-gradient(ellipse at 20% 0%,rgba(212,162,60,.06),transparent 45%),radial-gradient(ellipse at 80% 100%,rgba(255,106,26,.04),transparent 50%),linear-gradient(180deg,#141416 0%,#0a0a0c 100%);background-attachment:fixed;min-height:100vh;font-size:15px}
   body::before{content:'';position:fixed;inset:0;pointer-events:none;opacity:.35;background-image:radial-gradient(circle at 25% 30%,rgba(255,255,255,.04) 0,transparent 1.5px),radial-gradient(circle at 75% 60%,rgba(255,255,255,.03) 0,transparent 1.5px),radial-gradient(circle at 50% 80%,rgba(0,0,0,.2) 0,transparent 1.5px);background-size:60px 60px,90px 90px,40px 40px;z-index:0}
   main,header{position:relative;z-index:1}
@@ -913,6 +913,17 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   #modalConfirmarSaida #btnSairDoApp{border-color:rgba(229,72,77,.35);color:#e5a4a6}
   #modalConfirmarAtualizacao #btnAtualizarSite{border-color:rgba(212,162,60,.55);color:#f0cf76;background:linear-gradient(180deg,rgba(212,162,60,.12),rgba(212,162,60,.05))}
   @media(max-width:380px){#modalConfirmarSaida .saida-box,#modalConfirmarAtualizacao .saida-box{padding:22px 16px 18px}}
+  #appInfoControls{position:absolute;right:8px;top:3px;z-index:60;display:flex;align-items:center;gap:5px}
+  #appVersion{font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1}
+  #btnAtualizarApp{position:relative;width:24px;height:22px;display:grid;place-items:center;padding:0;border:1px solid rgba(212,162,60,.42);border-radius:6px;background:linear-gradient(180deg,rgba(212,162,60,.13),rgba(212,162,60,.05));color:var(--gold-2);cursor:pointer;touch-action:manipulation}
+  #btnAtualizarApp.tem-atualizacao{border-color:rgba(240,200,98,.8);box-shadow:0 0 10px rgba(212,162,60,.22)}
+  #btnAtualizarApp svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #btnAtualizarApp:focus-visible{outline:2px solid var(--gold-2);outline-offset:2px}
+  #btnAtualizarApp:disabled{opacity:.75;cursor:wait}
+  #btnAtualizarApp.atualizando svg{animation:reiChapaGirarAtualizacao .8s linear infinite}
+  @keyframes reiChapaGirarAtualizacao{to{transform:rotate(360deg)}}
+  #statusAtualizacaoSite{display:none;padding:8px 10px;border:1px solid rgba(212,162,60,.28);border-radius:8px;background:rgba(212,162,60,.06);font-size:11px;color:var(--gold-2)}
+  #modalConfirmarAtualizacao.atualizando .modal-acoes button{opacity:.55;pointer-events:none}
 </style>
 </head><body>
 <div id="conexaoGate" role="dialog" aria-modal="true" aria-labelledby="conexaoTitulo">
@@ -952,7 +963,12 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     </select>
     <span class="role-badge" id="roleBadge" style="display:none">👑</span>
   </div>
-  <span id="appVersion" title="Versão do aplicativo" style="position:absolute;right:9px;top:3px;z-index:60;font-size:9px;color:#a9a39c;letter-spacing:.35px;line-height:1">v1.0.19</span>
+  <div id="appInfoControls">
+    <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
+    </button>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.19</span>
+  </div>
 </header>  
 <main>
   <section id="view-vendas" class="view ativo">
@@ -1249,10 +1265,10 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   <div class="modal-box saida-box">
     <div class="saida-emblema" aria-hidden="true">👑</div>
     <h3 id="tituloConfirmarSaida">Deseja sair do aplicativo?</h3>
-    <p id="descricaoConfirmarSaida">O Rei da Chapa Delivery continuará aberto se você escolher ficar.</p>
+    <p id="descricaoConfirmarSaida">Quer sair do Rei da Chapa Delivery?</p>
     <div class="modal-acoes">
-      <button type="button" class="btn-primario" id="btnFicarNoApp">Continuar no app</button>
-      <button type="button" class="btn-fantasma" id="btnSairDoApp">🚪 Sair</button>
+      <button type="button" class="btn-primario" id="btnFicarNoApp">Não, continuar</button>
+      <button type="button" class="btn-fantasma" id="btnSairDoApp">Sim, sair</button>
     </div>
   </div>
 </div>
@@ -1260,11 +1276,12 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   <div class="modal-box saida-box">
     <div class="saida-emblema" aria-hidden="true">🔄</div>
     <h3 id="tituloConfirmarAtualizacao">Atualizar o aplicativo?</h3>
-    <p id="descricaoConfirmarAtualizacao">Se atualizar, sua compra ficará salva neste aparelho. Ao abrir o app novamente e entrar como gerente, você continua de onde parou.</p>
+    <p id="descricaoConfirmarAtualizacao">O aplicativo vai atualizar e voltar para esta mesma área e posição. Se você estiver editando uma compra, o rascunho continuará salvo neste aparelho.</p>
     <div class="modal-acoes">
       <button type="button" class="btn-primario" id="btnContinuarLancando">Continuar lançando</button>
       <button type="button" class="btn-fantasma" id="btnAtualizarSite">🔄 Atualizar agora</button>
     </div>
+    <p id="statusAtualizacaoSite" role="status" aria-live="polite"></p>
   </div>
 </div>
 <div id="modalSenha" class="modal senha-modal"><div class="modal-box">
@@ -1752,6 +1769,8 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   function tratarVolta(){
     if(confirmandoSaida)return true;
     var modal=modalAbertoNoTopo();
+    if(modal&&modal.id==='modalConfirmarSaida'){protegerVolta();return true}
+    if(modal&&modal.id==='modalConfirmarAtualizacao'&&modal.classList.contains('atualizando')){protegerVolta();return true}
     if(modal){modal.classList.remove('aberto');protegerVolta();return true}
     var ativa=document.querySelector('.view.ativo');
     var atual=ativa?ativa.id.replace(/^view-/,''):'vendas';
@@ -4394,27 +4413,24 @@ window.Notificacoes = {
 })();
 
 if ('serviceWorker' in navigator) {
+  function sinalizarAtualizacaoDisponivel(){
+    var botao=document.getElementById('btnAtualizarApp');
+    if(botao){botao.title='Há uma atualização disponível';botao.setAttribute('aria-label','Atualizar aplicativo — nova versão disponível');botao.classList.add('tem-atualizacao')}
+  }
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).then(reg => {
-      setInterval(() => { reg.update(); }, 10000);
-      
+      window.__reiChapaServiceWorkerRegistration=reg;
       reg.addEventListener('updatefound', () => {
         const newWorker = reg.installing;
+        if(!newWorker)return;
         newWorker.addEventListener('statechange', () => {
-          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            window.__reiChapaAtualizacaoAutomatica=true;
-            window.location.reload();
-          }
+          if (newWorker.state === 'installed' && navigator.serviceWorker.controller) sinalizarAtualizacaoDisponivel();
         });
       });
     }).catch(err => console.log('SW erro:', err));
 
-    let refreshing;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (refreshing) return;
-      window.__reiChapaAtualizacaoAutomatica=true;
-      window.location.reload();
-      refreshing = true;
+      sinalizarAtualizacaoDisponivel();
     });
   });
 }
@@ -9592,6 +9608,7 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
       var seletor=document.getElementById('roleSelect');if(seletor)seletor.value='atendente';
       aplicarRole();if(gate)gate.style.display='none';if(window.finalizarSplash)window.finalizarSplash(true);
       if(!realtimeAtivo){assinarRealtime();realtimeAtivo=true}
+       window.dispatchEvent(new Event('reiChapaDadosCarregados'));
       setTimeout(async function(){var reg=await BackupSys.verificarAutoBackup();if(reg)toast('📦 Backup semanal criado automaticamente')},1200);
     }catch(e){console.error('Falha ao conectar ao Supabase:',e);mostrarStatus('Não consegui carregar os dados do Supabase. Verifique a conexão e a permissão de leitura da tabela “estado”. Nenhum dado local foi usado.',true);if(window.finalizarSplash)window.finalizarSplash(false)}
     finally{authProcessando=false}
@@ -9992,58 +10009,166 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var modalAtualizacao = document.getElementById('modalConfirmarAtualizacao');
   var btnContinuarLancando = document.getElementById('btnContinuarLancando');
   var btnAtualizarSite = document.getElementById('btnAtualizarSite');
-  function fecharConfirmacaoAtualizacao() { if (modalAtualizacao) modalAtualizacao.classList.remove('aberto'); }
-  window.__mostrarConfirmacaoAtualizacao = function () { if (estaAberto() && modalAtualizacao) modalAtualizacao.classList.add('aberto'); };
+  var btnAbrirAtualizacao = document.getElementById('btnAtualizarApp');
+  var statusAtualizacao = document.getElementById('statusAtualizacaoSite');
+  var chaveContextoAtualizacao = 'rei_chapa_contexto_tela_atualizacao_v1';
+  var telasQuePedemGerente = ['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
+  var atualizacaoEmCurso = false;
+
+  function fecharConfirmacaoAtualizacao() {
+    if (atualizacaoEmCurso) return;
+    if (modalAtualizacao) modalAtualizacao.classList.remove('aberto');
+  }
+  window.__mostrarConfirmacaoAtualizacao = function () {
+    if (!modalAtualizacao) return;
+    if (statusAtualizacao) { statusAtualizacao.textContent = ''; statusAtualizacao.style.display = 'none'; }
+    modalAtualizacao.classList.add('aberto');
+  };
+  if (btnAbrirAtualizacao) btnAbrirAtualizacao.addEventListener('click', window.__mostrarConfirmacaoAtualizacao);
   if (btnContinuarLancando) btnContinuarLancando.addEventListener('click', fecharConfirmacaoAtualizacao);
-  if (btnAtualizarSite) btnAtualizarSite.addEventListener('click', function () {
-    guardarRetomadaAoSair();
-    window.__reiChapaAtualizacaoConfirmada = true;
-    window.location.reload();
-  });
   if (modalAtualizacao) modalAtualizacao.addEventListener('click', function (e) { if (e.target === modalAtualizacao) fecharConfirmacaoAtualizacao(); });
 
-  var gestoAtualizacao = null;
-  function podeIniciarGestoAtualizacao(alvo) {
-    if (!estaAberto() || !modal.classList.contains('aberto')) return false;
-    if (alvo && alvo.closest && alvo.closest('input,textarea,select,button,a,[contenteditable="true"]')) return false;
-    var caixa = modal.querySelector('.modal-box');
-    if ((window.scrollY || 0) > 1 || (modal.scrollTop || 0) > 1 || (caixa && caixa.scrollTop > 1)) return false;
-    var no = alvo;
-    while (no && no !== modal) {
-      if (no.nodeType === 1) {
-        var estilo = window.getComputedStyle(no);
-        if (/(auto|scroll)/.test(estilo.overflowY || '') && no.scrollHeight > no.clientHeight + 1 && no.scrollTop > 1) return false;
-      }
-      no = no.parentElement;
+  function salvarContextoDaTela() {
+    var ativa = document.querySelector('.view.ativo');
+    if (!ativa) return false;
+    var nomeTela = ativa.id.replace(/^view-/, '');
+    if (!/^[a-z]+$/.test(nomeTela)) return false;
+    var rolagens = [];
+    Array.prototype.forEach.call(ativa.querySelectorAll('[id]'), function (el) {
+      if (el.scrollTop > 0) rolagens.push({ id: el.id, top: el.scrollTop });
+    });
+    var contexto = {
+      tela: nomeTela,
+      precisaGerente: telasQuePedemGerente.indexOf(nomeTela) >= 0,
+      scrollY: window.scrollY || document.documentElement.scrollTop || 0,
+      scrollTela: ativa.scrollTop || 0,
+      rolagens: rolagens
+    };
+    try { window.sessionStorage.setItem(chaveContextoAtualizacao, JSON.stringify(contexto)); return true; }
+    catch (e) { console.warn('Não consegui guardar a tela antes de atualizar:', e); return false; }
+  }
+  function limparContextoDaTela() {
+    try { window.sessionStorage.removeItem(chaveContextoAtualizacao); } catch (e) {}
+  }
+  function aplicarContextoDaTela(contexto) {
+    var destino = document.getElementById('view-' + contexto.tela);
+    if (!destino) { limparContextoDaTela(); return; }
+    var atual = document.querySelector('.view.ativo');
+    if (!atual || atual !== destino) {
+      var tab = document.querySelector('.tabs .tab[data-tab="' + contexto.tela + '"], #modalMaisMenu .tab[data-tab="' + contexto.tela + '"]');
+      if (tab) tab.click();
     }
-    return true;
+    function restaurarRolagem() {
+      try { window.scrollTo(0, Math.max(0, Number(contexto.scrollY) || 0)); } catch (e) {}
+      destino.scrollTop = Math.max(0, Number(contexto.scrollTela) || 0);
+      (contexto.rolagens || []).forEach(function (posicao) {
+        var el = document.getElementById(posicao.id);
+        if (el && destino.contains(el)) el.scrollTop = Math.max(0, Number(posicao.top) || 0);
+      });
+    }
+    limparContextoDaTela();
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(function () { window.requestAnimationFrame(restaurarRolagem); });
+    } else window.setTimeout(restaurarRolagem, 0);
+    window.setTimeout(restaurarRolagem, 180);
+  }
+  function restaurarContextoDaTela() {
+    var contexto;
+    try { contexto = JSON.parse(window.sessionStorage.getItem(chaveContextoAtualizacao) || 'null'); }
+    catch (e) { limparContextoDaTela(); return; }
+    if (!contexto || !contexto.tela || !document.getElementById('view-' + contexto.tela)) { limparContextoDaTela(); return; }
+    if (contexto.precisaGerente && !souGerente()) {
+      window.setTimeout(function () {
+        if (typeof abrirModalSenha !== 'function') { limparContextoDaTela(); return; }
+        abrirModalSenha(function () { aplicarContextoDaTela(contexto); }, limparContextoDaTela);
+      }, 250);
+      return;
+    }
+    aplicarContextoDaTela(contexto);
+  }
+  window.addEventListener('reiChapaDadosCarregados', restaurarContextoDaTela, { once: true });
+
+  function atualizarIndicadorAtualizacao(ativo) {
+    atualizacaoEmCurso = ativo;
+    if (modalAtualizacao) modalAtualizacao.classList.toggle('atualizando', ativo);
+    if (btnAbrirAtualizacao) {
+      btnAbrirAtualizacao.disabled = ativo;
+      btnAbrirAtualizacao.classList.toggle('atualizando', ativo);
+      btnAbrirAtualizacao.setAttribute('aria-busy', ativo ? 'true' : 'false');
+    }
+    if (btnContinuarLancando) btnContinuarLancando.disabled = ativo;
+    if (btnAtualizarSite) {
+      btnAtualizarSite.disabled = ativo;
+      btnAtualizarSite.textContent = ativo ? '⏳ Preparando atualização…' : '🔄 Atualizar agora';
+    }
+  }
+  function aguardarAtivacaoDoWorker(worker) {
+    if (!worker || worker.state === 'activated') return Promise.resolve();
+    return new Promise(function (resolve, reject) {
+      var timer = window.setTimeout(function () { encerrar(new Error('A atualização ainda está sendo preparada. Tente novamente em alguns segundos.')); }, 12000);
+      function encerrar(erro) {
+        window.clearTimeout(timer);
+        worker.removeEventListener('statechange', mudouEstado);
+        if (erro) reject(erro); else resolve();
+      }
+      function mudouEstado() {
+        if (worker.state === 'activated') encerrar();
+        else if (worker.state === 'redundant') encerrar(new Error('O navegador não conseguiu preparar a atualização.'));
+      }
+      worker.addEventListener('statechange', mudouEstado);
+      mudouEstado();
+    });
+  }
+  async function confirmarAtualizacao() {
+    if (atualizacaoEmCurso) return;
+    guardarRetomadaAoSair();
+    if (!salvarContextoDaTela()) {
+      if (statusAtualizacao) { statusAtualizacao.textContent = 'Não consegui guardar a tela atual. Feche esta mensagem e tente de novo.'; statusAtualizacao.style.display = 'block'; }
+      return;
+    }
+    atualizarIndicadorAtualizacao(true);
+    if (statusAtualizacao) { statusAtualizacao.textContent = 'Preparando a atualização com segurança…'; statusAtualizacao.style.display = 'block'; }
+    try {
+      if ('serviceWorker' in navigator) {
+        var registro = window.__reiChapaServiceWorkerRegistration || await navigator.serviceWorker.getRegistration();
+        if (registro) {
+          await registro.update();
+          if (registro.installing) await aguardarAtivacaoDoWorker(registro.installing);
+        }
+      }
+      window.__reiChapaAtualizacaoConfirmada = true;
+      window.location.reload();
+    } catch (erro) {
+      limparContextoDaTela();
+      window.__reiChapaAtualizacaoConfirmada = false;
+      atualizarIndicadorAtualizacao(false);
+      if (statusAtualizacao) { statusAtualizacao.textContent = 'Não consegui preparar a atualização. Confira a internet e tente novamente; sua tela continua aberta.'; statusAtualizacao.style.display = 'block'; }
+      console.warn('Não consegui preparar a atualização do app:', erro);
+    }
+  }
+  if (btnAtualizarSite) btnAtualizarSite.addEventListener('click', confirmarAtualizacao);
+
+  var toqueDeRolagem = null;
+  function podeRolarParaCima(alvo) {
+    var atual = alvo;
+    while (atual && atual !== document.body && atual !== document.documentElement) {
+      if (atual.nodeType === 1 && atual.scrollTop > 0) return true;
+      atual = atual.parentElement;
+    }
+    return (window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0) > 0;
   }
   document.addEventListener('touchstart', function (e) {
-    if (!e.touches || e.touches.length !== 1 || !podeIniciarGestoAtualizacao(e.target)) { gestoAtualizacao = null; return; }
-    gestoAtualizacao = { x: e.touches[0].clientX, y: e.touches[0].clientY, ativado: false };
+    if (!e.touches || e.touches.length !== 1) { toqueDeRolagem = null; return; }
+    toqueDeRolagem = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   }, { capture: true, passive: true });
   document.addEventListener('touchmove', function (e) {
-    if (!gestoAtualizacao || !e.touches || e.touches.length !== 1) return;
-    var dx = e.touches[0].clientX - gestoAtualizacao.x;
-    var dy = e.touches[0].clientY - gestoAtualizacao.y;
-    if (dy >= 86 && dy > Math.abs(dx) * 1.35) {
-      gestoAtualizacao.ativado = true;
-      if (e.cancelable) e.preventDefault();
-    }
+    if (!toqueDeRolagem || !e.touches || e.touches.length !== 1 || !e.cancelable) return;
+    var dx = e.touches[0].clientX - toqueDeRolagem.x;
+    var dy = e.touches[0].clientY - toqueDeRolagem.y;
+    if (dy > 6 && dy > Math.abs(dx) * 1.2 && !podeRolarParaCima(e.target)) e.preventDefault();
   }, { capture: true, passive: false });
-  document.addEventListener('touchend', function (e) {
-    if (!gestoAtualizacao) return;
-    var inicio = gestoAtualizacao; gestoAtualizacao = null;
-    var toque = e.changedTouches && e.changedTouches[0];
-    if (!toque) return;
-    var dx = toque.clientX - inicio.x;
-    var dy = toque.clientY - inicio.y;
-    if (inicio.ativado && dy >= 86 && dy > Math.abs(dx) * 1.35 && typeof window.__mostrarConfirmacaoAtualizacao === 'function') {
-      e.preventDefault();
-      window.__mostrarConfirmacaoAtualizacao();
-    }
-  }, true);
-  document.addEventListener('touchcancel', function () { gestoAtualizacao = null; }, true);
+  document.addEventListener('touchend', function () { toqueDeRolagem = null; }, true);
+  document.addEventListener('touchcancel', function () { toqueDeRolagem = null; }, true);
 })();
 </script>
 </body>
