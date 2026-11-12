@@ -8,16 +8,17 @@ const end = html.indexOf(marker, start);
 assert(start >= 0 && end > start, 'o controle de voltar do Android existe');
 const backHandler = html.slice(start, end + marker.indexOf('\nlet senhaBuffer'));
 
-function criarAmbiente({ modalAberto = true } = {}) {
+function criarAmbiente({ modalAberto = true, closeWatcher = true, modalId = 'modalConfirmarSaida', atualizando = false } = {}) {
   const callbacks = {};
   const timers = [];
   let appFechado = false;
   let historicoVoltado = 0;
   const modal = {
-    id: 'modalConfirmarSaida',
+    id: modalId,
     aberto: modalAberto,
+    atualizando,
     classList: {
-      contains(name) { return name === 'aberto' && modal.aberto; },
+      contains(name) { return name === 'aberto' ? modal.aberto : name === 'atualizando' && modal.atualizando; },
       add(name) { if (name === 'aberto') modal.aberto = true; },
       remove(name) { if (name === 'aberto') modal.aberto = false; },
     },
@@ -33,26 +34,35 @@ function criarAmbiente({ modalAberto = true } = {}) {
     destroy() { this.destroyed = true; }
   }
   const window = {
-    CloseWatcher: CloseWatcherFake,
     addEventListener(name, fn) { callbacks['window:' + name] = fn; },
     setTimeout(fn, delay) { timers.push({ fn, delay }); return timers.length; },
     close() { appFechado = true; },
     location: { href: 'https://example.test/' },
   };
+  if (closeWatcher) window.CloseWatcher = CloseWatcherFake;
   const document = {
     addEventListener(name, fn) { callbacks['document:' + name] = fn; },
     getElementById(id) { return id === modal.id ? modal : buttons[id] || null; },
     querySelectorAll(selector) { return selector === '.modal.aberto' && modal.aberto ? [modal] : []; },
     querySelector() { return null; },
   };
-  const history = { pushState() {}, back() { historicoVoltado += 1; } };
+  const pilhaHistorico = [null];
+  const history = {
+    get state() { return pilhaHistorico[pilhaHistorico.length - 1]; },
+    pushState(state) { pilhaHistorico.push(state); },
+    back() {
+      historicoVoltado += 1;
+      if (pilhaHistorico.length > 1) pilhaHistorico.pop();
+      if (callbacks['window:popstate']) callbacks['window:popstate']({});
+    },
+  };
   const run = new Function(
     'window', 'document', 'history', 'location', 'getComputedStyle', 'setTimeout', 'console', 'souGerente', '$', '$$',
     backHandler + '\nreturn window.__reiChapaVoltarInstalado;'
   );
   run(window, document, history, window.location, () => ({ display: 'block', visibility: 'visible', zIndex: '260' }), fn => fn(), { warn() {} }, () => false, () => null, () => []);
   const watcher = window.__testeWatcher;
-  return { callbacks, modal, window, timers, appFechado: () => appFechado, historicoVoltado: () => historicoVoltado, watcher };
+  return { callbacks, modal, window, timers, history, appFechado: () => appFechado, historicoVoltado: () => historicoVoltado, watcher };
 }
 
 {
@@ -65,6 +75,24 @@ function criarAmbiente({ modalAberto = true } = {}) {
     assert.equal(app.modal.aberto, true, 'Voltar repetido mantém a confirmação aberta');
   }
   assert.equal(cancelado, true, 'o pedido nativo de fechar é interceptado');
+}
+
+{
+  const app = criarAmbiente({ modalAberto: false, closeWatcher: false });
+  app.history.back();
+  assert.equal(app.modal.aberto, true, 'o primeiro Voltar na tela inicial abre a confirmação');
+  for (let toque = 0; toque < 4; toque += 1) {
+    app.history.back();
+    assert.equal(app.modal.aberto, true, 'Voltar repetido mantém a confirmação aberta no fallback');
+    assert.equal(app.history.state && app.history.state.reiChapaBackGuard, true, 'o fallback rearma a proteção de histórico');
+  }
+}
+
+{
+  const app = criarAmbiente({ modalAberto: true, closeWatcher: false, modalId: 'modalConfirmarAtualizacao', atualizando: true });
+  app.history.back();
+  assert.equal(app.modal.aberto, true, 'Voltar não fecha a atualização em andamento');
+  assert.equal(app.history.state && app.history.state.reiChapaBackGuard, true, 'a atualização em andamento rearma a proteção de histórico');
 }
 
 {

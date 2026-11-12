@@ -1769,8 +1769,8 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   function tratarVolta(){
     if(confirmandoSaida)return true;
     var modal=modalAbertoNoTopo();
-    if(modal&&modal.id==='modalConfirmarSaida'){return true}
-    if(modal&&modal.id==='modalConfirmarAtualizacao'&&modal.classList.contains('atualizando')){return true}
+    if(modal&&modal.id==='modalConfirmarSaida'){protegerVolta();return true}
+    if(modal&&modal.id==='modalConfirmarAtualizacao'&&modal.classList.contains('atualizando')){protegerVolta();return true}
     if(modal){modal.classList.remove('aberto');protegerVolta();return true}
     var ativa=document.querySelector('.view.ativo');
     var atual=ativa?ativa.id.replace(/^view-/,''):'vendas';
