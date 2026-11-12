@@ -1686,7 +1686,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
 (function instalarNavegacaoVoltarAndroid(){
   if(window.__reiChapaVoltarInstalado)return;
   window.__reiChapaVoltarInstalado=true;
-  var pilhaTelas=[],aplicandoVolta=false,confirmandoSaida=false,passosSaida=0,guardaVoltaArmada=false,closeWatcher=null,closeWatcherDisponivel=false;
+  var pilhaTelas=[],aplicandoVolta=false,confirmandoSaida=false,passosSaida=0,guardaVoltaArmada=false,closeWatcher=null,closeWatcherDisponivel=false,backbuttonFallbackInstalado=false;
   var telasGerente=['dre','hist','estoque','ingredientes','compras','despesas','patrimonio'];
 
   document.addEventListener('click',function(e){
@@ -1728,8 +1728,14 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
     try{history.pushState({reiChapaBackGuard:true},'',location.href);guardaVoltaArmada=true}
     catch(e){console.warn('Não foi possível preparar o voltar do app',e)}
   }
+  function ativarFallbackVolta(){
+    closeWatcherDisponivel=false;
+    try{guardaVoltaArmada=!!(history.state&&history.state.reiChapaBackGuard)}catch(e){guardaVoltaArmada=false}
+    protegerVolta();
+    if(!backbuttonFallbackInstalado){document.addEventListener('backbutton',function(e){if(e.preventDefault)e.preventDefault();tratarVolta()},false);backbuttonFallbackInstalado=true}
+  }
   function armarCloseWatcher(){
-    if(typeof window.CloseWatcher!=='function')return false;
+    if(typeof window.CloseWatcher!=='function'){ativarFallbackVolta();return false}
     try{
       var watcher=new window.CloseWatcher();
       closeWatcher=watcher;closeWatcherDisponivel=true;
@@ -1741,7 +1747,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
         window.setTimeout(function(){if(!confirmandoSaida&&!closeWatcher)armarCloseWatcher()},0);
       });
       return true;
-    }catch(e){closeWatcher=null;closeWatcherDisponivel=false;console.warn('CloseWatcher indisponível; usando fallback de navegação',e);return false}
+    }catch(e){closeWatcher=null;console.warn('CloseWatcher indisponível; usando fallback de navegação',e);ativarFallbackVolta();return false}
   }
   function tratarVolta(){
     if(confirmandoSaida)return true;
@@ -1790,7 +1796,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
     tratarVolta();
   }
   window.addEventListener('keydown',eventoVoltarDeTeclado,true);
-  if(typeof window.CloseWatcher!=='function')document.addEventListener('backbutton',function(e){if(e.preventDefault)e.preventDefault();tratarVolta()},false);
+  if(typeof window.CloseWatcher!=='function')ativarFallbackVolta();
 
   function rearmarAoRetomar(){
     if(document.visibilityState==='hidden')return;
@@ -1817,10 +1823,7 @@ $$('.tab').forEach(tab=>tab.addEventListener('click',()=>{
   var modalConfirmarSaida=document.getElementById('modalConfirmarSaida');
   if(modalConfirmarSaida)modalConfirmarSaida.addEventListener('click',function(e){if(e.target===modalConfirmarSaida)fecharModalSaida()});
 
-  if(!armarCloseWatcher()){
-    try{guardaVoltaArmada=!!(history.state&&history.state.reiChapaBackGuard)}catch(e){}
-    protegerVolta();
-  }
+  armarCloseWatcher();
 })();
 let senhaBuffer='';
 var roleSalva=null;role='atendente';
