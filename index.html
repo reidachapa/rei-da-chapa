@@ -2928,6 +2928,7 @@ async function salvarCompraDaNota(e){
   var textoBotaoSalvarNota=botaoSalvarNota?botaoSalvarNota.textContent:'';
   if(botaoSalvarNota){botaoSalvarNota.disabled=true;botaoSalvarNota.textContent='⏳ Confirmando no servidor...'}
   var estadoAntes=null;
+  var revisaoCompraEnviada=null;
   var compraConfirmadaNoServidor=false;
   try{
     estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
@@ -3002,7 +3003,9 @@ async function salvarCompraDaNota(e){
     if(anterior) Object.assign(anterior,dados); else despesas.push(dados);
     if(typeof window.marcarRascunhoCompraPendente==='function')window.marcarRascunhoCompraPendente(editId,dados.id);
     notaCompraEmSincronizacaoId=dados.id;
-    var resultadoSync=await salvar();
+    var promessaSyncCompra=salvar();
+    revisaoCompraEnviada=revisaoLocal;
+    var resultadoSync=await promessaSyncCompra;
     if(resultadoSync&&resultadoSync.persisted)compraConfirmadaNoServidor=true;
     if(!resultadoSync||!resultadoSync.ok)throw resultadoSync&&resultadoSync.error||new Error('A compra não foi confirmada no servidor. O rascunho foi mantido neste aparelho.');
     compraConfirmadaNoServidor=true;
@@ -3019,8 +3022,9 @@ async function salvarCompraDaNota(e){
     toast('Compra salva e estoque atualizado');
   }catch(err){
     console.error('Falha ao salvar compra:',err);
-    if(estadoAntes&&!compraConfirmadaNoServidor){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
-    if(resultadoSync&&resultadoSync.conflict&&!resultadoSync.persisted){try{await baixarDoServidor()}catch(erroAtualizacao){console.warn('Não consegui recarregar o estado após conflito:',erroAtualizacao)}}
+    var semAlteracoesPosteriores=revisaoCompraEnviada===null||revisaoLocal===revisaoCompraEnviada;
+    if(estadoAntes&&!compraConfirmadaNoServidor&&semAlteracoesPosteriores){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
+    if(resultadoSync&&resultadoSync.conflict&&!resultadoSync.persisted&&semAlteracoesPosteriores){try{await baixarDoServidor()}catch(erroAtualizacao){console.warn('Não consegui recarregar o estado após conflito:',erroAtualizacao)}}
     if(resultadoSync&&resultadoSync.persisted)alert('A compra já foi confirmada no servidor. Mantive as alterações feitas durante o envio neste aparelho. Deixe o app aberto e tente salvar novamente para sincronizar o restante.');
     else alert('Não foi possível salvar a compra: '+(err&&err.message||err));
   }finally{compraNotaEmAndamento=false;notaCompraEmSincronizacaoId=null;if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
@@ -3749,6 +3753,7 @@ function mesclarEstadosConcorrentes(base,local,remoto){
 function buscarNotaPorId(dados,id){var lojasDados=dados&&dados.porLoja||{};for(var lojaId in lojasDados){var nota=((lojasDados[lojaId]||{}).despesas||[]).find(function(n){return String(n.id)===String(id)});if(nota)return nota}return null}
 function notaCompraIgual(a,b){if(!ehNotaCompraSalva(a)||!ehNotaCompraSalva(b)||String(a.id)!==String(b.id))return false;var limpar=function(n){var c=clonarDadosEstado(n);delete c.criadoEm;(c.itens||[]).forEach(function(it){delete it.aplicado;delete it._indiceOriginalNota});return c};return dadosIguais(limpar(a),limpar(b))}
 window.notaCompraIgual=notaCompraIgual;
+window.__notaCompraConfirmadaNoServidor=function(id){return clonarDadosEstado(buscarNotaPorId(estadoBaseSincronizado,id))};
 function aplicarDadosEstadoAtual(dados){
   estadoRemotoPorLoja=dados.porLoja||{};
   if(Array.isArray(dados.lojas))lojas=dados.lojas;
@@ -3783,6 +3788,7 @@ async function subirParaServidor(){
   if(salvandoRemoto)return promessaSincronizacao;
   salvandoRemoto=true;
   let gravacaoConfirmadaNoEnvio=false;
+  let notaCompraConfirmadaNoEnvio=false;
   promessaSincronizacao=(async function(){
     try{
       do{
@@ -3802,6 +3808,7 @@ async function subirParaServidor(){
           if(data&&data.length){
             confirmada=true;
             gravacaoConfirmadaNoEnvio=true;
+            if(notaCompraEmSincronizacaoId&&ehNotaCompraSalva(buscarNotaPorId(dadosLocal,notaCompraEmSincronizacaoId)))notaCompraConfirmadaNoEnvio=true;
             if(revisaoEnviada===revisaoLocal){
               ultimaAtualizacao=agora;
               estadoBaseSincronizado=clonarDadosEstado(dadosLocal);
@@ -3822,6 +3829,7 @@ async function subirParaServidor(){
           if(remoto.atualizado_em===versaoBase)throw new Error('O Supabase não confirmou a gravação. Confira a conexão e a permissão de atualização; sua nota continua como rascunho.');
           const notaId=notaCompraEmSincronizacaoId;
           if(notaId&&revisaoEnviada===revisaoLocal&&notaCompraIgual(buscarNotaPorId(dadosLocal,notaId),buscarNotaPorId(remoto.dados,notaId))){
+            notaCompraConfirmadaNoEnvio=true;
             dadosLocal=clonarDadosEstado(remoto.dados);
             dadosBase=clonarDadosEstado(remoto.dados);
             ultimaAtualizacao=remoto.atualizado_em;
@@ -3847,7 +3855,7 @@ async function subirParaServidor(){
       salvarPendente=false;
       toast(gravacaoConfirmadaNoEnvio?'⚠️ Uma gravação já foi confirmada. Mantive as alterações posteriores neste aparelho; mantenha o app aberto e tente sincronizar novamente.':'⚠️ Não consegui confirmar a gravação. A nota continua como rascunho; mantenha o app aberto e tente novamente.');
       if(typeof window.__falharRascunhoCompraSincronizacao==='function')window.__falharRascunhoCompraSincronizacao();
-      return{ok:false,conflict:!!(e&&/Conflito|editada em dois aparelhos/.test(e.message||'')),persisted:gravacaoConfirmadaNoEnvio,error:e};
+      return{ok:false,conflict:!!(e&&/Conflito|editada em dois aparelhos/.test(e.message||'')),persisted:notaCompraConfirmadaNoEnvio,error:e};
     }finally{
       salvandoRemoto=false;
       promessaSincronizacao=null;
@@ -9486,7 +9494,8 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
       if (rascunhoSalvo && rascunhoSalvo.savedRecordId) {
         var compraSalva = obterCompraLocal(rascunhoSalvo.savedRecordId);
         if (compraSalva) {
-          if (rascunhoSalvo.savedNote && typeof window.notaCompraIgual === 'function' && window.notaCompraIgual(rascunhoSalvo.savedNote, compraSalva) && rascunhoSalvo.syncSubmittedAt === rascunhoSalvo.updatedAt) {
+          var compraConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(rascunhoSalvo.savedRecordId):null;
+          if (rascunhoSalvo.savedNote && compraConfirmada && typeof window.notaCompraIgual === 'function' && window.notaCompraIgual(rascunhoSalvo.savedNote, compraConfirmada) && rascunhoSalvo.syncSubmittedAt === rascunhoSalvo.updatedAt) {
             try { localStorage.removeItem(chaveNova); } catch (e) {}
             avisoNotaJaSalva = true;
           } else {
