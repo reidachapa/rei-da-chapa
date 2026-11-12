@@ -1575,9 +1575,12 @@ function reservadoProprio(produtoId){let total=0;for(const ch in carrinho){const
 
 function testarLS(){try{const t='__t__';localStorage.setItem(t,'1');localStorage.removeItem(t);return true}catch(e){return false}}
 function salvar(){
-  if(!window.__authPermitido)return;
+  if(!window.__authPermitido)return Promise.resolve({ok:false,error:new Error('Conexão não autorizada')});
   try{recalcContadores()}catch(e){}
-  if(window.__subirSupabase)window.__subirSupabase();
+  estadoLocalSujo=true;
+  revisaoLocal++;
+  if(window.__subirSupabase)return window.__subirSupabase();
+  return Promise.resolve({ok:false,error:new Error('Sincronização indisponível')});
 }
 function carregar(){if(!window.__authPermitido)return false;return baixarDoServidor()}
 function mesAtual(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
@@ -2902,7 +2905,7 @@ function addSugestao(tipo,valor){if(!valor||!valor.trim())return;valor=valor.tri
 function popularSugestoes(tipo,idDatalist){var dl=document.getElementById(idDatalist);if(!dl)return;var arr=getSugestoes(tipo);dl.innerHTML=arr.map(function(v){return '<option value="'+esc(v)+'">'}).join('')}
 function popularTodasSugestoes(){popularSugestoes('fornecedor','listaFornecedores');popularSugestoes('subcategoria','listaSubcategorias');popularSugestoes('produto','listaProdutos')}
 function popularFornecedoresDatalist(){var dl=document.getElementById('listaFornecedores');if(!dl)return;var set={};(despesas||[]).forEach(function(d){if(d.fornecedor)set[d.fornecedor]=1});dl.innerHTML=Object.keys(set).sort().map(function(f){return '<option value="'+esc(f)+'">'}).join('')}
-function salvarCompraDaNota(e){
+async function salvarCompraDaNota(e){
   if(e){e.preventDefault();e.stopImmediatePropagation();}
   if(!souGerente()) return toast('Apenas o gerente pode salvar compras');
   var arr=window.despItensTemp||despItensTemp||[];
@@ -2914,9 +2917,14 @@ function salvarCompraDaNota(e){
    function ingredienteDaCompra(it){var vinc=it.vinc?alvoEstoque(it.vinc):null;if(vinc&&vinc.tipo==='ing')return vinc.obj;var n=String(it.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');return ingredientes.find(function(x){return String(x.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR')===n})||null}
    var rendimentoApagado=itens.find(function(it){var ing=ingredienteDaCompra(it);return (it.tipoItem||'prod')==='ing'&&it.rendimentoInformado&&!(Number(it.rend)>0)&&ing&&ing.modoCompra==='flexivel'&&Number(ing.rendimento)>0});
    if(rendimentoApagado)return toast('O item "'+rendimentoApagado.nome+'" já tem rendimento salvo. Informe o valor para preservar a ficha e o estoque.');
+  var botaoSalvarNota=document.getElementById('btnSalvarDespesa');
+  if(botaoSalvarNota&&botaoSalvarNota.disabled)return;
+  var textoBotaoSalvarNota=botaoSalvarNota?botaoSalvarNota.textContent:'';
+  if(botaoSalvarNota){botaoSalvarNota.disabled=true;botaoSalvarNota.textContent='⏳ Confirmando no servidor...'}
   var editId=window.editandoDespesaId||editandoDespesaId;
   var anterior=editId?despesas.find(function(d){return String(d.id)===String(editId);}):null;
   var estadoAntes=null;
+  var compraConfirmadaNoServidor=false;
   try{
     estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
     if(anterior) reverterCompraEstoque(anterior.itens);
@@ -2989,7 +2997,9 @@ function salvarCompraDaNota(e){
      itens.forEach(function(it){var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';delete it._indiceOriginalNota});var categoriaDespesa=campo('despCategoria');var categoriaFinanceiraNome=anterior&&String(anterior.categoria||'')===String(categoriaDespesa||'')&&anterior.categoriaNome?anterior.categoriaNome:categoriaLabelSelecionada(categoriaDespesa);var dados={id:editId||(typeof uid==='function'?'desp_'+uid():'desp_'+Date.now()),tipoRegistro:'compra',descricao:String(campo('despSubcategoria')).trim()||'Compra',categoria:categoriaDespesa,categoriaNome:categoriaFinanceiraNome,subcategoria:String(campo('despSubcategoria')).trim(),fornecedor:String(campo('despFornecedor')).trim(),nf:String(campo('despNF')).trim(),status:campo('despStatus')||'pago',obs:String(campo('despObs')).trim(),desconto:descNota,descontoTipo:window._descontoNotaTipo||'valor',descontoOriginal:descEntrada,itens:itens,valor:Math.max(0,subtotal-descNota),data:data,criadoEm:anterior&&anterior.criadoEm||new Date().toISOString()};
     if(anterior) Object.assign(anterior,dados); else despesas.push(dados);
     if(typeof window.marcarRascunhoCompraPendente==='function')window.marcarRascunhoCompraPendente(editId,dados.id);
-    salvar();
+    var resultadoSync=await salvar();
+    if(!resultadoSync||!resultadoSync.ok)throw resultadoSync&&resultadoSync.error||new Error('A compra não foi confirmada no servidor. O rascunho foi mantido neste aparelho.');
+    compraConfirmadaNoServidor=true;
     if(typeof refrescarEstoqueUI==='function') refrescarEstoqueUI();
     if(typeof renderCompras==='function') renderCompras();
     if(typeof renderDRE==='function') renderDRE();
@@ -3003,9 +3013,9 @@ function salvarCompraDaNota(e){
     toast('Compra salva e estoque atualizado');
   }catch(err){
     console.error('Falha ao salvar compra:',err);
-    if(estadoAntes){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{salvar();refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
+    if(estadoAntes&&!compraConfirmadaNoServidor){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE();renderVendas()}catch(erroRestauro){console.error('Falha ao restaurar compra:',erroRestauro)}}
     alert('Não foi possível salvar a compra: '+(err&&err.message||err));
-  }
+  }finally{if(botaoSalvarNota){botaoSalvarNota.disabled=false;botaoSalvarNota.textContent=textoBotaoSalvarNota}}
 }
 // Um único ponto de gravação controla produto, custo, estoque e nota da compra.
 document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('#btnSalvarDespesa'):null;if(b)salvarCompraDaNota(e);},true);
@@ -3651,7 +3661,7 @@ const CHAVE_ATIVA='burgercontrol_loja_ativa';
 const PREFIXO_DADOS='burgercontrol_v24_reidachapa_';
 const CORES_PRESET=[{cor:'#d4a23c',corSec:'#f0c862',nome:'Dourado'},{cor:'#e5484d',corSec:'#f08080',nome:'Vermelho'},{cor:'#3fb972',corSec:'#6dd695',nome:'Verde'},{cor:'#4d9de5',corSec:'#7bc0f5',nome:'Azul'},{cor:'#a06ee5',corSec:'#c49df0',nome:'Roxo'},{cor:'#ff6a1a',corSec:'#ff9d5c',nome:'Laranja'},{cor:'#26c6da',corSec:'#70efde',nome:'Ciano'},{cor:'#ec407a',corSec:'#f48fb1',nome:'Rosa'}];
 let lojas=[],lojaEditandoId=null,corSelecionadaEdit=null;
-let supa=null,ultimaAtualizacao=null,salvandoRemoto=false,salvarPendente=false,atualizacoesProprias=new Set(),estadoRemotoPorLoja={};
+let supa=null,ultimaAtualizacao=null,salvandoRemoto=false,salvarPendente=false,atualizacoesProprias=new Set(),estadoRemotoPorLoja={},estadoLocalSujo=false,revisaoLocal=0,conflitoSincronizacao=false,promessaSincronizacao=null;
 function carregarLojas(){lojas=[]}
 function salvarLojas(){}
 function trocarChavePara(id){lojaAtivaId=id;CHAVE=PREFIXO_DADOS+id}
@@ -3677,9 +3687,52 @@ async function baixarDoServidor(){try{const{data,error}=await supa.from('estado'
 function listaLocalPDV(k){try{var x=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(x)?x:[]}catch(e){return[]}}
 function objetoLocalPDV(k){try{var x=JSON.parse(localStorage.getItem(k)||'{}');return x&&typeof x==='object'&&!Array.isArray(x)?x:{}}catch(e){return{}}}
 function capturarEstado(){salvarEstadoLojaAtivo();return{lojas:lojas,porLoja:estadoRemotoPorLoja,categoriasPDV:listaLocalPDV('rei_chapa_categorias_pdv_v1'),categoriasPDVOcultas:listaLocalPDV('rei_chapa_categorias_pdv_ocultas_v1'),categoriasCompra:listaLocalPDV('rei_chapa_cats_desp'),categoriasCompraOcultas:listaLocalPDV('rei_chapa_hide_desp'),categoriasCompraEditadas:objetoLocalPDV('rei_chapa_catedit_desp')}}
-async function subirParaServidor(){if(!window.__authPermitido||!supa)return;if(salvandoRemoto){salvarPendente=true;return}salvandoRemoto=true;try{do{salvarPendente=false;const agora=new Date().toISOString(),dados=capturarEstado();ultimaAtualizacao=agora;atualizacoesProprias.add(agora);setTimeout(function(){atualizacoesProprias.delete(agora)},60000);const{error}=await supa.from('estado').upsert({id:'atual',dados:dados,atualizado_em:agora},{onConflict:'id'});if(error){atualizacoesProprias.delete(agora);throw error}}while(salvarPendente&&window.__authPermitido);if(typeof window.__confirmarRascunhoCompraSincronizado==='function')window.__confirmarRascunhoCompraSincronizado()}catch(e){console.warn(e);if(!salvarPendente&&typeof window.__falharRascunhoCompraSincronizacao==='function')window.__falharRascunhoCompraSincronizacao()}finally{salvandoRemoto=false;if(salvarPendente&&window.__authPermitido&&supa){salvarPendente=false;subirParaServidor()}}}
-window.__subirSupabase=function(){if(window.__authPermitido&&supa)subirParaServidor()};
-function assinarRealtime(){if(!window.__authPermitido||!supa)return;supa.channel('estado-realtime').on('postgres_changes',{event:'*',schema:'public',table:'estado',filter:'id=eq.atual'},payload=>{if(!window.__authPermitido||!payload.new||!payload.new.dados)return;if(payload.new.atualizado_em===ultimaAtualizacao||atualizacoesProprias.has(payload.new.atualizado_em)){atualizacoesProprias.delete(payload.new.atualizado_em);return}console.log('🔄 Sincronizando...');const d=payload.new.dados;if(d.porLoja)estadoRemotoPorLoja=d.porLoja;if(d.lojas){lojas=d.lojas;salvarLojas()}if(d.porLoja&&d.porLoja[lojaAtivaId]){const ld=d.porLoja[lojaAtivaId];window.perdas=Array.isArray(ld.perdas)?ld.perdas:[];produtos=ld.produtos||[];paes=ld.paes||[];ingredientes=ld.ingredientes||[];clientes=ld.clientes||[];pedidos=ld.pedidos||[];historico=ld.historico||[];despesas=ld.despesas||[];bensEmpresa=Array.isArray(ld.bensEmpresa)?ld.bensEmpresa:[];categoriasBens=Array.isArray(ld.categoriasBens)&&ld.categoriasBens.length?ld.categoriasBens:['Equipamento','Veículo','Móveis e utensílios','Informática','Outros'];carrinho=ld.carrinho||{};contadores=ld.contadores||{geral:0,mensal:0,mesRef:mesAtual()};proximoNumeroCliente=ld.proximoNumeroCliente||1;motoboyConfig=ld.motoboyConfig||{nome:'',telefone:''};if(typeof aplicarMotivosPerda==='function')aplicarMotivosPerda(ld.motivosPerda);sincronizarCategoriasFinanceiras(d);renderTudo();renderClientes();renderPaes();renderIngredientes();atualizarBotaoMotoboy()}ultimaAtualizacao=payload.new.atualizado_em;toast('🔄 Sincronizado')}).subscribe()}
+async function subirParaServidor(){
+  if(!window.__authPermitido||!supa)return{ok:false,error:new Error('Sincronização indisponível')};
+  if(conflitoSincronizacao)return{ok:false,conflict:true,error:new Error('Há uma versão mais recente no servidor. Reabra o app e recupere o rascunho antes de continuar.')};
+  salvarPendente=true;
+  if(salvandoRemoto)return promessaSincronizacao;
+  salvandoRemoto=true;
+  promessaSincronizacao=(async function(){
+    try{
+      do{
+        salvarPendente=false;
+        const revisaoEnviada=revisaoLocal,base=ultimaAtualizacao;
+        if(!base)throw new Error('Não foi possível confirmar a versão atual do servidor.');
+        const agora=new Date().toISOString(),dados=capturarEstado();
+        atualizacoesProprias.add(agora);
+        setTimeout(function(){atualizacoesProprias.delete(agora)},60000);
+        const{data,error}=await supa.from('estado').update({dados:dados,atualizado_em:agora}).eq('id','atual').eq('atualizado_em',base).select('id');
+        if(error){atualizacoesProprias.delete(agora);throw error}
+        if(!data||!data.length){
+          atualizacoesProprias.delete(agora);
+          conflitoSincronizacao=true;
+          throw Object.assign(new Error('Outra tela atualizou os dados primeiro. Sua cópia não substituiu a do servidor.'),{syncConflict:true});
+        }
+        ultimaAtualizacao=agora;
+        if(revisaoEnviada===revisaoLocal)estadoLocalSujo=false;
+        else salvarPendente=true;
+      }while(salvarPendente&&window.__authPermitido);
+      if(typeof window.__confirmarRascunhoCompraSincronizado==='function')window.__confirmarRascunhoCompraSincronizado();
+      return{ok:true};
+    }catch(e){
+      console.warn('Falha ao sincronizar estado:',e);
+      salvarPendente=false;
+      if(e&&e.syncConflict){
+        conflitoSincronizacao=true;
+        toast('⚠️ Outra tela salvou antes. Não substituí os dados do servidor; mantenha o app aberto e recupere o rascunho desta compra.');
+      }
+      if(typeof window.__falharRascunhoCompraSincronizacao==='function')window.__falharRascunhoCompraSincronizacao();
+      return{ok:false,conflict:!!(e&&e.syncConflict),error:e};
+    }finally{
+      salvandoRemoto=false;
+      promessaSincronizacao=null;
+    }
+  })();
+  return promessaSincronizacao;
+}
+window.__subirSupabase=function(){if(window.__authPermitido&&supa)return subirParaServidor();return Promise.resolve({ok:false,error:new Error('Sincronização indisponível')})};
+function assinarRealtime(){if(!window.__authPermitido||!supa)return;supa.channel('estado-realtime').on('postgres_changes',{event:'*',schema:'public',table:'estado',filter:'id=eq.atual'},payload=>{if(!window.__authPermitido||!payload.new||!payload.new.dados)return;if(payload.new.atualizado_em===ultimaAtualizacao||atualizacoesProprias.has(payload.new.atualizado_em)){atualizacoesProprias.delete(payload.new.atualizado_em);return}if(estadoLocalSujo||salvandoRemoto){conflitoSincronizacao=true;toast('⚠️ Há uma edição local e outra atualização no servidor. A cópia local foi protegida; não feche o app.');return}console.log('🔄 Sincronizando...');const d=payload.new.dados;if(d.porLoja)estadoRemotoPorLoja=d.porLoja;if(d.lojas){lojas=d.lojas;salvarLojas()}if(d.porLoja&&d.porLoja[lojaAtivaId]){const ld=d.porLoja[lojaAtivaId];window.perdas=Array.isArray(ld.perdas)?ld.perdas:[];produtos=ld.produtos||[];paes=ld.paes||[];ingredientes=ld.ingredientes||[];clientes=ld.clientes||[];pedidos=ld.pedidos||[];historico=ld.historico||[];despesas=ld.despesas||[];bensEmpresa=Array.isArray(ld.bensEmpresa)?ld.bensEmpresa:[];categoriasBens=Array.isArray(ld.categoriasBens)&&ld.categoriasBens.length?ld.categoriasBens:['Equipamento','Veículo','Móveis e utensílios','Informática','Outros'];carrinho=ld.carrinho||{};contadores=ld.contadores||{geral:0,mensal:0,mesRef:mesAtual()};proximoNumeroCliente=ld.proximoNumeroCliente||1;motoboyConfig=ld.motoboyConfig||{nome:'',telefone:''};if(typeof aplicarMotivosPerda==='function')aplicarMotivosPerda(ld.motivosPerda);sincronizarCategoriasFinanceiras(d);renderTudo();renderClientes();renderPaes();renderIngredientes();atualizarBotaoMotoboy()}ultimaAtualizacao=payload.new.atualizado_em;toast('🔄 Sincronizado')}).subscribe()}
 
 function garantirPaesMinimos(){if(!Array.isArray(paes) || paes.length === 0){console.log('🥖 Criando pães padrão...');paes = [{id:'brioche', nome:'Pão Brioche', estoque:50, minEstoque:10, custo:1.5, icone:'🥐'},{id:'australia', nome:'Pão Austrália', estoque:30, minEstoque:10, custo:2, icone:'🥖'}];if(typeof salvar === 'function') salvar();if(typeof renderPaes === 'function') renderPaes();if(typeof popularSelectPaes === 'function') popularSelectPaes();if(typeof renderVendas === 'function') renderVendas();}}
 function injetarBotaoNovoPao(){const listaPaes = document.getElementById('listaPaes');if(!listaPaes) return;const sectionTitulo = listaPaes.previousElementSibling;if(!sectionTitulo || !sectionTitulo.classList.contains('section-titulo')) return;if(sectionTitulo.querySelector('#btnNovoPao')) return;sectionTitulo.style.display = 'flex';sectionTitulo.style.justifyContent = 'space-between';sectionTitulo.style.alignItems = 'center';const btn = document.createElement('button');btn.id = 'btnNovoPao';btn.type = 'button';btn.style.cssText = 'background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.3px;margin-left:auto';btn.textContent = '➕ Novo Pão';btn.addEventListener('click', () => abrirModalPao(null));sectionTitulo.appendChild(btn)}
@@ -9307,6 +9360,10 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
     }
     var resultado = abrirOriginal.call(this, despesa || null);
     if (!estaAberto()) return resultado;
+    var titulo = document.getElementById('despesaTitulo');
+    var botaoSalvar = document.getElementById('btnSalvarDespesa');
+    if (titulo) titulo.textContent = despesa ? '✏️ Editar nota de compra' : '🛒 Registrar compra';
+    if (botaoSalvar) botaoSalvar.textContent = despesa ? '🔄 Atualizar nota' : '💾 Salvar compra';
     lojaRascunho = loja;
     idRascunho = recuperadoComoEdicao ? null : (despesa ? despesa.id : null);
     chaveRascunhoAtivo = recuperadoComoEdicao ? chaveNova : chave(lojaRascunho, idRascunho);
