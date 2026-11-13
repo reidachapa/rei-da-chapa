@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.23 -->
+<!-- APP_VERSION: 1.0.24 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -983,7 +983,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
     </button>
-    <span id="appVersion" title="Versão do aplicativo">v1.0.23</span>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.24</span>
   </div>
 </header>  
 <main>
@@ -4199,7 +4199,46 @@ function injetarModalLojas(){const modal=document.createElement('div');modal.id=
 function instalarClickLoja(){const brand=document.querySelector('.brand');if(brand){brand.style.cursor='pointer';brand.title='Trocar de loja';brand.addEventListener('click',abrirModalLojas)}}
 
 function carregarLibSupabase(){return new Promise((resolve,reject)=>{if(window.supabase)return resolve();const s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';s.onload=resolve;s.onerror=reject;document.head.appendChild(s)})}
-async function baixarDoServidor(){try{const{data,error}=await supa.from('estado').select('*').eq('id','atual').maybeSingle();if(error){console.warn('Erro download:',error);return false}if(!data||!data.dados||!data.dados.porLoja){console.warn('Estado do Supabase ausente; nenhum dado local foi enviado.');return false}estadoBaseSincronizado=clonarDadosEstado(data.dados);estadoLocalSujo=false;estadoRemotoPorLoja=data.dados.porLoja;sincronizarCategoriasPDV(data.dados);lojas=Array.isArray(data.dados.lojas)?data.dados.lojas:[];const ids=Object.keys(estadoRemotoPorLoja);if(!lojas.length)lojas=ids.map(function(id,i){return{id:id,nome:i===0?'Rei Da Chapa':'Loja '+(i+1),cor:'#d4a23c',corSec:'#f0c862'}});if(!estadoRemotoPorLoja[lojaAtivaId])lojaAtivaId=(lojas.find(function(l){return estadoRemotoPorLoja[l.id]})||{}).id||ids[0]||'';if(!lojaAtivaId||!estadoRemotoPorLoja[lojaAtivaId]){console.warn('Nenhuma loja remota disponível.');return false}trocarChavePara(lojaAtivaId);aplicarEstadoLoja(estadoRemotoPorLoja[lojaAtivaId]);sincronizarCategoriasFinanceiras(data.dados);renderTudo();renderClientes();renderPaes();renderIngredientes();popularSelectPaes();renderGridIngredientesProduto();atualizarPreview();aplicarCorDaLoja();atualizarBotaoMotoboy();ultimaAtualizacao=data.atualizado_em;console.log('⬇️ Dados baixados');return true}catch(e){console.warn('Erro download:',e);return false}}
+async function baixarDoServidor(){
+  var etapa='leitura';
+  try{
+    const{data,error}=await supa.from('estado').select('*').eq('id','atual').maybeSingle();
+    if(error)return{ok:false,etapa:'leitura',error:error};
+    if(!data||!data.dados||!data.dados.porLoja)return{ok:false,etapa:'estado',error:new Error('O registro principal do app não foi encontrado no servidor.')};
+    etapa='preparacao';
+    estadoBaseSincronizado=clonarDadosEstado(data.dados);
+    estadoLocalSujo=false;
+    estadoRemotoPorLoja=data.dados.porLoja;
+    sincronizarCategoriasPDV(data.dados);
+    lojas=Array.isArray(data.dados.lojas)?data.dados.lojas:[];
+    const ids=Object.keys(estadoRemotoPorLoja);
+    if(!lojas.length)lojas=ids.map(function(id,i){return{id:id,nome:i===0?'Rei Da Chapa':'Loja '+(i+1),cor:'#d4a23c',corSec:'#f0c862'}});
+    if(!estadoRemotoPorLoja[lojaAtivaId])lojaAtivaId=(lojas.find(function(l){return estadoRemotoPorLoja[l.id]})||{}).id||ids[0]||'';
+    if(!lojaAtivaId||!estadoRemotoPorLoja[lojaAtivaId])return{ok:false,etapa:'estado',error:new Error('Nenhuma loja válida foi encontrada no registro do servidor.')};
+    trocarChavePara(lojaAtivaId);
+    aplicarEstadoLoja(estadoRemotoPorLoja[lojaAtivaId]);
+    ultimaAtualizacao=data.atualizado_em;
+    var falhas=[];
+    function renderizar(nome,fn){try{fn()}catch(e){falhas.push(nome);console.error('Falha ao desenhar '+nome+' após carregar os dados:',e)}}
+    renderizar('categorias financeiras',function(){sincronizarCategoriasFinanceiras(data.dados)});
+    renderizar('PDV',renderVendas);
+    renderizar('pedido em andamento',renderCarrinho);
+    renderizar('pedidos',renderPedidos);
+    renderizar('estoque',renderEstoque);
+    renderizar('resumo de vendas',renderStats);
+    renderizar('clientes',renderClientes);
+    renderizar('pães',renderPaes);
+    renderizar('ingredientes',renderIngredientes);
+    renderizar('lista de pães',popularSelectPaes);
+    renderizar('ingredientes dos produtos',renderGridIngredientesProduto);
+    renderizar('prévia',atualizarPreview);
+    renderizar('cores da loja',aplicarCorDaLoja);
+    renderizar('motoboy',atualizarBotaoMotoboy);
+    if(falhas.length)console.warn('Dados carregados com áreas que precisam de revisão:',falhas);
+    console.log('⬇️ Dados baixados');
+    return{ok:true,falhas:falhas};
+  }catch(e){console.error('Erro ao preparar os dados do servidor na etapa '+etapa+':',e);return{ok:false,etapa:etapa,error:e}}
+}
 function listaLocalPDV(k){try{var x=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(x)?x:[]}catch(e){return[]}}
 function objetoLocalPDV(k){try{var x=JSON.parse(localStorage.getItem(k)||'{}');return x&&typeof x==='object'&&!Array.isArray(x)?x:{}}catch(e){return{}}}
 function capturarEstado(){salvarEstadoLojaAtivo();return{lojas:lojas,porLoja:estadoRemotoPorLoja,categoriasPDV:listaLocalPDV('rei_chapa_categorias_pdv_v1'),categoriasPDVOcultas:listaLocalPDV('rei_chapa_categorias_pdv_ocultas_v1'),categoriasCompra:listaLocalPDV('rei_chapa_cats_desp'),categoriasCompraOcultas:listaLocalPDV('rei_chapa_hide_desp'),categoriasCompraEditadas:objetoLocalPDV('rei_chapa_catedit_desp')}}
@@ -9695,18 +9734,23 @@ $('#btnTestarNoPC').addEventListener('click',()=>{if(!souGerente())return toast(
   function mostrarStatus(texto,erro){if(gate)gate.style.display='flex';if(msg){msg.textContent=erro?texto:'';msg.classList.toggle('erro',!!erro)}if(btnConectar){btnConectar.style.display=erro?'block':'none';btnConectar.disabled=false}}
   window.conectarSupabase=async function(){
     if(authProcessando||conexaoAtiva)return;authProcessando=true;if(window.mostrarSplashConexao)window.mostrarSplashConexao();mostrarStatus('Conectando ao Supabase e carregando os dados…',false);if(btnConectar)btnConectar.disabled=true;
+    var etapaConexao='biblioteca';
     try{
       await carregarLibSupabase();
+      etapaConexao='cliente';
       supa=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false}});
-      var carregou=await baixarDoServidor();
-      if(!carregou)throw new Error('O Supabase não liberou a leitura do registro atual. Confira a política RLS da tabela estado.');
+      etapaConexao='leitura';
+      var resultado=await baixarDoServidor();
+      if(!resultado||!resultado.ok){var erroConexao=new Error(resultado&&resultado.etapa==='leitura'?'Falha ao ler o registro estado no Supabase.':resultado&&resultado.etapa==='estado'?'O registro principal não contém uma loja válida.':'Os dados chegaram, mas houve uma falha ao preparar o estado do app.');erroConexao.etapaInicializacao=resultado&&resultado.etapa||etapaConexao;erroConexao.causa=resultado&&resultado.error;throw erroConexao}
       window.__authPermitido=true;role='atendente';conexaoAtiva=true;
       var seletor=document.getElementById('roleSelect');if(seletor)seletor.value='atendente';
-      aplicarRole();if(gate)gate.style.display='none';if(window.finalizarSplash)window.finalizarSplash(true);
-      if(!realtimeAtivo){assinarRealtime();realtimeAtivo=true}
-       window.dispatchEvent(new Event('reiChapaDadosCarregados'));
+      if(gate)gate.style.display='none';if(window.finalizarSplash)window.finalizarSplash(true);
+      try{aplicarRole()}catch(e){resultado.falhas.push('perfil inicial');console.error('Falha ao aplicar o perfil inicial após carregar os dados:',e)}
+      if(resultado.falhas&&resultado.falhas.length)toast('⚠️ Dados carregados. Algumas áreas precisam ser atualizadas: '+resultado.falhas.join(', ')+'.');
+      if(!realtimeAtivo){try{assinarRealtime();realtimeAtivo=true}catch(e){console.error('Falha ao iniciar a sincronização ao vivo:',e);toast('⚠️ App aberto, mas a atualização automática está indisponível. Use o botão atualizar.')}}
+      window.dispatchEvent(new Event('reiChapaDadosCarregados'));
       setTimeout(async function(){var reg=await BackupSys.verificarAutoBackup();if(reg)toast('📦 Backup semanal criado automaticamente')},1200);
-    }catch(e){console.error('Falha ao conectar ao Supabase:',e);mostrarStatus('Não consegui carregar os dados do Supabase. Verifique a conexão e a permissão de leitura da tabela “estado”. Nenhum dado local foi usado.',true);if(window.finalizarSplash)window.finalizarSplash(false)}
+    }catch(e){console.error('Falha ao conectar ao Supabase:',e);var mensagemErro='Não consegui iniciar a conexão do app. Seus dados no servidor não foram alterados. Tente novamente.';if(e&&e.etapaInicializacao==='leitura')mensagemErro='O servidor respondeu, mas não consegui ler o registro do app. Confira a conexão e a permissão de leitura da tabela “estado”. Seus dados não foram alterados.';else if(e&&e.etapaInicializacao==='estado')mensagemErro='O servidor respondeu, mas não encontrei uma loja válida para abrir. Seus dados continuam no servidor; me avise para corrigirmos sem apagar nada.';else if(e&&e.etapaInicializacao==='preparacao')mensagemErro='Consegui ler os dados, mas houve uma falha ao preparar o app. Seus lançamentos continuam no servidor e não foram alterados. Tente novamente.';mostrarStatus(mensagemErro,true);if(window.finalizarSplash)window.finalizarSplash(false)}
     finally{authProcessando=false}
   };
   if(btnConectar)btnConectar.addEventListener('click',function(){window.conectarSupabase()});
