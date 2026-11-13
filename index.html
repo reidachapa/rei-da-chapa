@@ -464,6 +464,12 @@
 .item-compra .ic-del:active{background:rgba(229,72,77,.3)}
 .btn-add-item-compra{background:linear-gradient(180deg,#4d9de5,#2871b8);color:#fff;border:0;border-radius:9px;padding:11px;font-size:12px;font-weight:800;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.3px;min-height:42px;width:100%}
 .btn-add-item-compra:active{filter:brightness(1.15)}
+#modalDespesaAvulsa .item-compra{display:grid;grid-template-columns:minmax(0,1fr) 58px 92px 34px;gap:6px}
+#modalDespesaAvulsa .item-compra .ic-nome{width:100%}
+#modalDespesaAvulsa .item-compra .ic-qtd{width:100%;min-width:0}
+#modalDespesaAvulsa .item-compra .ic-valor{width:100%;min-width:0}
+#modalDespesaAvulsa .desp-avulsa-item-subtotal{grid-column:1/-1;text-align:right;color:var(--green);font-size:10px;font-weight:800}
+#despAvulsaValor[readonly]{border-color:rgba(63,185,114,.35);color:var(--green);font-weight:800}
 .resumo-total-compra{background:linear-gradient(180deg,#181819,#121213);border:1px solid var(--iron-5);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .linha-resumo{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);gap:10px}
 .linha-resumo input{background:linear-gradient(180deg,#181819,#121213);border:1px solid var(--iron-5);border-radius:7px;padding:7px 10px;color:var(--txt);font-size:13px;font-family:inherit;outline:none;width:100px;text-align:right;min-height:34px}
@@ -1449,7 +1455,8 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   <div class="dupla"><div class="campo"><label>Data *</label><input id="despAvulsaData" type="date" required></div><div class="campo"><label>Status</label><select id="despAvulsaStatus"><option value="pago">✅ Pago</option><option value="pendente">⏳ A pagar</option></select></div></div>
   <div class="campo"><label>Categoria *</label><select id="despAvulsaCategoria" required></select></div>
   <div class="campo"><label>Descrição *</label><input id="despAvulsaDescricao" required maxlength="100" placeholder="Ex.: conta de luz de novembro"></div>
-  <div class="campo"><label>Valor (R$) *</label><input id="despAvulsaValor" type="text" inputmode="numeric" required placeholder="0,00"></div>
+  <div class="campo"><label>📦 Itens da despesa (opcional)</label><div class="lista-itens-compra" id="despAvulsaItensLista"></div><button type="button" class="btn-add-item-compra" id="btnAddItemDespesaAvulsa">➕ Adicionar item</button></div>
+  <div class="campo"><label>Valor total (R$) *</label><input id="despAvulsaValor" type="text" inputmode="numeric" required placeholder="0,00"><small id="despAvulsaValorAjuda" style="display:block;color:var(--muted);font-size:10px;margin-top:4px">Sem itens, informe o valor total manualmente.</small></div>
   <div class="campo"><label>Observação</label><textarea id="despAvulsaObs" rows="2" placeholder="Opcional"></textarea></div>
   <div class="modal-acoes"><button type="button" class="btn-fantasma" id="btnCancelarDespesaAvulsa">Cancelar</button><button type="submit" class="btn-primario" id="btnSalvarDespesaAvulsa">💾 Salvar despesa</button></div>
 </form></div>
@@ -3529,6 +3536,29 @@ window.renderDespItens = function() {
   if (typeof atualizarTotaisDesp === 'function') atualizarTotaisDesp();
 };
 
+function calcularTotalItensDespesaAvulsa(itens){
+  var total=(Array.isArray(itens)?itens:[]).reduce(function(s,it){var qtd=Number(it&&it.qtd)||0,valor=Number(it&&it.valor)||0;return s+qtd*valor},0);
+  return Math.round((total+Number.EPSILON)*100)/100;
+}
+
+function validarItensDespesaAvulsa(itens){
+  return(Array.isArray(itens)?itens:[]).every(function(it){it=it||{};var nome=String(it.nome||'').trim(),qtd=it.qtd===undefined?1:Number(it.qtd),valor=Number(it.valor)||0,comecou=!!nome||valor!==0||qtd!==1;if(!comecou)return true;return!!nome&&Number.isFinite(qtd)&&qtd>0&&Number.isFinite(valor)&&valor>0});
+}
+
+function separarDespesasDRE(despFiltradas){
+  var lista=Array.isArray(despFiltradas)?despFiltradas:[];
+  var comprasEstoque=lista.filter(function(d){return(Array.isArray(d.itens)?d.itens:[]).some(function(it){
+    if(Number(it.aplicado&&it.aplicado.qtdEst)>0)return true;
+    var alvo=typeof alvoEstoque==='function'?alvoEstoque(it.vinc):null;
+    return!!(alvo&&!alvo.obj.semEstoque);
+  })});
+  return{comprasEstoque:comprasEstoque,despesasOperacionais:lista.filter(function(d){return!comprasEstoque.includes(d)})};
+}
+
+function totalizarDespesasOperacionais(despesasOperacionais){
+  return(Array.isArray(despesasOperacionais)?despesasOperacionais:[]).reduce(function(s,d){return s+(Number(d.valor)||0)},0);
+}
+
 function renderDRE() {
   if (!souGerente()) return;
   
@@ -3596,14 +3626,9 @@ function renderDRE() {
   
   const totalPerdas = perdasPeriodo.reduce((s, p) => s + (Number(p.valorTotal) || 0), 0);
   // Compras vinculadas ao estoque são ativo; o custo entra no resultado via CMV quando vendidas.
-  const comprasEstoque = despFiltradas.filter(d => (d.itens || []).some(it => {
-    if (Number(it.aplicado && it.aplicado.qtdEst) > 0) return true;
-    const alvo = typeof alvoEstoque === 'function' ? alvoEstoque(it.vinc) : null;
-    return !!(alvo && !alvo.obj.semEstoque);
-  }));
-  const despesasOperacionais = despFiltradas.filter(d => !comprasEstoque.includes(d));
+  const { comprasEstoque, despesasOperacionais } = separarDespesasDRE(despFiltradas);
   const totalComprasEstoque = comprasEstoque.reduce((s, d) => s + (Number(d.valor) || 0), 0);
-  const totalDespesasOperacionais = despesasOperacionais.reduce((s, d) => s + (Number(d.valor) || 0), 0);
+  const totalDespesasOperacionais = totalizarDespesasOperacionais(despesasOperacionais);
   const totalDespesas = totalDespesasOperacionais + totalPerdas;
   const despPorCategoria = {};
   despesasOperacionais.forEach(d => {
@@ -3753,7 +3778,8 @@ function renderDRE() {
       const d = despesas.find(x => x.id === id);
       if (!d) return;
       if (acao === 'editar') {
-        abrirModalDespesa(d);
+        if (ehDespesaAvulsa(d)) abrirModalDespesaAvulsa(d.id);
+        else abrirModalDespesa(d);
       } else if (acao === 'excluir') {
         if (!confirm(`Excluir "${d.descricao}"?`)) return;
         reverterCompraEstoque(d.itens,d);
@@ -4469,6 +4495,16 @@ function excelZip(arquivos){
   var size=centrals.reduce(function(s,x){return s+x.length},0),end=new Uint8Array([].concat(u32(0x06054b50),u16(0),u16(0),u16(arquivos.length),u16(arquivos.length),u32(size),u32(off),u16(0)));
   return join(locals.concat(centrals,[end]),off+size+end.length);
 }
+function despesaEhCompraExcel(d){
+  d=d||{};
+  var tipoRegistro=String(d.tipoRegistro||'').toLowerCase();
+  if(tipoRegistro==='despesa')return false;
+  if(tipoRegistro==='compra')return true;
+  var tipo=String(d.tipo||d.origem||'').toLowerCase();
+  if(/gasto|despesa|conta|avulso/.test(tipo)&&!/compra/.test(tipo))return false;
+  return(Array.isArray(d.itens)&&d.itens.length>0)||!!d.nf||!!d.numeroNota||!!d.fornecedor||/compra|nota|estoque/i.test(tipo);
+}
+
 function excelPlanilhaCompleta(){
   if(!souGerente())return toast('🔒 Só o gerente pode exportar os relatórios');
   try{
@@ -4489,9 +4525,9 @@ function excelPlanilhaCompleta(){
     var vendasRows=vendas.map(function(p){var pg='';try{pg=typeof pagamentosDoPedido==='function'?pagamentosDoPedido(p).map(function(x){return((PAGAMENTO_LABEL[x[0]]||{txt:x[0]}).txt)+': R$ '+excelNumero(x[1]).toFixed(2)}).join(' + '):(p.pagamento||'')}catch(e){pg=p.pagamento||''}
       return{Data:excelData(p.finalizadoEm||p.data),Número:p.numero||'',Cliente:p.cliente||'Balcão',Telefone:p.telefone||'',Tipo:p.tipo||'',Pagamento:pg,Pago:p.pago?'Sim':'Não','Venda de produtos (R$)':excelNumero(p.subtotal===undefined?p.total-excelNumero(p.taxaEntrega):p.subtotal),'Taxa entrega (R$)':excelNumero(p.taxaEntrega),'Total (R$)':excelNumero(p.total),'Custo (R$)':excelNumero(p.custoTotal),'Lucro informado (R$)':excelNumero(p.lucro),Itens:(p.itens||[]).map(function(x){return excelNumero(x.qtd)+'x '+(x.nome||'Item')}).join(' | '),Observação:p.obs||'','Dados completos (JSON)':excelTexto(p)}});
     var itemVenda=[];vendas.forEach(function(p){(Array.isArray(p.itens)?p.itens:[]).forEach(function(x){itemVenda.push({'Nº venda':p.numero||'',Data:excelData(p.finalizadoEm||p.data),Cliente:p.cliente||'',Produto:x.nome||x.produto||'',Quantidade:excelNumero(x.qtd||x.quantidade),'Preço unitário (R$)':excelNumero(x.preco||x.valorUnitario),'Total item (R$)':excelNumero(x.total||x.valorTotal||excelNumero(x.preco)*excelNumero(x.qtd||x.quantidade)),Pão:x.paoNome||'',Adicionais:excelTexto(x.adicionais||x.ingredientes||''),Removidos:excelTexto(x.removidos||''),'Dados do item (JSON)':excelTexto(x)})})});
-    var allDesp=gastos.map(despRow),isBuy=function(d){var tipo=String(d.tipo||d.origem||'').toLowerCase();if(/gasto|despesa|conta|avulso/.test(tipo)&&!/compra/.test(tipo))return false;return(Array.isArray(d.itens)&&d.itens.length>0)||d.nf||d.numeroNota||d.fornecedor||/compra|nota|estoque/i.test(tipo)};
-    var buys=gastos.filter(isBuy).map(despRow),outros=gastos.filter(function(d){return!isBuy(d)}).map(despRow),itemCompra=[];
-    gastos.forEach(function(d){var itens=Array.isArray(d.itens)?d.itens:[];if(!itens.length)itens=[{nome:d.descricao||d.nome||'Gasto sem item',qtd:1,valor:d.valor||d.total}];itens.forEach(function(x){var qtd=excelNumero(x.qtd||x.quantidade),tot=excelNumero(x.total||x.valorTotal||x.valor||x.subtotal);if(!tot)tot=excelNumero(x.valorUnitario||x.custoUnitario||x.preco||x.custo)*qtd;
+    var allDesp=gastos.map(despRow);
+    var buys=gastos.filter(despesaEhCompraExcel).map(despRow),outros=gastos.filter(function(d){return!despesaEhCompraExcel(d)}).map(despRow),itemCompra=[];
+    gastos.filter(despesaEhCompraExcel).forEach(function(d){var itens=Array.isArray(d.itens)?d.itens:[];if(!itens.length)itens=[{nome:d.descricao||d.nome||'Gasto sem item',qtd:1,valor:d.valor||d.total}];itens.forEach(function(x){var qtd=excelNumero(x.qtd||x.quantidade),tot=excelNumero(x.total||x.valorTotal||x.valor||x.subtotal);if(!tot)tot=excelNumero(x.valorUnitario||x.custoUnitario||x.preco||x.custo)*qtd;
       itemCompra.push({Data:excelData(d.data||d.criadoEm),Fornecedor:d.fornecedor||'',Nota:d.nf||d.numeroNota||'',Categoria:(x.categoriaNome||x.categoria||excelCategoria(d.categoria)),Item:x.nome||x.produto||x.descricao||'Item',Quantidade:qtd,Unidade:x.unidade||x.unid||'','Valor unitário (R$)':excelNumero(x.valorUnitario||x.custoUnitario||x.preco||x.custo),'Total item (R$)':tot,'Dados do item (JSON)':excelTexto(x)})})});
     var perdaRows=perdas.map(function(p){var m=p.motivo||'outro',txt=typeof MOTIVOS_PERDA!=='undefined'&&MOTIVOS_PERDA[m]?MOTIVOS_PERDA[m].txt:m;return{Data:excelData(p.data),Item:p.itemNome||p.nome||'',Motivo:txt,Quantidade:excelNumero(p.qtd),'Valor (R$)':excelNumero(p.valorTotal||p.valor),Observação:p.obs||'',Tipo:p.tipo||'','Dados completos (JSON)':excelTexto(p)}});
     function gen(lista){return lista.map(function(o){return{Nome:o.nome||o.produto||'',Categoria:o.categoria||'',Quantidade:excelNumero(o.estoque||o.qtd||o.quantidade),Unidade:o.unidade||o.unid||'','Preço (R$)':excelNumero(o.preco||o.precoVenda||o.precoExtra),'Custo (R$)':excelNumero(o.custo||o.custoUnitario),'Estoque mínimo':excelNumero(o.minEstoque||o.estoqueMinimo),Status:o.status||'','Dados completos (JSON)':excelTexto(o)}})}
@@ -4861,12 +4897,91 @@ function renderCompras(){
     var acaoPagar=d.status==='pendente'?'<button data-acao="pagar" data-id="'+esc(d.id)+'" title="Marcar como pago" aria-label="Marcar como pago">💸</button>':'';
     return '<tr><td data-label="Data">'+dt+'</td><td data-label="Fornecedor">'+(d.fornecedor?'<span class="reg-pill">'+esc(d.fornecedor)+'</span>':'<span class="mut">—</span>')+'</td><td data-label="NF" class="mut">'+esc(d.nf||'—')+'</td><td data-label="Categoria da nota"><span class="reg-pill" style="text-transform:none">'+esc(categoriaFinanceira||'—')+'</span></td><td data-label="Itens" class="mut">'+res+'</td><td data-label="Status">'+(d.status==='pendente'?'<span class="reg-st pend">⏳ A PAGAR</span>':'<span class="reg-st ok">✅ PAGO</span>')+'</td><td data-label="Desconto" class="num mut">'+(d.desconto>0?moeda(d.desconto):'—')+'</td><td data-label="Total" class="num"><b>'+moeda(d.valor||0)+'</b></td><td data-label="Ações" class="acoes">'+acaoPagar+'<button data-acao="ver" data-id="'+esc(d.id)+'">👁️</button><button data-acao="editar" data-id="'+esc(d.id)+'">✏️</button><button data-acao="excluir" data-id="'+esc(d.id)+'" style="color:var(--red)">🗑️</button></td></tr>'
   }).join('')+'</tbody></table>'
-}var despesaAvulsaEditandoId=null,despesasAvulsasMes='';
+}
+var despesaAvulsaEditandoId=null,despesasAvulsasMes='',despesaAvulsaItensTemp=[],despesaAvulsaValorManual='';
 function popularCategoriasDespesaAvulsa(){var sel=document.getElementById('despAvulsaCategoria'),orig=document.getElementById('despCategoria');if(!sel||!orig)return;var atual=sel.value;sel.innerHTML='';Array.prototype.forEach.call(orig.options,function(op){if(!op.value||op.value==='insumo'||op.value==='__nova__')return;var n=document.createElement('option');n.value=op.value;n.textContent=op.textContent;sel.appendChild(n)});if(!sel.options.length){[['aluguel','🏠 Aluguel'],['luz','💡 Luz'],['agua','💧 Água'],['gas','🔥 Gás'],['internet','📶 Internet/Telefone'],['funcionario','👤 Salário/Diária'],['motoboy','🛵 Motoboy'],['marketing','📣 Marketing'],['manutencao','🔧 Manutenção'],['outro','🍴 Outro']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.appendChild(o)})}if(Array.prototype.some.call(sel.options,function(o){return o.value===atual}))sel.value=atual}
-function abrirModalDespesaAvulsa(id){if(!souGerente())return toast('🔒 Só o gerente pode lançar despesas');popularCategoriasDespesaAvulsa();var d=id?(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)}):null;if(id&&!d)return toast('⚠️ Despesa não encontrada');despesaAvulsaEditandoId=d?d.id:null;document.getElementById('tituloDespesaAvulsa').textContent=d?'✏️ Editar despesa':'💸 Lançar despesa';document.getElementById('despAvulsaData').value=d?d.data:dataHojeLocal();document.getElementById('despAvulsaCategoria').value=d?d.categoria:(document.getElementById('despAvulsaCategoria').options[0]||{}).value||'outro';document.getElementById('despAvulsaDescricao').value=d?(d.subcategoria||d.descricao||''):'';document.getElementById('despAvulsaValor').value=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';document.getElementById('despAvulsaStatus').value=d?(d.status||'pago'):'pago';document.getElementById('despAvulsaObs').value=d?(d.obs||''):'';document.getElementById('modalDespesaAvulsa').classList.add('aberto')}
-function salvarDespesaAvulsa(e){e.preventDefault();if(!souGerente())return toast('🔒 Só o gerente');var data=document.getElementById('despAvulsaData').value,cat=document.getElementById('despAvulsaCategoria').value,desc=document.getElementById('despAvulsaDescricao').value.trim(),valor=lerMoeda(document.getElementById('despAvulsaValor').value);if(!data||!cat||!desc||!Number.isFinite(valor)||valor<=0)return toast('⚠️ Preencha data, categoria, descrição e valor');var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null;var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,fornecedor:'',nf:'',status:document.getElementById('despAvulsaStatus').value||'pago',obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:[],valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};if(ant)Object.assign(ant,d);else despesas.push(d);salvar();document.getElementById('modalDespesaAvulsa').classList.remove('aberto');despesaAvulsaEditandoId=null;renderDespesasAvulsas();renderDRE();toast(ant?'✅ Despesa atualizada':'✅ Despesa lançada')}
-function renderDespesasAvulsas(){if(!souGerente())return;var lista=(despesas||[]).filter(ehDespesaAvulsa);var meses={};lista.forEach(function(d){if(d.data)meses[String(d.data).slice(0,7)]=true});var mesSel=document.getElementById('filtroMesDespesas'),mesesOrdenados=Object.keys(meses).sort().reverse();if(mesSel){var valorAtual=despesasAvulsasMes;mesSel.innerHTML='<option value="">Todos os meses</option>'+mesesOrdenados.map(function(m){return '<option value="'+esc(m)+'">'+esc(rotuloMes(m))+'</option>'}).join('');if(meses[valorAtual])mesSel.value=valorAtual;else{despesasAvulsasMes='';mesSel.value=''}}var busca=(document.getElementById('buscaDespesasAvulsas')||{}).value||'',status=(document.getElementById('filtroStatusDespesas')||{}).value||'';var filtradas=lista.filter(function(d){return(!despesasAvulsasMes||String(d.data||'').slice(0,7)===despesasAvulsasMes)&&(!status||(d.status==='pendente'?'pendente':'pago')===status)&&(!busca||((d.descricao||'')+' '+(d.obs||'')+' '+nomeCatCompra(d.categoria)).toLocaleLowerCase('pt-BR').includes(busca.toLocaleLowerCase('pt-BR')))}).sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''))||String(b.criadoEm||'').localeCompare(String(a.criadoEm||''))});var soma=filtradas.reduce(function(s,d){return s+(Number(d.valor)||0)},0),pago=filtradas.filter(function(d){return d.status!=='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0),pend=filtradas.filter(function(d){return d.status==='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0);var cards=document.getElementById('despesasAvulsasStats');if(cards)cards.innerHTML='<div class="dre-card azul"><div class="titulo">Lançamentos</div><div class="valor">'+filtradas.length+'</div><div class="sub">no filtro</div></div><div class="dre-card"><div class="titulo">Total</div><div class="valor">'+moeda(soma)+'</div><div class="sub">despesas</div></div><div class="dre-card verde"><div class="titulo">✅ Pago</div><div class="valor">'+moeda(pago)+'</div><div class="sub">quitado</div></div><div class="dre-card vermelho"><div class="titulo">⏳ A pagar</div><div class="valor">'+moeda(pend)+'</div><div class="sub">pendente</div></div>';var box=document.getElementById('listaDespesasAvulsas');if(!box)return;if(!filtradas.length){box.innerHTML='<div class="dre-vazio">Nenhuma despesa encontrada neste filtro.</div>';return}box.innerHTML=filtradas.map(function(d){var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'';return '<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(info.txt)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+(d.obs?' · '+esc(d.obs):'')+'</small></div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes"><button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button></div></div>'}).join('')}
+function abrirModalDespesaAvulsa(id){
+  if(!souGerente())return toast('🔒 Só o gerente pode lançar despesas');
+  popularCategoriasDespesaAvulsa();
+  var d=id?(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)}):null;
+  if(id&&!d)return toast('⚠️ Despesa não encontrada');
+  despesaAvulsaEditandoId=d?d.id:null;
+  document.getElementById('tituloDespesaAvulsa').textContent=d?'✏️ Editar despesa':'💸 Lançar despesa';
+  document.getElementById('despAvulsaData').value=d?d.data:dataHojeLocal();
+  document.getElementById('despAvulsaCategoria').value=d?d.categoria:(document.getElementById('despAvulsaCategoria').options[0]||{}).value||'outro';
+  document.getElementById('despAvulsaDescricao').value=d?(d.subcategoria||d.descricao||''):'';
+  despesaAvulsaValorManual=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+  document.getElementById('despAvulsaValor').value=despesaAvulsaValorManual;
+  document.getElementById('despAvulsaStatus').value=d?(d.status||'pago'):'pago';
+  document.getElementById('despAvulsaObs').value=d?(d.obs||''):'';
+  despesaAvulsaItensTemp=d&&Array.isArray(d.itens)?d.itens.filter(function(it){return it&&String(it.nome||'').trim()}).map(function(it){return{nome:String(it.nome||''),qtd:Number(it.qtd)||1,valor:Number(it.valor)||0,unid:it.unid||'un'}}):[];
+  renderItensDespesaAvulsa();
+  document.getElementById('modalDespesaAvulsa').classList.add('aberto');
+}
+function itemDespesaAvulsaTemConteudo(it){
+  it=it||{};
+  var nome=String(it.nome||'').trim(),qtd=it.qtd===undefined?1:Number(it.qtd),valor=Number(it.valor)||0;
+  return!!nome||valor!==0||qtd!==1;
+}
+
+function renderItensDespesaAvulsa(){
+  var cont=document.getElementById('despAvulsaItensLista');
+  if(!cont)return;
+  cont.innerHTML=despesaAvulsaItensTemp.map(function(it,idx){
+    var qtd=it.qtd===undefined?1:it.qtd,valor=Number(it.valor)||0,subtotal=Math.max(0,(Number(qtd)||0)*valor);
+    return'<div class="item-compra"><input class="ic-nome" data-idx="'+idx+'" maxlength="100" aria-label="Nome do item '+(idx+1)+'" placeholder="Nome do item" value="'+esc(it.nome||'')+'"><input class="ic-qtd" data-idx="'+idx+'" type="text" inputmode="decimal" aria-label="Quantidade do item '+(idx+1)+'" placeholder="Qtd." value="'+esc(qtd)+'"><input class="ic-valor" data-idx="'+idx+'" type="text" inputmode="numeric" aria-label="Valor unitário do item '+(idx+1)+'" placeholder="R$ unit." value="'+(valor?valor.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'')+'"><button type="button" class="ic-del" data-idx="'+idx+'" aria-label="Remover item '+(idx+1)+'">×</button><small class="desp-avulsa-item-subtotal" id="despAvulsaItemSubtotal'+idx+'">Subtotal: '+moeda(subtotal)+'</small></div>';
+  }).join('');
+  cont.querySelectorAll('.ic-nome').forEach(function(input){input.addEventListener('input',function(e){despesaAvulsaItensTemp[Number(e.target.dataset.idx)].nome=e.target.value;atualizarResumoItensDespesaAvulsa()})});
+  cont.querySelectorAll('.ic-qtd').forEach(function(input){input.addEventListener('input',function(e){var it=despesaAvulsaItensTemp[Number(e.target.dataset.idx)],q=Number(String(e.target.value||'').replace(',','.'));it.qtd=Number.isFinite(q)?q:0;atualizarResumoItensDespesaAvulsa()})});
+  cont.querySelectorAll('.ic-valor').forEach(function(input){input.addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);e.target.setSelectionRange(e.target.value.length,e.target.value.length);var it=despesaAvulsaItensTemp[Number(e.target.dataset.idx)];it.valor=lerMoeda(e.target.value);atualizarResumoItensDespesaAvulsa()})});
+  atualizarResumoItensDespesaAvulsa();
+}
+
+function atualizarResumoItensDespesaAvulsa(){
+  var valorEl=document.getElementById('despAvulsaValor'),ajuda=document.getElementById('despAvulsaValorAjuda');
+  despesaAvulsaItensTemp.forEach(function(it,idx){var sub=document.getElementById('despAvulsaItemSubtotal'+idx);if(sub)sub.textContent='Subtotal: '+moeda(Math.max(0,(Number(it.qtd)||0)*(Number(it.valor)||0)))});
+  var temRascunho=despesaAvulsaItensTemp.some(itemDespesaAvulsaTemConteudo);
+  if(!valorEl)return;
+  if(temRascunho){if(!valorEl.readOnly)despesaAvulsaValorManual=valorEl.value;valorEl.value=calcularTotalItensDespesaAvulsa(despesaAvulsaItensTemp).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});valorEl.readOnly=true;if(ajuda)ajuda.textContent='Total calculado pela soma dos itens.'}
+  else{if(valorEl.readOnly)valorEl.value=despesaAvulsaValorManual;valorEl.readOnly=false;if(ajuda)ajuda.textContent='Sem itens, informe o valor total manualmente.'}
+}
+function salvarDespesaAvulsa(e){
+  e.preventDefault();
+  if(!souGerente())return toast('🔒 Só o gerente');
+  var data=document.getElementById('despAvulsaData').value,cat=document.getElementById('despAvulsaCategoria').value,desc=document.getElementById('despAvulsaDescricao').value.trim();
+  if(!validarItensDespesaAvulsa(despesaAvulsaItensTemp))return toast('⚠️ Complete ou remova os itens adicionados');
+  var itens=(despesaAvulsaItensTemp||[]).filter(itemDespesaAvulsaTemConteudo).map(function(it){return{nome:String(it.nome||'').trim(),qtd:Number(it.qtd),valor:Number(it.valor),unid:it.unid||'un',vinc:'',semEstoque:true}});
+  var valor=itens.length?calcularTotalItensDespesaAvulsa(itens):lerMoeda(document.getElementById('despAvulsaValor').value);
+  if(!data||!cat||!desc||!Number.isFinite(valor)||valor<=0)return toast('⚠️ Preencha data, categoria, descrição e um valor maior que zero');
+  var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null;
+  var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,fornecedor:'',nf:'',status:document.getElementById('despAvulsaStatus').value||'pago',obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:itens,valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};
+  if(ant)Object.assign(ant,d);else despesas.push(d);
+  salvar();
+  document.getElementById('modalDespesaAvulsa').classList.remove('aberto');
+  despesaAvulsaEditandoId=null;
+  renderDespesasAvulsas();
+  renderDRE();
+  toast(ant?'✅ Despesa atualizada':'✅ Despesa lançada');
+}
+function renderDespesasAvulsas(){
+  if(!souGerente())return;
+  var lista=(despesas||[]).filter(ehDespesaAvulsa),meses={};
+  lista.forEach(function(d){if(d.data)meses[String(d.data).slice(0,7)]=true});
+  var mesSel=document.getElementById('filtroMesDespesas'),mesesOrdenados=Object.keys(meses).sort().reverse();
+  if(mesSel){var valorAtual=despesasAvulsasMes;mesSel.innerHTML='<option value="">Todos os meses</option>'+mesesOrdenados.map(function(m){return'<option value="'+esc(m)+'">'+esc(rotuloMes(m))+'</option>'}).join('');if(meses[valorAtual])mesSel.value=valorAtual;else{despesasAvulsasMes='';mesSel.value=''}}
+  var busca=(document.getElementById('buscaDespesasAvulsas')||{}).value||'',status=(document.getElementById('filtroStatusDespesas')||{}).value||'';
+  var filtradas=lista.filter(function(d){var nomesItens=(Array.isArray(d.itens)?d.itens:[]).map(function(it){return it.nome||''}).join(' ');return(!despesasAvulsasMes||String(d.data||'').slice(0,7)===despesasAvulsasMes)&&(!status||(d.status==='pendente'?'pendente':'pago')===status)&&(!busca||((d.descricao||'')+' '+(d.obs||'')+' '+nomesItens+' '+nomeCatCompra(d.categoria)).toLocaleLowerCase('pt-BR').includes(busca.toLocaleLowerCase('pt-BR')))}).sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''))||String(b.criadoEm||'').localeCompare(String(a.criadoEm||''))});
+  var soma=filtradas.reduce(function(s,d){return s+(Number(d.valor)||0)},0),pago=filtradas.filter(function(d){return d.status!=='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0),pend=filtradas.filter(function(d){return d.status==='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0);
+  var cards=document.getElementById('despesasAvulsasStats');
+  if(cards)cards.innerHTML='<div class="dre-card azul"><div class="titulo">Lançamentos</div><div class="valor">'+filtradas.length+'</div><div class="sub">no filtro</div></div><div class="dre-card"><div class="titulo">Total</div><div class="valor">'+moeda(soma)+'</div><div class="sub">despesas</div></div><div class="dre-card verde"><div class="titulo">✅ Pago</div><div class="valor">'+moeda(pago)+'</div><div class="sub">quitado</div></div><div class="dre-card vermelho"><div class="titulo">⏳ A pagar</div><div class="valor">'+moeda(pend)+'</div><div class="sub">pendente</div></div>';
+  var box=document.getElementById('listaDespesasAvulsas');
+  if(!box)return;
+  if(!filtradas.length){box.innerHTML='<div class="dre-vazio">Nenhuma despesa encontrada neste filtro.</div>';return}
+  box.innerHTML=filtradas.map(function(d){var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'',itens=(Array.isArray(d.itens)?d.itens:[]).filter(function(it){return String(it.nome||'').trim()}),resumo=itens.slice(0,3).map(function(it){return esc(it.qtd||1)+'× '+esc(it.nome)+' — '+moeda((Number(it.qtd)||0)*(Number(it.valor)||0))}).join(' · ')+(itens.length>3?' · +'+(itens.length-3)+' itens':'');return'<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(info.txt)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+(d.obs?' · '+esc(d.obs):'')+'</small>'+(resumo?'<small class="desp-itens-resumo">📦 '+resumo+'</small>':'')+'</div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes"><button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button></div></div>'}).join('');
+}
 document.getElementById('btnNovaDespesaPagina').addEventListener('click',function(){abrirModalDespesaAvulsa(null)});document.getElementById('btnCancelarDespesaAvulsa').addEventListener('click',function(){document.getElementById('modalDespesaAvulsa').classList.remove('aberto')});document.getElementById('modalDespesaAvulsa').addEventListener('click',function(e){if(e.target===this)this.classList.remove('aberto')});document.getElementById('formDespesaAvulsa').addEventListener('submit',salvarDespesaAvulsa);document.getElementById('despAvulsaValor').addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);e.target.setSelectionRange(e.target.value.length,e.target.value.length)});document.getElementById('filtroMesDespesas').addEventListener('change',function(e){despesasAvulsasMes=e.target.value;renderDespesasAvulsas()});document.getElementById('filtroStatusDespesas').addEventListener('change',renderDespesasAvulsas);document.getElementById('buscaDespesasAvulsas').addEventListener('input',renderDespesasAvulsas);document.getElementById('listaDespesasAvulsas').addEventListener('click',function(e){var b=e.target.closest('button[data-acao]');if(!b)return;var id=b.dataset.id;if(b.dataset.acao==='editar-despesa')abrirModalDespesaAvulsa(id);else if(b.dataset.acao==='excluir-despesa'){var d=(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)});if(!d||!confirm('Excluir esta despesa?\n\n'+(d.descricao||'Despesa')+' — '+moeda(d.valor||0)))return;despesas=despesas.filter(function(x){return String(x.id)!==String(id)});salvar();renderDespesasAvulsas();renderDRE();toast('🗑️ Despesa excluída')}});
+document.getElementById('btnAddItemDespesaAvulsa').addEventListener('click',function(){despesaAvulsaItensTemp.push({nome:'',qtd:1,valor:0,unid:'un'});renderItensDespesaAvulsa()});
+document.getElementById('despAvulsaItensLista').addEventListener('click',function(e){var b=e.target.closest('button.ic-del[data-idx]');if(!b)return;despesaAvulsaItensTemp.splice(Number(b.dataset.idx),1);renderItensDespesaAvulsa()});
 (function(){var $i=function(id){return document.getElementById(id)};
 $i('comprasMes').addEventListener('change',function(e){comprasMes=e.target.value;renderCompras()});
 $i('comprasCat').addEventListener('change',function(e){comprasCat=e.target.value;renderCompras()});
