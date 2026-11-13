@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.25 -->
+<!-- APP_VERSION: 1.0.27 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -334,7 +334,9 @@
   .cliente-historico-pedido .valor{color:var(--gold-2);font-weight:900;white-space:nowrap}
   .cliente-historico-pedido button{border:1px solid rgba(63,185,114,.35);border-radius:7px;background:rgba(63,185,114,.12);color:var(--green);font:inherit;font-weight:800;padding:6px 8px;cursor:pointer;white-space:nowrap}
   .cliente-devendo{color:var(--red)!important}
-  .cliente-filtro{min-width:180px;flex:0 1 220px}
+  .cliente-filtro{min-width:180px;flex:0 1 220px;min-height:44px;padding:10px 12px;color:var(--txt);color-scheme:dark;background:linear-gradient(180deg,rgba(229,72,77,.13),rgba(229,72,77,.06)),linear-gradient(180deg,#1e1e21,#151517);border:1px solid rgba(229,72,77,.55);border-radius:8px;font-family:inherit;font-size:12px;font-weight:800;outline:none;cursor:pointer}
+  .cliente-filtro:focus{border-color:var(--red);box-shadow:0 0 0 2px rgba(229,72,77,.18)}
+  .cliente-filtro option{background:#171719;color:var(--txt)}
   .cliente-whats-opcoes{display:grid;grid-template-columns:1fr;gap:8px}
   .cliente-whats-opcoes button{min-height:44px;font-family:inherit;font-weight:800}
   #modalEscolherWhats{z-index:260!important}
@@ -983,7 +985,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
     </button>
-    <span id="appVersion" title="Versão do aplicativo">v1.0.25</span>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.27</span>
   </div>
 </header>  
 <main>
@@ -3239,22 +3241,22 @@ function imprimirViaNavegadorDirect(p){
   document.body.appendChild(f);
   const d=f.contentWindow.document;
   const itens=p.itens.map(it=>{
-    const paoTxt=it.paoNome?` [${it.paoNome.replace('Pão ','')}]`:'';
-    return `<tr><td>${it.qtd}x ${it.nome}${paoTxt}</td><td style="text-align:right">R$ ${(it.preco*it.qtd).toFixed(2).replace('.',',')}</td></tr>`
+    const paoTxt=it.paoNome?` [${esc(String(it.paoNome).replace('Pão ',''))}]`:'';
+    return `<tr><td>${esc(it.qtd)}x ${esc(it.nome)}${paoTxt}</td><td style="text-align:right">R$ ${(it.preco*it.qtd).toFixed(2).replace('.',',')}</td></tr>`
   }).join('');
   const financeiro=resumoFinanceiroPedidoImpressao(p);
   const pagsNav=pagamentosDoPedido(p);
   let pgtoNavHtml='';
   if(pagsNav.length>1){
-    pgtoNavHtml='<div><b>PAGAMENTO DIVIDIDO:</b></div>'+pagsNav.map(([k,v])=>{const L=PAGAMENTO_LABEL[k]||{txt:k};return `<div>${L.txt}: R$ ${v.toFixed(2).replace('.',',')}</div>`}).join('')
+    pgtoNavHtml='<div><b>PAGAMENTO DIVIDIDO:</b></div>'+pagsNav.map(([k,v])=>{const L=PAGAMENTO_LABEL[k]||{txt:k};return `<div>${esc(L.txt)}: R$ ${v.toFixed(2).replace('.',',')}</div>`}).join('')
   }else if(pagsNav.length===1){
     const L=PAGAMENTO_LABEL[pagsNav[0][0]]||{txt:pagsNav[0][0]};
-    pgtoNavHtml=`<div><b>PAGAMENTO: ${L.txt.toUpperCase()}</b></div>`
+    pgtoNavHtml=`<div><b>PAGAMENTO: ${esc(L.txt).toUpperCase()}</b></div>`
   }
   const logoNavUrl=new URL('logo-header.png',document.baseURI).href;
   const enderecoNav=[p.endereco,p.enderecoNumero,p.enderecoBairro].filter(v=>String(v||'').trim()).map(esc).join(' ');
   const entregaNavHtml=p.tipo==='entrega'?`<div><b>END:</b> ${enderecoNav||'NÃO INFORMADO'}</div>${p.motoboyNome?`<div><b>MOTOBOY:</b> ${esc(p.motoboyNome)}</div>`:''}`:'';
-  const alteracaoNavHtml=p.ultimaAlteracaoPedido?'<div class="c big">⚠️ PEDIDO ALTERADO</div><div><b>ITENS PARA ACRESCENTAR:</b></div><ul>'+(p.ultimaAlteracaoPedido.itens||[]).map(it=>'<li>'+it.qtd+'x '+esc(it.nome)+(it.paoNome?' ['+esc(it.paoNome.replace('Pão ',''))+']':'')+(it.adicionados||[]).map(a=>'<div>+ '+a.qtd+' '+esc(a.nome)+'</div>').join('')+(it.removidos||[]).map(r=>'<div>− '+r.qtd+' '+esc(r.nome)+'</div>').join('')+'</li>').join('')+'</ul><hr>':'';
+  const alteracaoNavHtml=p.ultimaAlteracaoPedido?'<div class="c big">⚠️ PEDIDO ALTERADO</div><div><b>ITENS PARA ACRESCENTAR:</b></div><ul>'+(p.ultimaAlteracaoPedido.itens||[]).map(it=>'<li>'+esc(it.qtd)+'x '+esc(it.nome)+(it.paoNome?' ['+esc(it.paoNome.replace('Pão ',''))+']':'')+(it.adicionados||[]).map(a=>'<div>+ '+esc(a.qtd)+' '+esc(a.nome)+'</div>').join('')+(it.removidos||[]).map(r=>'<div>− '+esc(r.qtd)+' '+esc(r.nome)+'</div>').join('')+'</li>').join('')+'</ul><hr>':'';
   const larguraPagina=printerState.larguraPapel===32?'58mm':'80mm',larguraConteudo=printerState.larguraPapel===32?'54mm':'74mm';  d.open();
   d.write(`<html><head><meta charset="UTF-8">
 <style>
@@ -3266,19 +3268,19 @@ hr{border:0;border-top:1px dashed #000}table{width:100%}
 <div class="c logo"><img src="${logoNavUrl}" alt="Rei da Chapa"></div><hr>
 <div class="c big">PEDIDO #${esc(numeroPedidoExibicao(p))}</div>
 ${alteracaoNavHtml}
-${p.clienteNumero?`<div class="c">Cliente N° ${pad(p.clienteNumero)}</div>`:''}
+${p.clienteNumero?`<div class="c">Cliente N° ${esc(pad(p.clienteNumero))}</div>`:''}
 <div class="c">${new Date(p.finalizadoEm||p.data).toLocaleString('pt-BR')} - ${p.tipo==='entrega'?'ENTREGA':'RETIRADA'}</div><hr>
 <div><b>CLIENTE:</b> ${esc(p.cliente||'Balcão')}</div>
-${p.telefone?`<div><b>TEL:</b> ${p.telefone}</div>`:''}
+${p.telefone?`<div><b>TEL:</b> ${esc(p.telefone)}</div>`:''}
 ${entregaNavHtml}
 <hr><div><b>ITENS:</b></div><table>${itens}</table><hr>
 <div><b>Subtotal itens:</b> ${dinheiroImpressao(financeiro.subtotalBruto)}</div>
 ${financeiro.descontoPedido>0?`<div><b>Desconto:</b> − ${dinheiroImpressao(financeiro.descontoPedido)}</div>`:''}
 ${financeiro.taxaEntrega>0?`<div><b>Taxa de entrega:</b> + ${dinheiroImpressao(financeiro.taxaEntrega)}</div>`:''}<hr>
-${p.obs?`<div><b>OBS:</b> ${p.obs}</div><hr>`:''}
+${p.obs?`<div><b>OBS:</b> ${esc(p.obs)}</div><hr>`:''}
 <div class="c big">TOTAL: ${dinheiroImpressao(financeiro.total)}</div><hr>
 ${pgtoNavHtml}
-${p.troco>0?`<div><b>TROCO: R$ ${p.troco.toFixed(2).replace('.',',')}</b></div>`:''}
+${p.troco>0?`<div><b>TROCO: R$ ${Number(p.troco).toFixed(2).replace('.',',')}</b></div>`:''}
 <div class="c">${p.pago?'*** PAGO ***':'*** A RECEBER ***'}</div><hr>
 <div class="c">Obrigado!</div></body></html>`);
   d.close();
@@ -10316,5 +10318,6 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   document.addEventListener('touchcancel', function () { toqueDeRolagem = null; }, true);
 })();
 </script>
+<script src="print-queue.js"></script>
 </body>
 </html>
