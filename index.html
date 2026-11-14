@@ -1467,7 +1467,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   <div class="campo"><label>Categoria *</label><select id="despAvulsaCategoria" required></select></div>
   <div class="campo"><label>Descrição *</label><input id="despAvulsaDescricao" required maxlength="100" placeholder="Ex.: conta de luz de novembro"></div>
   <div class="campo"><label>Nº da nota fiscal</label><input id="despAvulsaNF" maxlength="80" placeholder="Opcional"></div>
-  <div class="dupla" id="despAvulsaAbastecimentoCampos" hidden><div class="campo"><label>Litros</label><input id="despAvulsaLitros" type="text" inputmode="decimal" placeholder="Ex.: 2,475"></div><div class="campo"><label>Preço por litro (R$)</label><input id="despAvulsaPrecoLitro" type="text" inputmode="decimal" placeholder="Ex.: 6,09"></div></div>
+  <div class="dupla" id="despAvulsaAbastecimentoCampos" hidden><div class="campo" style="grid-column:1/-1"><label>Placa do veículo (opcional)</label><input id="despAvulsaPlaca" type="text" maxlength="10" autocomplete="off" autocapitalize="characters" spellcheck="false" style="text-transform:uppercase" placeholder="Ex.: ABC1D23"></div><div class="campo"><label>Litros</label><input id="despAvulsaLitros" type="text" inputmode="decimal" placeholder="Ex.: 2,475"></div><div class="campo"><label>Preço por litro (R$)</label><input id="despAvulsaPrecoLitro" type="text" inputmode="decimal" placeholder="Ex.: 6,09"></div></div>
   <div class="campo"><label>📦 Itens da despesa (opcional)</label><div class="lista-itens-compra" id="despAvulsaItensLista"></div><button type="button" class="btn-add-item-compra" id="btnAddItemDespesaAvulsa">➕ Adicionar item</button></div>
   <div class="campo"><label>Valor total (R$)</label><input id="despAvulsaValor" type="text" inputmode="numeric" placeholder="0,00"><small id="despAvulsaValorAjuda" style="display:block;color:var(--muted);font-size:10px;margin-top:4px">Valor opcional. Se não souber, deixe em branco ou informe 0,00.</small></div>
   <div class="campo"><label>Observação</label><textarea id="despAvulsaObs" rows="2" placeholder="Opcional"></textarea></div>
@@ -3582,8 +3582,9 @@ function calcularTotalDespesaAvulsa(itens,litros,precoPorLitro,valorManual){
 }
 
 function formatarDetalhesFinanceirosDespesa(d){
-  if(!d)return'';var detalhes=[],nf=String(d.nf||'').trim(),ab=d.abastecimento||{},litros=Number(ab.litros),preco=Number(ab.precoPorLitro);
+  if(!d)return'';var detalhes=[],nf=String(d.nf||'').trim(),ab=d.abastecimento||{},placa=String(ab.placa||'').trim().toLocaleUpperCase('pt-BR'),litros=Number(ab.litros),preco=Number(ab.precoPorLitro);
   if(nf)detalhes.push('NF '+esc(nf));
+  if(placa)detalhes.push('Placa '+esc(placa));
   if(Number.isFinite(litros)&&litros>0)detalhes.push(litros.toLocaleString('pt-BR',{maximumFractionDigits:3})+' L'+(Number.isFinite(preco)&&preco>0?' × R$ '+formatarPrecoLitroDetalhe(preco)+'/L':''));
   else if(Number.isFinite(preco)&&preco>0)detalhes.push('R$ '+formatarPrecoLitroDetalhe(preco)+'/L');
   return detalhes.join(' · ');
@@ -3620,6 +3621,14 @@ function separarDespesasDRE(despFiltradas){
 
 function totalizarDespesasOperacionais(despesasOperacionais){
   return(Array.isArray(despesasOperacionais)?despesasOperacionais:[]).reduce(function(s,d){return s+(Number(d.valor)||0)},0);
+}
+
+function totalizarAbastecimentosNoPeriodo(despesasOperacionais){
+  return(Array.isArray(despesasOperacionais)?despesasOperacionais:[]).reduce(function(total,d){
+    if(!d)return total;
+    var rotulo=d.categoriaNome||((DESPESA_LABEL[d.categoria]||{}).txt)||'',ehAbastecimento=!!(d.abastecimento&&typeof d.abastecimento==='object')||categoriaEhAbastecimentoDespesa(d.categoria,rotulo,d);
+    return total+(ehAbastecimento?(Number(d.valor)||0):0);
+  },0);
 }
 
 function renderDRE() {
@@ -3692,6 +3701,7 @@ function renderDRE() {
   const { comprasEstoque, despesasOperacionais } = separarDespesasDRE(despFiltradas);
   const totalComprasEstoque = comprasEstoque.reduce((s, d) => s + (Number(d.valor) || 0), 0);
   const totalDespesasOperacionais = totalizarDespesasOperacionais(despesasOperacionais);
+  const totalAbastecimento = totalizarAbastecimentosNoPeriodo(despesasOperacionais);
   const totalDespesas = totalDespesasOperacionais + totalPerdas;
   const despPorCategoria = {};
   despesasOperacionais.forEach(d => {
@@ -3744,6 +3754,11 @@ function renderDRE() {
         <div class="titulo">Despesas + Perdas</div>
         <div class="valor">${moeda(totalDespesas)}</div>
         <div class="sub">${despesasOperacionais.length} despesa${despesasOperacionais.length === 1 ? '' : 's'} · ${comprasEstoque.length} compra${comprasEstoque.length === 1 ? '' : 's'} em estoque · ${perdasPeriodo.length} perda${perdasPeriodo.length === 1 ? '' : 's'}</div>
+      </div>
+      <div class="dre-card" style="border-color:rgba(234,179,8,.4)">
+        <div class="titulo">⛽ Abastecimento</div>
+        <div class="valor">${moeda(totalAbastecimento)}</div>
+        <div class="sub">já incluído em despesas operacionais</div>
       </div>
       <div class="dre-card ${lucroLiquido >= 0 ? 'verde' : 'vermelho'}">
         <div class="titulo">Lucro Líquido</div>
@@ -4900,7 +4915,7 @@ function getCategoriasCustom(){try{return JSON.parse(localStorage.getItem('rei_c
 function listaCategoriaCompraLocal(k){try{var a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
 function objetoCategoriaCompraLocal(k){try{var o=JSON.parse(localStorage.getItem(k)||'{}');return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}catch(e){return{}}}
 function normalizarCategoriaFinanceira(nome){var texto=String(nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();texto=texto.replace(/^[^a-z0-9]+/,'').replace(/^\d+\s*[-.)]\s*/,'').replace(/^[^a-z0-9]+/,'');return texto.replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
-function ordenarCategoriasFinanceiras(categorias){return(Array.isArray(categorias)?categorias:[]).slice().sort(function(a,b){var an=typeof a==='string'?a:(a&& (a.n||a.nome||a.textContent||a.text)||''),bn=typeof b==='string'?b:(b&& (b.n||b.nome||b.textContent||b.text)||'');return normalizarCategoriaFinanceira(an).localeCompare(normalizarCategoriaFinanceira(bn),'pt-BR',{sensitivity:'base',numeric:true})})}
+function ordenarCategoriasFinanceiras(categorias){return(Array.isArray(categorias)?categorias:[]).slice().sort(function(a,b){var an=typeof a==='string'?a:(a&& (a.n||a.nome||a.textContent||a.text)||''),bn=typeof b==='string'?b:(b&& (b.n||b.nome||b.textContent||b.text)||''),am=String(an).match(/(?:^|\s)(\d+)\s*[-.)]/),bm=String(bn).match(/(?:^|\s)(\d+)\s*[-.)]/);if(am||bm){if(!am)return 1;if(!bm)return-1;var diferenca=Number(am[1])-Number(bm[1]);if(diferenca)return diferenca}return normalizarCategoriaFinanceira(an).localeCompare(normalizarCategoriaFinanceira(bn),'pt-BR',{sensitivity:'base',numeric:true})})}
 function resolverCategoriaFinanceiraPorTexto(termo,opcoes){var alvo=normalizarCategoriaFinanceira(termo);if(!alvo)return'';var op=(Array.isArray(opcoes)?opcoes:[]).find(function(x){return normalizarCategoriaFinanceira(x&&(x.text||x.textContent)||'')===alvo});return op?String(op.value||''):''}
 function garantirCategoriaFinanceira(nome,emoji){
   nome=String(nome||'').trim();if(!nome)return'';
@@ -5001,6 +5016,7 @@ function abrirModalDespesaAvulsa(id){
   document.getElementById('despAvulsaCategoria').value=d?d.categoria:(document.getElementById('despAvulsaCategoria').options[0]||{}).value||'outro';
   document.getElementById('despAvulsaDescricao').value=d?(d.subcategoria||d.descricao||''):'';
   document.getElementById('despAvulsaNF').value=d?(d.nf||''):'';
+  document.getElementById('despAvulsaPlaca').value=d&&d.abastecimento&&d.abastecimento.placa?String(d.abastecimento.placa).toLocaleUpperCase('pt-BR'):'';
   document.getElementById('despAvulsaLitros').value=d&&d.abastecimento&&d.abastecimento.litros!=null?formatarNumeroFinanceiroEditavel(d.abastecimento.litros):'';
   document.getElementById('despAvulsaPrecoLitro').value=d&&d.abastecimento&&d.abastecimento.precoPorLitro!=null?formatarNumeroFinanceiroEditavel(d.abastecimento.precoPorLitro):'';
   despesaAvulsaValorManual=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
@@ -5046,9 +5062,9 @@ function salvarDespesaAvulsa(e){
   var data=document.getElementById('despAvulsaData').value,cat=document.getElementById('despAvulsaCategoria').value,desc=document.getElementById('despAvulsaDescricao').value.trim();
   if(!validarItensDespesaAvulsa(despesaAvulsaItensTemp))return toast('⚠️ Complete ou remova os itens adicionados');
   var itens=(despesaAvulsaItensTemp||[]).filter(itemDespesaAvulsaTemConteudo).map(function(it){return{nome:String(it.nome||'').trim(),qtd:Number(it.qtd),valor:Number(it.valor),unid:it.unid||'un',vinc:'',semEstoque:true}});
-  var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null,categoriaNome=categoriaLabelSelecionada(cat),ehCombustivel=categoriaEhAbastecimentoDespesa(cat,categoriaNome,ant),nf=(document.getElementById('despAvulsaNF')||{}).value||'',litrosTexto=ehCombustivel?(document.getElementById('despAvulsaLitros')||{}).value||'':'',precoTexto=ehCombustivel?(document.getElementById('despAvulsaPrecoLitro')||{}).value||'':'',litros=interpretarNumeroFinanceiroBR(litrosTexto),precoPorLitro=interpretarNumeroFinanceiroBR(precoTexto),valor=calcularTotalDespesaAvulsa(itens,litrosTexto,precoTexto,(document.getElementById('despAvulsaValor')||{}).value);
+  var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null,categoriaNome=categoriaLabelSelecionada(cat),ehCombustivel=categoriaEhAbastecimentoDespesa(cat,categoriaNome,ant),nf=(document.getElementById('despAvulsaNF')||{}).value||'',placa=ehCombustivel?String((document.getElementById('despAvulsaPlaca')||{}).value||'').trim().toLocaleUpperCase('pt-BR'):'',litrosTexto=ehCombustivel?(document.getElementById('despAvulsaLitros')||{}).value||'':'',precoTexto=ehCombustivel?(document.getElementById('despAvulsaPrecoLitro')||{}).value||'':'',litros=interpretarNumeroFinanceiroBR(litrosTexto),precoPorLitro=interpretarNumeroFinanceiroBR(precoTexto),valor=calcularTotalDespesaAvulsa(itens,litrosTexto,precoTexto,(document.getElementById('despAvulsaValor')||{}).value);
   if(!data||!cat||!desc||!Number.isFinite(valor)||valor<0)return toast('⚠️ Preencha data, categoria e descrição. O valor pode ficar em branco ou ser zero.');
-  var abastecimento=ehCombustivel&&(litros!==null||precoPorLitro!==null)?{litros:litros,precoPorLitro:precoPorLitro}:null;
+  var abastecimento=ehCombustivel&&(litros!==null||precoPorLitro!==null||placa)?{litros:litros,precoPorLitro:precoPorLitro,placa:placa}:null;
   var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,categoriaNome:ant&&ant.categoria===cat&&ant.categoriaNome||categoriaNome,fornecedor:'',nf:String(nf).trim(),abastecimento:abastecimento,status:document.getElementById('despAvulsaStatus').value||'pago',obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:itens,valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};
   if(ant)Object.assign(ant,d);else despesas.push(d);
   salvar();

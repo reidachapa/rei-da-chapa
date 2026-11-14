@@ -12,18 +12,18 @@
 
 ## Global Constraints
 
-- Preservar as categorias financeiras atuais e a edição/renomeação; ordenar categorias por nome em português.
+- Preservar as categorias financeiras atuais e a edição/renomeação; ordenar primeiro pelo prefixo numérico crescente, e depois alfabeticamente as categorias sem número.
 - Preservar notas, despesas, rótulos históricos, itens e estoque; não alterar categorias de estoque/PDV.
 - Não alterar schema, dados diretamente no Supabase, políticas RLS ou login.
-- O total da despesa é contado uma única vez; litros e preço/L são dados de conferência e cálculo.
+- O total da despesa é contado uma única vez; placa, litros e preço/L são dados de conferência, e litros/preço também calculam o total.
 - Permitir R$ 0,00 quando não há valor manual; categorias e campos de combustível não apagam nem reclassificam lançamentos existentes.
 
 ## Review Focus
 
-- Categoria com diferença apenas de caixa/acentos não deve duplicar nem se ordenar errado; testar normalização e ordem.
+- Categoria com diferença apenas de caixa/acentos não deve duplicar nem se ordenar errado; testar normalização, prefixos numéricos em ordem crescente e categorias sem número em ordem alfabética.
 - Rótulos de categorias antigas devem permanecer nos registros, e uma categoria nova criada no campo deve aparecer nos dois formulários e no estado sincronizado; testar preservação e cadastro.
 - Litros e preço com vírgula decimal devem calcular corretamente, por exemplo 2,475 × R$ 6,09 → R$ 15,07; campos incompletos ou valor manual vazio/zero devem salvar sem esconder o lançamento.
-- DRE deve mostrar despesa com valor zero por categoria, somar combustível e itens uma única vez e manter compra de estoque separada; testar esses totais e classificações.
+- DRE deve mostrar despesa com valor zero por categoria, resumir o combustível no período sem criar uma lista repetida, somar itens uma única vez e manter compra de estoque separada; testar esses totais e classificações.
 - O campo de busca e o formulário de abastecimento devem continuar fáceis de usar no celular e no computador; revisar toque, teclado, foco e a aparência escura no navegador.
 
 ---
@@ -36,13 +36,13 @@
 
 **Interfaces:**
 - Produz `normalizarCategoriaFinanceira(nome)`, que remove acentos, normaliza caixa e espaços para comparar nomes sem alterar o rótulo exibido.
-- Produz `ordenarCategoriasFinanceiras(categorias)`, que devolve as categorias em ordem alfabética pt-BR sem remover nem renomear as existentes.
+- Produz `ordenarCategoriasFinanceiras(categorias)`, que devolve categorias numeradas em ordem crescente e as sem número em ordem alfabética pt-BR, sem remover nem renomear as existentes.
 - Produz `garantirCategoriaFinanceira(nome, emoji)`, que reutiliza uma categoria equivalente ou cria uma nova no catálogo atual, atualizando as opções de compra/despesa e salvando pelo mecanismo existente.
 - O campo pesquisável atualiza o `select` canônico para manter compatibilidade com formulários e notas históricas.
 
 - [x] **Step 1: Escrever testes que provem ordenação, equivalência sem acento/caixa, preservação das categorias atuais e cadastro de uma categoria nova.**
 - [x] **Step 2: Executar `node tests/expense-financial-categories.test.cjs` e confirmar falha pela ausência do comportamento.**
-- [x] **Step 3: Implementar a interface pesquisável escura para os campos financeiros de compra e despesa avulsa, mantendo criação/edição/exclusão no gerenciador e ordenando sua lista.**
+- [x] **Step 3: Implementar a interface pesquisável escura para os campos financeiros de compra e despesa avulsa, mantendo criação/edição/exclusão no gerenciador e ordenando por prefixo numérico.**
 - [x] **Step 4: Executar o teste específico; confirmar que texto exato, busca parcial, saída do campo e abertura de outra compra deixam o campo visível sincronizado ao valor canônico. Teclado, foco e estilos revisados no código. A conferência visual no navegador ficou indisponível: a automação do navegador isolado não acessou localhost e o Computer Use encerrou ao não conseguir identificar a URL do Chrome.**
 
 ### Task 2: Dados de abastecimento, NF, valor zero e DRE
@@ -53,13 +53,13 @@
 
 **Interfaces:**
 - Produz `calcularTotalAbastecimento(litros, precoPorLitro)`, que interpreta números decimais em formato brasileiro e devolve valor arredondado a centavos quando os dois campos são informados.
-- O registro de despesa avulsa persiste `nf` e `abastecimento: { litros, precoPorLitro }`; campos opcionais ausentes não bloqueiam o salvamento e o total pode ser zero. Se combustível e itens avulsos forem informados juntos, o total soma cada detalhe uma vez.
-- O DRE e a lista de despesas exibem categoria e detalhes informados, sem somar NF/litros como valores adicionais.
+- O registro de despesa avulsa persiste `nf` e `abastecimento: { placa, litros, precoPorLitro }`; campos opcionais ausentes não bloqueiam o salvamento e o total pode ser zero. Se combustível e itens avulsos forem informados juntos, o total soma cada detalhe uma vez.
+- O DRE mostra o resumo do abastecimento no período, avisa que já está incluído nas despesas operacionais e mantém a placa nos detalhes da linha existente sem criar outra lista de despesas.
 
 - [x] **Step 1: Escrever testes para cálculo arredondado, preenchimento de `nf` e `abastecimento`, salvamento com valor zero, exibição/categoria no DRE e total contado uma vez.**
 - [x] **Step 2: Executar `node tests/expense-fuel-fields-dre.test.cjs` e confirmar falha pelas funções/campos ausentes.**
-- [x] **Step 3: Adicionar campos opcionais de NF, litros e preço/L; mostrar abastecimento para categorias correspondentes e calcular o valor quando ambos forem preenchidos. Deixar o valor manual opcional e aceitar zero.**
-- [x] **Step 4: Mostrar os detalhes no histórico de despesas e no DRE, mantendo a classificação do DRE por categoria e o valor autoritativo único.**
+- [x] **Step 3: Adicionar campos opcionais de NF, placa, litros e preço/L; mostrar abastecimento para categorias correspondentes, calcular o valor quando litros e preço estiverem preenchidos, e aceitar zero.**
+- [x] **Step 4: Mostrar a placa no histórico e nos detalhes da linha já existente do DRE; adicionar apenas um resumo do gasto de combustível no período, marcado como incluído em despesas operacionais.**
 - [x] **Step 5: Executar os dois testes específicos e todos os `tests/*.test.cjs`; revisar diff e sintaxe dos scripts inline.**
 
 ### Task 3: Revisão final e publicação

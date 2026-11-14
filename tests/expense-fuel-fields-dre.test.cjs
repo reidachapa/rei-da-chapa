@@ -25,6 +25,7 @@ const itemComConteudoSource = extrairFunction('itemDespesaAvulsaTemConteudo', '\
 const salvarSource = extrairFunction('salvarDespesaAvulsa', '\nfunction renderDespesasAvulsas(');
 const atualizarCamposAbastecimentoSource = extrairFunction('atualizarCamposAbastecimento', '\nfunction abrirModalDespesaAvulsa(');
 const totalizarDespesasSource = extrairFunction('totalizarDespesasOperacionais', '\nfunction renderDRE(');
+const totalizarAbastecimentosSource = extrairFunction('totalizarAbastecimentosNoPeriodo', '\nfunction renderDRE(');
 
 const interpretar = new Function(`${interpretarSource}; return interpretarNumeroFinanceiroBR;`)();
 const formatarEditavel = new Function(`${formatarEditavelSource}; return formatarNumeroFinanceiroEditavel;`)();
@@ -34,7 +35,7 @@ const calcularTotal = new Function(
 )();
 const formatarDetalhes = new Function(
   'esc', 'moeda', `${interpretarSource}\n${formatarPrecoLitroSource}\n${detalhesSource}; return formatarDetalhesFinanceirosDespesa;`
-)((value) => String(value), (value) => `R$ ${value.toFixed(2).replace('.', ',')}`);
+)((value) => String(value).replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]), (value) => `R$ ${value.toFixed(2).replace('.', ',')}`);
 const calcularItens = new Function(`${totalizarItensSource}; return calcularTotalItensDespesaAvulsa;`)();
 const validarItens = new Function(`${validarItensSource}; return validarItensDespesaAvulsa;`)();
 const itemTemConteudo = new Function(`${itemComConteudoSource}; return itemDespesaAvulsaTemConteudo;`)();
@@ -45,6 +46,10 @@ const atualizarCamposAbastecimento = new Function(
   `${atualizarCamposAbastecimentoSource}; return atualizarCamposAbastecimento;`
 );
 const totalizarDespesas = new Function(`${totalizarDespesasSource}; return totalizarDespesasOperacionais;`)();
+const totalizarAbastecimentos = new Function(
+  'categoriaEhAbastecimentoDespesa', 'DESPESA_LABEL',
+  `${normalizarCategoriaSource}\n${categoriaAbastecimentoSource}\n${categoriaAbastecimentoDespesaSource}\n${totalizarAbastecimentosSource}; return totalizarAbastecimentosNoPeriodo;`
+)(ehCategoriaAbastecimentoDespesa, { c_posto: { txt: '14 - Abastecimento' }, luz: { txt: 'Luz' } });
 
 assert.equal(interpretar('2,475'), 2.475, 'lê litros com vírgula decimal');
 assert.equal(interpretar('6.09'), 6.09, 'aceita ponto decimal digitado no celular');
@@ -80,13 +85,16 @@ const combustivel = { nf: '000.123', abastecimento: { litros: 2.475, precoPorLit
 assert.match(formatarDetalhes(combustivel), /NF 000\.123/, 'mostra o número da nota');
 assert.match(formatarDetalhes(combustivel), /2,475 L × R\$ 6,09\/L/, 'mostra litros e preço por litro');
 assert.match(formatarDetalhes({ abastecimento: { litros: 50, precoPorLitro: 6.099 } }), /50 L × R\$ 6,099\/L/, 'mostra a precisão original do preço por litro na conferência');
+assert.match(formatarDetalhes({ abastecimento: { placa: 'abc1d23' } }), /Placa ABC1D23/, 'mostra a placa formatada em maiúsculas');
+assert.match(formatarDetalhes({ abastecimento: { placa: '<img src=x onerror=alert(1)>' } }), /Placa &lt;img/i, 'escapa a placa antes de exibi-la no histórico e no DRE');
 
-function salvarCom({ categoria = 'c_posto', label = '⛽ Posto Avenida', nf = '000.123', litros = '2,475', preco = '6,09', valor = '', existente = null, itens = [] } = {}) {
+function salvarCom({ categoria = 'c_posto', label = '⛽ Posto Avenida', nf = '000.123', placa = 'abc1d23', litros = '2,475', preco = '6,09', valor = '', existente = null, itens = [] } = {}) {
   const fields = {
     despAvulsaData: { value: '2026-11-13' },
     despAvulsaCategoria: { value: categoria, options: [{ value: categoria, textContent: label }] },
     despAvulsaDescricao: { value: 'Posto Avenida' },
     despAvulsaNF: { value: nf },
+    despAvulsaPlaca: { value: placa },
     despAvulsaLitros: { value: litros },
     despAvulsaPrecoLitro: { value: preco },
     despAvulsaValor: { value: valor },
@@ -130,16 +138,23 @@ function salvarCom({ categoria = 'c_posto', label = '⛽ Posto Avenida', nf = '0
 const salvaAbastecimento = salvarCom();
 assert.equal(salvaAbastecimento.valor, 15.07, 'salvar usa o total calculado pela bomba');
 assert.equal(salvaAbastecimento.nf, '000.123', 'salva o número da nota no registro');
-assert.deepEqual(salvaAbastecimento.abastecimento, { litros: 2.475, precoPorLitro: 6.09 }, 'salva os dados do abastecimento');
+assert.deepEqual(salvaAbastecimento.abastecimento, { litros: 2.475, precoPorLitro: 6.09, placa: 'ABC1D23' }, 'salva os dados do abastecimento e a placa normalizada');
 
-const salvaZero = salvarCom({ categoria: 'outro', label: '🍴 Outro', nf: '', litros: '', preco: '', valor: '' });
+const salvaZero = salvarCom({ categoria: 'outro', label: '🍴 Outro', nf: '', placa: 'ABC1D23', litros: '', preco: '', valor: '' });
 assert.equal(salvaZero.valor, 0, 'permite salvar despesa sem valor informado');
 assert.equal(salvaZero.abastecimento, null, 'não cria detalhe de abastecimento em outra categoria');
+const salvaSomentePlaca = salvarCom({ nf: '', placa: 'abc1d23', litros: '', preco: '', valor: '0,00' });
+assert.deepEqual(salvaSomentePlaca.abastecimento, { litros: null, precoPorLitro: null, placa: 'ABC1D23' }, 'preserva a placa mesmo antes de informar litros e preço');
 
 const salvaParcial = salvarCom({ nf: '', litros: '1,5', preco: '', valor: '0,00' });
 assert.equal(salvaParcial.valor, 0, 'campos de bomba incompletos não impedem lançamento de valor zero');
-assert.deepEqual(salvaParcial.abastecimento, { litros: 1.5, precoPorLitro: null }, 'preserva os dados parciais para completar depois');
+assert.deepEqual(salvaParcial.abastecimento, { litros: 1.5, precoPorLitro: null, placa: 'ABC1D23' }, 'preserva os dados parciais para completar depois');
 assert.equal(totalizarDespesas([salvaZero]), 0, 'despesa de valor zero continua sendo um lançamento operacional do DRE');
+assert.equal(totalizarAbastecimentos([
+  { categoria: 'c_posto', valor: 304.95 },
+  { categoria: 'luz', valor: 90 },
+  { categoria: 'outro', categoriaNome: '⛽ Posto Avenida', abastecimento: { litros: 50, precoPorLitro: 6.099 }, valor: 314.95 },
+]), 619.9, 'identifica o total de abastecimento pelas categorias e pelos rótulos históricos sem somar outras despesas');
 
 const renomeadoSalvo = salvarCom({
   categoria: 'outro',
@@ -158,17 +173,21 @@ assert.equal(totalizarDespesas([renomeadoSalvo]), 314.95, 'o DRE conta o abastec
 
 const modal = html.slice(html.indexOf('<div id="modalDespesaAvulsa"'), html.indexOf('<div id="modalPersonalizar"'));
 assert.match(modal, /despAvulsaNF/, 'o formulário contém o campo de nota fiscal');
+assert.match(modal, /despAvulsaPlaca/, 'o formulário contém o campo opcional da placa');
 assert.match(modal, /despAvulsaLitros/, 'o formulário contém litros');
 assert.match(modal, /despAvulsaPrecoLitro/, 'o formulário contém preço por litro');
 assert.doesNotMatch(modal.match(/id="despAvulsaValor"[^>]+/)[0], /required/, 'o valor total não é obrigatório');
 const renderDreSource = extrairFunction('renderDRE', '\ndocument.addEventListener(\'DOMContentLoaded\'');
 assert.match(renderDreSource, /despesasOperacionais\.forEach\(d\s*=>/, 'o DRE inclui despesas de valor zero no agrupamento por categoria');
 assert.match(renderDreSource, /formatarDetalhesFinanceirosDespesa\(d\)/, 'o DRE mostra dados de abastecimento por lançamento');
+assert.match(renderDreSource, /totalizarAbastecimentosNoPeriodo\(despesasOperacionais\)/, 'o DRE calcula o gasto em abastecimento dentro do período filtrado');
+assert.match(renderDreSource, /Abastecimento[\s\S]*já incluído em despesas operacionais/i, 'o DRE mostra um resumo próprio de combustível sem duplicá-lo nos totais');
 assert.match(renderDreSource, /rotuloCategoriaFinanceira\(d\)/, 'o detalhe do DRE mantém o rótulo histórico da categoria');
 assert.match(extrairFunction('renderDespesasAvulsas', '\ndocument.getElementById(\'btnNovaDespesaPagina\')'), /formatarDetalhesFinanceirosDespesa\(d\)/, 'o histórico de despesas mostra dados de abastecimento');
 assert.match(extrairFunction('renderDespesasAvulsas', '\ndocument.getElementById(\'btnNovaDespesaPagina\')'), /rotuloCategoriaFinanceira\(d\)/, 'o histórico de despesas mantém o rótulo histórico da categoria');
 const abrirDespesaSource = extrairFunction('abrirModalDespesaAvulsa', '\nfunction itemDespesaAvulsaTemConteudo(');
 assert.match(abrirDespesaSource, /formatarNumeroFinanceiroEditavel\(d\.abastecimento\.litros\)/, 'a edição reabre litros sem separador de milhar');
 assert.match(abrirDespesaSource, /formatarNumeroFinanceiroEditavel\(d\.abastecimento\.precoPorLitro\)/, 'a edição reabre o preço sem arredondamento');
+assert.match(abrirDespesaSource, /despAvulsaPlaca[^\n]*d\.abastecimento\.placa/, 'a edição reabre a placa salva');
 
 console.log('Expense fuel fields and DRE scenarios passed.');

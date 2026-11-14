@@ -5,7 +5,7 @@ Facilitar o lançamento e a edição de despesas, registrar os dados de abasteci
 
 ## Objetivos
 - Manter todas as categorias financeiras atuais e permitir criar, renomear e excluir pelo gerenciador.
-- Substituir a caixa branca por um campo escuro pesquisável com autopreenchimento; ordenar as sugestões e a lista do gerenciador alfabeticamente em português.
+- Substituir a caixa branca por um campo escuro pesquisável com autopreenchimento; ordenar categorias numeradas por prefixo crescente e as sem número alfabeticamente em português.
 - Manter o texto do campo pesquisável sincronizado ao valor canônico: ao sair/confirmar, nome exato escolhe a categoria correspondente; busca parcial sem confirmação volta à categoria selecionada. Criar categoria exige a ação explícita de adicionar.
 - Ao confirmar uma categoria digitada que ainda não existe, adicioná-la ao catálogo compartilhado para aparecer nas próximas despesas e nos demais aparelhos.
 - No lançamento avulso, incluir o número da nota. Para categorias que indiquem posto, abastecimento ou combustível, exibir litros e preço por litro; quando ambos forem informados, calcular o total por litros × preço/L.
@@ -22,7 +22,8 @@ Foram consideradas duas opções: manter o seletor nativo e escurecer suas opç�
 
 ## Dados e comportamento
 - Reutilizar as categorias e sincronização atuais do estado compartilhado; não limpar o catálogo e não criar migração/tabela no Supabase.
+- Em categorias financeiras com prefixo numérico (ex.: `01 - Aluguel`), ordenar pelo número crescente; categorias sem número ficam depois, em ordem alfabética.
 - Preservar a categoria original nos registros antigos. Mudanças futuras no nome/ícone da categoria não devem reescrever o rótulo já registrado.
-- No formulário de despesa, salvar número da nota, litros e preço por litro no registro. Esses dois últimos campos são opcionais; se ambos estiverem preenchidos, o total reflete a multiplicação. Sem cálculo, o valor manual pode ficar vazio/zero e salvar.
-- O DRE soma o campo `valor` uma vez e agrupa pela categoria. Os campos da bomba e da nota servem para conferência e não criam outro gasto.
+- No formulário de despesa, salvar número da nota, placa opcional, litros e preço por litro no registro de abastecimento. Se litros e preço/L estiverem preenchidos, o total reflete a multiplicação. Sem cálculo, o valor manual pode ficar vazio/zero e salvar.
+- O DRE soma o campo `valor` uma vez e agrupa pela categoria. Mostra um resumo do abastecimento no período, com aviso de que já está incluído nas despesas operacionais; a placa complementa a linha já existente, sem uma segunda lista de lançamentos.
 - As linhas de despesa existentes permanecem independentes do estoque; seu total mantém o comportamento atual.
