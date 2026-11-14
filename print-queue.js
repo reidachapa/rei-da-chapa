@@ -262,9 +262,10 @@
           const data = job.criado_em ? new Date(job.criado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
           const podeReenviar = job.status === 'conferir' && estacaoAtiva && lojaEstacao === store;
           const podeConfirmar = podeReenviar && job.estacao_id === idEstacao;
-          const acao = podeReenviar ? '<div style="display:flex;gap:6px;margin-top:6px">' + (podeConfirmar ? '<button type="button" data-fila-confirmar="' + escapar(job.id) + '" style="flex:1;background:#268b54;color:#fff;border:0;border-radius:7px;padding:7px;font-weight:800">✅ Saiu o papel</button>' : '') + '<button type="button" data-fila-reenviar="' + escapar(job.id) + '" style="flex:1;background:#386fa5;color:#fff;border:0;border-radius:7px;padding:7px;font-weight:800">↻ Reenviar</button></div>' : '';
+          const acoesConferencia = podeReenviar ? '<div style="display:flex;gap:6px;margin-top:6px">' + (podeConfirmar ? '<button type="button" data-fila-confirmar="' + escapar(job.id) + '" style="flex:1;background:#268b54;color:#fff;border:0;border-radius:7px;padding:7px;font-weight:800">✅ Saiu o papel</button>' : '') + '<button type="button" data-fila-reenviar="' + escapar(job.id) + '" style="flex:1;background:#386fa5;color:#fff;border:0;border-radius:7px;padding:7px;font-weight:800">↻ Reenviar</button></div>' : '';
+          const acaoExcluir = job.status === 'pendente' ? '<button type="button" data-fila-excluir="' + escapar(job.id) + '" data-fila-excluir-nome="' + escapar(tipo + ' ' + numero) + '" style="margin-top:6px;background:#842e35;color:#fff;border:1px solid #a94149;border-radius:7px;padding:6px 9px;font-weight:800;font-size:10px">🗑 Tirar da fila</button>' : '';
           const detalhe = job.status === 'conferir' && job.erro ? '<div style="font-size:10px;color:#e6b653;margin-top:3px">' + escapar(job.erro) + '</div>' : '';
-          return '<div style="border:1px solid var(--iron-5);border-radius:8px;padding:7px 8px;margin:5px 0;background:rgba(0,0,0,.13)"><div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><b>' + escapar(tipo + ' ' + numero) + '</b><span>' + nomeStatus(job.status) + '</span></div><small style="color:var(--muted)">' + escapar(data) + (job.tentativas ? ' · ' + job.tentativas + ' tentativa(s)' : '') + '</small>' + detalhe + acao + '</div>';
+          return '<div style="border:1px solid var(--iron-5);border-radius:8px;padding:7px 8px;margin:5px 0;background:rgba(0,0,0,.13)"><div style="display:flex;justify-content:space-between;gap:8px;font-size:11px"><b>' + escapar(tipo + ' ' + numero) + '</b><span>' + nomeStatus(job.status) + '</span></div><small style="color:var(--muted)">' + escapar(data) + (job.tentativas ? ' · ' + job.tentativas + ' tentativa(s)' : '') + '</small>' + detalhe + acoesConferencia + acaoExcluir + '</div>';
         }).join('');
       }
       const botaoProximo = elemento('btnFilaImprimirProxima');
@@ -412,7 +413,27 @@
     secao.addEventListener('click', async function (event) {
       const confirmar = event.target.closest('[data-fila-confirmar]');
       const reenviar = event.target.closest('[data-fila-reenviar]');
-      if (!confirmar && !reenviar) return;
+      const excluir = event.target.closest('[data-fila-excluir]');
+      if (!confirmar && !reenviar && !excluir) return;
+      if (excluir) {
+        const idExcluir = excluir.dataset.filaExcluir;
+        const nomeFicha = excluir.dataset.filaExcluirNome || 'esta ficha';
+        if (!confirm('Excluir ' + nomeFicha + ' da fila compartilhada? Ela não será impressa.')) return;
+        excluir.disabled = true;
+        try {
+          const { data, error } = await supa.from(TABLE).delete()
+            .eq('id', idExcluir).eq('loja_id', lojaAtualFila()).eq('status', 'pendente').select('id');
+          if (error) throw error;
+          if (!data || !data.length) throw new Error('A ficha já saiu da fila ou está sendo processada; atualize a lista.');
+          toastFila('🗑️ Ficha removida da fila.');
+          await atualizarPainelFila();
+        } catch (error) {
+          toastFila('⚠️ ' + mostrarErro(error));
+          excluir.disabled = false;
+          await atualizarPainelFila();
+        }
+        return;
+      }
       const id = (confirmar || reenviar).dataset.filaConfirmar || (confirmar || reenviar).dataset.filaReenviar;
       if (!estacaoAtiva || lojaEstacao !== lojaAtualFila()) return toastFila('Ative esta estação antes de atualizar o status da ficha.');
       try {
