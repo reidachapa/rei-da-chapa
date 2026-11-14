@@ -1,0 +1,180 @@
+const assert = require('node:assert/strict');
+const test = require('node:test');
+const fs = require('node:fs');
+const path = require('node:path');
+const PrecosCompra = require('../purchase-pricing.js');
+const EstoqueIngredientes = require('../ingredient-stock.js');
+
+const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8').replace(/\r\n/g, '\n');
+function source(name, next) {
+  const start = html.indexOf('function ' + name + '(');
+  const end = next ? html.indexOf('\nfunction ' + next + '(', start) : html.indexOf('\n}\n', start) + 2;
+  assert(start >= 0 && end > start, 'função real disponível: ' + name);
+  return html.slice(start, end);
+}
+const lookupSource = source('buscarIngredienteCompra', 'sincronizarIngredienteCompraPorNome');
+function buscar(item, ingredientes) {
+  return new Function('ingredientes', 'it', source('normalizarNomeCadastro', 'unidadeCanonicaMedida') + '\n' + source('alvoEstoque', 'refrescarEstoqueUI') + '\n' + lookupSource + '\nreturn buscarIngredienteCompra(it);')(ingredientes, item);
+}
+
+test('vínculo de ingrediente prevalece sobre nome histórico que hoje pertence a outro cadastro', () => {
+  const ingredientes = [
+    { id: 'outro', nome: 'Milho', nomeBase: 'Milho' },
+    { id: 'original', nome: 'Milho doce', nomeBase: 'Milho doce' },
+  ];
+  assert.equal(buscar({ vinc: 'ing:original', nome: 'Milho Quero', nomeBase: 'Milho', marca: 'Quero' }, ingredientes), ingredientes[1]);
+});
+
+test('nome base normalizado encontra o mesmo ingrediente com outra marca', () => {
+  const ingredientes = [{ id: 'molho', nome: 'Maionese', nomeBase: 'Maionése', marca: 'Quero' }];
+  assert.equal(buscar({ nome: '  maionese Hellmann’s ', nomeBase: ' MAIONESE ', marca: 'Hellmann’s' }, ingredientes), ingredientes[0]);
+});
+
+function memoria({ ingredientes = [], notas = [], itens, editId = null }) {
+  const campos = Object.fromEntries(Object.entries({ despData: '2026-11-14', despCategoria: 'outro', despSubcategoria: '', despFornecedor: 'Fornecedor teste', despNF: '000.123', despStatus: 'pago', despObs: '', despDesconto: '' }).map(([id, value]) => [id, { value }]));
+  campos.btnSalvarDespesa = { disabled: false, textContent: editId ? 'Atualizar nota' : 'Salvar compra' };
+  campos.modalDespesa = { classList: { remove() {} } };
+  const document = { getElementById(id) { return campos[id] || null; }, querySelector() { return null; } };
+  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, PrecosCompra, EstoqueIngredientes, _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
+  const messages = [];
+  const deps = { ingredientes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
+  const saveStart = html.indexOf('async function salvarCompraDaNota(');
+  const saveEnd = html.indexOf('// Um único ponto de gravação', saveStart);
+  const code = `
+    var ingredientes=deps.ingredientes,produtos=[],paes=[],despesas=deps.notas,despItensTemp=deps.window.despItensTemp,editandoDespesaId=deps.window.editandoDespesaId;
+    var window=deps.window,document=deps.document,toast=deps.toast,compraNotaEmAndamento=false,notaCompraEmSincronizacaoId=null,revisaoLocal=0,sequencia=0;
+    function uid(){return 'teste_'+(++sequencia)} function souGerente(){return true}
+    function salvar(){return Promise.resolve({ok:true,persisted:true})}
+    function categoriaLabelSelecionada(){return 'Outro'} function addSugestao(){} function popularTodasSugestoes(){}
+    function ehNotaCompraSalva(n){return !!(n&&Array.isArray(n.itens)&&n.tipoRegistro!=='despesa')}
+    function alert(msg){throw new Error(msg)}
+    ${source('normalizarNomeCadastro', 'formatarQtdMedida')}
+    ${html.split('\n').find(line => line.startsWith('function usaMediaPorContagemIngrediente('))}
+    ${source('lerMoeda', 'lerQuantidade')}
+    ${source('alvoEstoque', 'refrescarEstoqueUI')}
+    ${lookupSource}
+    ${source('reverterCompraEstoque', 'vincularItemCompra')}
+    ${source('aplicarCompraEstoque')}
+    ${html.slice(saveStart, saveEnd)}
+    return {salvarCompraDaNota,get ingredientes(){return ingredientes},get notas(){return despesas}};
+  `;
+  return { app: new Function('deps', code)(deps), messages };
+}
+
+const ingrediente = () => ({ id: 'milho', nome: 'Milho', nomeBase: 'Milho', marca: 'Quero', estoque: 3, custo: 2, modoCompra: 'pacote', unidade: 'un', semEstoque: false });
+const item = (extra = {}) => ({ nome: 'Milho Bonduelle', nomeBase: 'Milho', marca: 'Bonduelle', tipoItem: 'ing', qtd: 2, valor: 3, unid: 'un', controlaEstoque: true, ...extra });
+
+test('salvar compra com marca diferente soma no ingrediente existente e mantém rótulo da nota', async () => {
+  const fixture = memoria({ ingredientes: [ingrediente()], itens: [item()] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes.length, 1, 'marca é metadado; não deve criar outro saldo');
+  assert.equal(fixture.app.ingredientes[0].estoque, 5);
+  assert.equal(fixture.app.ingredientes[0].marca, 'Bonduelle');
+  const linha = fixture.app.notas[0].itens[0];
+  assert.deepEqual([linha.nome, linha.nomeBase, linha.marca, linha.vinc], ['Milho Bonduelle', 'Milho', 'Bonduelle', 'ing:milho']);
+});
+
+test('novo ingrediente criado pela compra mantém nome base e marca em campos separados', async () => {
+  const fixture = memoria({ itens: [item()] });
+  await fixture.app.salvarCompraDaNota();
+  const ing = fixture.app.ingredientes[0];
+  assert.deepEqual([ing.nome, ing.nomeBase, ing.marca, ing.estoque], ['Milho', 'Milho', 'Bonduelle', 2]);
+});
+
+test('marca diferente não permite apagar rendimento já usado pelo ingrediente', async () => {
+  const ing = { ...ingrediente(), modoCompra: 'flexivel', rendimento: 10, unidadeEstoque: 'porção' };
+  const fixture = memoria({ ingredientes: [ing], itens: [item({ rendimentoInformado: true, rend: 0 })] });
+  const antes = structuredClone(ing);
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.notas.length, 0);
+  assert.deepEqual(fixture.app.ingredientes[0], antes);
+  assert.match(fixture.messages[0], /rendimento salvo/);
+});
+
+test('compra sem metadado de controle conserva o ingrediente sem controle', async () => {
+  const linha = item();
+  delete linha.controlaEstoque;
+  const fixture = memoria({ ingredientes: [{ ...ingrediente(), semEstoque: true, estoque: 0, estoqueEstimado: 3 }], itens: [linha] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].semEstoque, true);
+  assert.equal(fixture.app.ingredientes[0].estoqueEstimado, 5);
+});
+
+test('editar quantidade de nota antiga conserva seus rótulos e a marca atual do catálogo', async () => {
+  const antiga = { id: 'nota-antiga', nf: '000.123', criadoEm: '2026-10-01T00:00:00Z', tipoRegistro: 'compra', itens: [item({ nome: 'Milho Quero', marca: 'Quero', vinc: 'ing:milho' })] };
+  const ing = { ...ingrediente(), nome: 'Milho doce', nomeBase: 'Milho doce', marca: 'Atual', estoque: 5 };
+  const fixture = memoria({ ingredientes: [ing], notas: [antiga], editId: antiga.id, itens: [{ ...structuredClone(antiga.itens[0]), qtd: 4, _indiceOriginalNota: 0 }] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].marca, 'Atual');
+  assert.deepEqual(fixture.app.notas[0].itens.map(i => [i.nome, i.nomeBase, i.marca]), [['Milho Quero', 'Milho', 'Quero']]);
+});
+
+test('marca explicitamente alterada ao editar nota atualiza o catálogo sem tocar em outras notas', async () => {
+  const antiga = { id: 'nota-antiga', tipoRegistro: 'compra', itens: [item({ nome: 'Milho Quero', marca: 'Quero', vinc: 'ing:milho' })] };
+  const intocada = { id: 'outra', nf: '000.010', tipoRegistro: 'compra', itens: [item({ nome: 'Milho Histórico', marca: 'Histórico', vinc: 'ing:milho' })] };
+  const antes = structuredClone(intocada);
+  const fixture = memoria({ ingredientes: [ingrediente()], notas: [antiga, intocada], editId: antiga.id, itens: [item({ vinc: 'ing:milho', _indiceOriginalNota: 0 })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].marca, 'Bonduelle');
+  assert.deepEqual(fixture.app.notas[1], antes);
+});
+
+test('editar nota de antes da contagem não soma novamente o estoque já contado', async () => {
+  const antiga = { id: 'nota-contada', tipoRegistro: 'compra', itens: [item({ nome: 'Milho Quero', marca: 'Quero', vinc: 'ing:milho', controlaEstoque: false, aplicado: { vinc: 'ing:milho', qtdEst: 2, semEstoque: true, contagemEstoqueId: 'contagem-1' } })] };
+  const fixture = memoria({ ingredientes: [{ ...ingrediente(), semEstoque: true, estoque: 0, estoqueEstimado: 0.2, contagemEstoqueId: 'contagem-2' }], notas: [antiga], editId: antiga.id, itens: [{ ...structuredClone(antiga.itens[0]), marca: 'Bonduelle', nome: 'Milho Bonduelle', _indiceOriginalNota: 0 }] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].estoqueEstimado, 0.2);
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.preservadoPorContagem, true);
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 0);
+  assert.equal(fixture.app.notas[0].itens[0].preservarSaldoContado, undefined);
+  assert.equal(fixture.app.ingredientes[0].marca, 'Bonduelle');
+});
+
+test('segunda edição da nota preservada continua sem resomar e novas linhas somam normalmente', async () => {
+  const linha = item({ vinc: 'ing:milho', controlaEstoque: false, aplicado: { vinc: 'ing:milho', qtdEst: 0, semEstoque: true, contagemEstoqueId: 'contagem-2', preservadoPorContagem: true } });
+  const antiga = { id: 'nota-contada', tipoRegistro: 'compra', itens: [linha] };
+  const fixture = memoria({ ingredientes: [{ ...ingrediente(), semEstoque: true, estoque: 0, estoqueEstimado: 0.2, contagemEstoqueId: 'contagem-2' }], notas: [antiga], editId: antiga.id, itens: [{ ...structuredClone(linha), _indiceOriginalNota: 0 }, item({ qtd: 3, controlaEstoque: false })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].estoqueEstimado, 3.2);
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.preservadoPorContagem, true);
+  assert.equal(fixture.app.notas[0].itens[1].aplicado.qtdEst, 3);
+});
+
+test('editar compra antiga de ovos não reimporta kg sobre a unidade corrigida do catálogo', async () => {
+  const linha = item({ nome: 'Ovo', nomeBase: 'Ovo', marca: '', vinc: 'ing:ovo', qtd: 30, unid: 'un', unidadeEstoque: 'kg', modoCompra: 'flexivel', rend: 0, controlaEstoque: false, aplicado: { vinc: 'ing:ovo', qtdEst: 30, semEstoque: true, custoAntes: 0, custoUnitario: 1 } });
+  const antiga = { id: 'ovos', tipoRegistro: 'compra', itens: [linha] };
+  const ovo = { id: 'ovo', nome: 'Ovo', nomeBase: 'Ovo', unidade: 'un', unidadeEstoque: 'un', modoCompra: 'flexivel', rendimento: 0, semEstoque: true, estoque: 0, estoqueEstimado: 30, custo: 1 };
+  const fixture = memoria({ ingredientes: [ovo], notas: [antiga], editId: antiga.id, itens: [{ ...structuredClone(linha), qtd: 60, _indiceOriginalNota: 0 }] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].unidadeEstoque, 'un');
+  assert.equal(fixture.app.ingredientes[0].estoqueEstimado, 60);
+  assert.equal(fixture.app.notas[0].itens[0].unid, 'un');
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 60);
+});
+
+test('compra em gramas converte para os kg persistidos sem trocar a unidade interna', async () => {
+  const ing = { id: 'milho', nome: 'Milho', nomeBase: 'Milho', unidade: 'kg', unidadeEstoque: 'kg', modoCompra: 'flexivel', rendimento: 0, semEstoque: true, estoque: 0, estoqueEstimado: 3, custo: 10 };
+  const fixture = memoria({ ingredientes: [ing], itens: [item({ qtd: 3000, valor: 0.01, unid: 'g', unidadeEstoque: 'g', modoCompra: 'flexivel', rend: 0, controlaEstoque: false })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].unidadeEstoque, 'kg');
+  assert.equal(fixture.app.ingredientes[0].estoqueEstimado, 6);
+  assert.equal(fixture.app.notas[0].itens[0].unid, 'g');
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 3);
+});
+
+test('compra com rendimento preserva a unidade de porções cadastrada apesar do snapshot antigo', async () => {
+  const ing = { id: 'milho', nome: 'Milho', nomeBase: 'Milho', unidade: 'kg', unidadeEstoque: 'porção', modoCompra: 'flexivel', rendimento: 10, semEstoque: false, estoque: 5, custo: 1 };
+  const fixture = memoria({ ingredientes: [ing], itens: [item({ qtd: 2, unid: 'kg', unidadeEstoque: 'kg', modoCompra: 'flexivel', rend: 10 })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].unidadeEstoque, 'porção');
+  assert.equal(fixture.app.ingredientes[0].estoque, 25);
+  assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 20);
+});
+
+test('autocomplete reúne marcas do catálogo e das notas sem duplicar e ordena em português', () => {
+  const marcas = new Function('ingredientes', 'despesas', source('normalizarNomeCadastro', 'unidadeCanonicaMedida') + '\n' + source('listaMarcasIngredientes', 'atualizarMarcasIngredientes') + '\nreturn listaMarcasIngredientes();')(
+    [{ marca: 'Zulu' }, { marca: 'água' }, { marca: 'Quero' }],
+    [{ itens: [{ tipoItem: 'ing', marca: 'quero' }, { tipoItem: 'ing', marca: 'Bonduelle' }, { tipoItem: 'prod', marca: 'Ignorar' }] }]
+  );
+  assert.deepEqual(marcas, ['água', 'Bonduelle', 'Quero', 'Zulu']);
+});
