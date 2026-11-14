@@ -70,7 +70,3 @@
 - [x] **Step 1: Conferir que o diff não altera estoque/PDV, histórico ou schema/RLS do Supabase.**
 - [ ] **Step 2: Abrir a interface no navegador em largura de celular e computador, confirmar busca escura, layout de combustível e DRE com valor zero.**
 - [ ] **Step 3: Criar PR contra `main`, acompanhar os checks e mesclar/publicar após validação, autorizado pelo usuário nesta conversa.**
-
-
-
-
