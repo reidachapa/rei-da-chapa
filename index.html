@@ -121,7 +121,7 @@
   .pao-estoque.baixo{color:#ffb703}.pao-estoque.zerado{color:var(--red)}
   .pao-acoes{display:flex;gap:5px;flex-wrap:wrap}
   .pao-acoes button{background:linear-gradient(180deg,#2a2a2e,#1a1a1c);border:1px solid var(--iron-5);color:var(--txt);border-radius:8px;cursor:pointer;font-family:inherit;font-size:14px;padding:8px 14px;font-weight:900;min-height:38px;line-height:1}
-  .item-ingrediente{background:linear-gradient(170deg,#232326,#18181a);border:1px solid var(--iron-5);border-radius:12px;padding:11px;display:grid;grid-template-columns:44px minmax(0,1fr) minmax(120px,max-content);grid-template-areas:"icon info meta" "icon actions meta";gap:7px 10px;align-items:center}
+  .item-ingrediente{background:linear-gradient(170deg,#232326,#18181a);border:1px solid var(--iron-5);border-radius:12px;padding:9px;display:grid;grid-template-columns:44px minmax(0,1fr) minmax(120px,max-content);grid-template-areas:"icon info meta" "icon actions meta";gap:4px 8px;align-items:center}
   .item-ingrediente.sem-estoque{border-left:3px solid var(--veg)}
   .item-ingrediente.com-estoque{border-left:3px solid var(--meat)}
   .ing-icon{width:44px;height:44px;border-radius:10px;background:linear-gradient(180deg,#2a2a2e,#1a1a1c);display:flex;align-items:center;justify-content:center;font-size:22px;border:1px solid var(--iron-5)}
@@ -130,18 +130,18 @@
   .ing-info{display:flex;flex-direction:column;gap:2px;min-width:0}
   .ing-info strong{font-size:13px}
   .ing-info small{font-size:10px;color:var(--muted)}
-  .ing-badge{display:inline-flex;align-items:center;font-size:9px;font-weight:800;padding:3px 8px;border-radius:20px;margin:0;white-space:nowrap}
+  .ing-badge{display:inline-flex;align-items:center;font-size:8px;font-weight:800;padding:2px 7px;border-radius:20px;margin:0;white-space:nowrap}
   .ing-badge.sem{background:rgba(106,191,105,.15);color:var(--veg);border:0}
   .ing-badge.com{background:rgba(217,116,74,.15);color:var(--meat);border:0}
   .ing-badge.extra{background:rgba(212,162,60,.15);color:var(--gold-2);border:0}
   .ing-badge.custo{background:rgba(63,185,114,.12);color:var(--green)}
-  .ing-meta{grid-area:meta;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:5px;min-width:120px}
-  .ing-estoque{font-size:11px;font-weight:800;padding:3px 8px;border-radius:20px;background:rgba(63,185,114,.12);color:var(--green);white-space:nowrap;text-align:right}
+  .ing-meta{grid-area:meta;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:3px;min-width:120px}
+  .ing-estoque{font-size:10px;font-weight:800;padding:2px 7px;border-radius:20px;background:rgba(63,185,114,.12);color:var(--green);white-space:nowrap;text-align:right}
   .ing-estoque.baixo{background:rgba(255,183,3,.12);color:#ffb703}
   .ing-estoque.zerado{background:rgba(229,72,77,.12);color:var(--red)}
-  .ing-estoque.sem{background:rgba(106,191,105,.12);color:var(--veg);font-size:10px;padding:3px 8px}
+  .ing-estoque.sem{background:rgba(106,191,105,.12);color:var(--veg);font-size:9px;padding:2px 7px}
   .ing-acoes{grid-area:actions;display:flex;gap:4px;flex-wrap:wrap}
-  .ing-acoes button{background:linear-gradient(180deg,#2a2a2e,#1a1a1c);border:1px solid var(--iron-5);color:var(--txt);border-radius:8px;cursor:pointer;font-family:inherit;font-size:12px;padding:7px 10px;font-weight:700;min-height:36px}
+  .ing-acoes button{background:linear-gradient(180deg,#2a2a2e,#1a1a1c);border:1px solid var(--iron-5);color:var(--txt);border-radius:8px;cursor:pointer;font-family:inherit;font-size:11px;padding:5px 8px;font-weight:700;min-height:31px}
   .ing-acoes .perigo:active{border-color:var(--red);color:var(--red)}
   .lista-stepper{display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow-y:auto;padding:2px;-webkit-overflow-scrolling:touch}
   .lista-stepper .grupo-titulo{font-size:10px;color:var(--muted);font-weight:800;text-transform:uppercase;letter-spacing:.5px;margin-top:8px;padding-left:2px}
@@ -632,14 +632,14 @@
     .ie-info strong,.ie-info .ie-ings{overflow-wrap:anywhere}
     .ie-estoque{grid-area:est;justify-self:start}
     .ie-acoes{grid-area:acc;justify-self:end;min-width:0;max-width:100%}
-    .item-ingrediente{grid-template-columns:40px minmax(0,1fr) minmax(108px,max-content);grid-template-areas:"icon info meta" "icon acc meta";gap:7px 8px;padding:10px}
-    .ing-icon{grid-area:icon;width:40px;height:40px}
+    .item-ingrediente{grid-template-columns:38px minmax(0,1fr) minmax(100px,max-content);grid-template-areas:"icon info meta" "icon actions meta";gap:4px 7px;padding:8px}
+    .ing-icon{grid-area:icon;width:38px;height:38px}
     .ing-info{grid-area:info}
     .ing-info strong{overflow-wrap:anywhere}
-    .ing-meta{grid-area:meta;min-width:108px;max-width:130px;gap:4px}
+    .ing-meta{grid-area:meta;min-width:100px;max-width:120px;gap:3px}
     .ing-meta>*{max-width:100%;box-sizing:border-box}
     .ing-estoque{max-width:100%;overflow:hidden;text-overflow:ellipsis}
-    .ing-acoes{grid-area:actions;justify-self:start}
+    .ing-acoes{grid-area:actions;justify-self:start;gap:3px}
     .item-pao{grid-template-columns:40px 1fr;grid-template-areas:"icon info" "icon acoes";gap:10px}
     .pao-icon{grid-area:icon;width:40px;height:40px}
     .pao-info{grid-area:info}
