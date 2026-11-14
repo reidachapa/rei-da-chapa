@@ -116,6 +116,51 @@ test('produto não se mistura a ingrediente/pão do mesmo nome e linhas incomple
   assert.deepEqual(r.porIndice.slice(1), [null, null, null, null]);
 });
 
+test('prévia pode calcular a venda antes do nome sem reutilizar vínculo antigo', () => {
+  const item = { nome: '  ', tipoItem: 'prod', vinc: 'prod:suco', qtd: 6, valor: 3.24, lucroPct: 83 };
+  const catalogo = [{ ...produto, estoque: 12, custo: 1.62, preco: 2.96 }];
+  const r = calcular({ itens: [item], produtos: catalogo, incluirRascunhosSemNome: true });
+  assert.equal(r.grupos.length, 1);
+  assert.equal(r.grupos[0].produtoId, null);
+  assert.deepEqual(r.grupos[0].indices, [0]);
+  assert.equal(r.grupos[0].estoque, 6);
+  perto(r.grupos[0].custoMedio, 3.24);
+  assert.equal(r.grupos[0].preco, 5.93);
+});
+
+test('linhas sem nome têm preços independentes na prévia e quantidade zero continua excluída', () => {
+  const itens = [
+    { nome: '', qtd: 6, valor: 3.24, lucroPct: 83 },
+    { nome: ' ', qtd: 2, valor: 10, lucroPct: 50 },
+    { nome: '', qtd: 0, valor: 5, lucroPct: 83 },
+  ];
+  const r = calcular({ itens, produtos: [], incluirRascunhosSemNome: true });
+  assert.equal(r.grupos.length, 2);
+  assert.deepEqual(r.grupos.map(g => g.indices), [[0], [1]]);
+  assert.deepEqual(r.grupos.map(g => g.preco), [5.93, 15]);
+  assert.equal(r.porIndice[2], null);
+});
+
+test('salvamento padrão continua descartando linhas sem nome mesmo com vínculo e preço', () => {
+  const item = { nome: '', vinc: 'prod:suco', qtd: 6, valor: 3.24, lucroPct: 83 };
+  const r = calcular({ itens: [item], produtos: [produto] });
+  assert.deepEqual(r.grupos, []);
+  assert.deepEqual(r.porIndice, [null]);
+});
+
+test('opção de prévia conserva agrupamento dos produtos nomeados e rateia só linhas válidas', () => {
+  const itens = [pago, gratis, { nome: '', qtd: 2, valor: 9.72, lucroPct: 50 }, { nome: '', qtd: 0, valor: 100 }];
+  const r = calcular({ itens, produtos: [], incluirRascunhosSemNome: true, descontoNota: 9.72 });
+  assert.equal(r.grupos.length, 2);
+  assert.deepEqual(r.grupos[0].indices, [0, 1]);
+  perto(r.grupos[0].custoMedio, 1.215);
+  assert.equal(r.grupos[0].preco, 2.22);
+  assert.deepEqual(r.grupos[1].indices, [2]);
+  perto(r.grupos[1].custoMedio, 7.29);
+  assert.equal(r.grupos[1].preco, 10.94);
+  assert.equal(r.porIndice[3], null);
+});
+
 test('entrada congelada permanece inalterada e grupos diferentes calculam preços independentes', () => {
   function freeze(v) { if (v && typeof v === 'object') { Object.values(v).forEach(freeze); Object.freeze(v); } return v; }
   const entrada = freeze({ itens: [pago, gratis, { nome: 'Outro', qtd: 2, valor: 7, lucroPct: 10 }], produtos: [produto], notaAnterior: { tipoRegistro: 'compra', itens: [] } });
