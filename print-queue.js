@@ -34,6 +34,47 @@
   function clienteSupabaseDisponivel() { return !!(window.__authPermitido && typeof supa !== 'undefined' && supa); }
   function mostrarErro(error) { return error && (error.message || error.details || error.hint) || 'Falha na fila de impressão.'; }
 
+  function confirmarRemocaoFila(nomeFicha) {
+    return new Promise(resolve => {
+      if (!document.getElementById('estiloConfirmarRemocaoFila')) {
+        const style = document.createElement('style');
+        style.id = 'estiloConfirmarRemocaoFila';
+        style.textContent = '.fila-confirm-overlay{position:fixed;inset:0;z-index:20000;display:grid;place-items:center;padding:18px;background:rgba(7,7,9,.78);backdrop-filter:blur(5px);animation:filaConfirmaEntrada .16s ease-out}.fila-confirm-card{width:min(100%,390px);padding:20px;border:1px solid rgba(212,162,60,.55);border-radius:18px;background:linear-gradient(160deg,#262427,#171719 72%);box-shadow:0 22px 70px rgba(0,0,0,.65),0 0 28px rgba(212,162,60,.1);color:var(--txt,#f4f0e8)}.fila-confirm-topo{display:flex;align-items:center;gap:12px;margin-bottom:14px}.fila-confirm-icone{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:14px;background:rgba(226,73,78,.14);border:1px solid rgba(226,73,78,.38);font-size:21px}.fila-confirm-titulo{margin:0;color:var(--gold-2,#f0c862);font-size:16px;font-weight:900}.fila-confirm-nome{margin:0 0 8px;font-size:14px;font-weight:800;overflow-wrap:anywhere}.fila-confirm-texto{margin:0;color:var(--muted,#aaa3a0);font-size:12px;line-height:1.5}.fila-confirm-nota{display:flex;gap:8px;align-items:flex-start;margin-top:14px;padding:10px 11px;border:1px solid rgba(212,162,60,.2);border-radius:11px;background:rgba(212,162,60,.07);color:#dfc477;font-size:11px;line-height:1.45}.fila-confirm-acoes{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:18px}.fila-confirm-acoes button{min-height:44px;border-radius:11px;font:inherit;font-size:12px;font-weight:800;cursor:pointer}.fila-confirm-cancelar{border:1px solid var(--iron-5,#414146);background:linear-gradient(180deg,#262629,#1b1b1e);color:var(--txt,#f4f0e8)}.fila-confirm-apagar{border:1px solid #bd4146;background:linear-gradient(180deg,#e04f54,#a82e36);color:#fff;box-shadow:0 5px 16px rgba(168,46,54,.25)}.fila-confirm-acoes button:focus-visible{outline:2px solid var(--gold-2,#f0c862);outline-offset:2px}@keyframes filaConfirmaEntrada{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}';
+        document.head.appendChild(style);
+      }
+      const anterior = document.activeElement;
+      const overlay = document.createElement('div');
+      overlay.className = 'fila-confirm-overlay';
+      overlay.innerHTML = '<section class="fila-confirm-card" role="alertdialog" aria-modal="true" aria-labelledby="filaConfirmTitulo" aria-describedby="filaConfirmDescricao"><div class="fila-confirm-topo"><div class="fila-confirm-icone" aria-hidden="true">🧾</div><h2 class="fila-confirm-titulo" id="filaConfirmTitulo">Tirar pedido da fila?</h2></div><p class="fila-confirm-nome"></p><p class="fila-confirm-texto" id="filaConfirmDescricao">Este pedido será removido da fila compartilhada.</p><div class="fila-confirm-nota"><span aria-hidden="true">ℹ️</span><span>Ele não será impresso. Só é possível tirar pedidos que ainda estão pendentes.</span></div><div class="fila-confirm-acoes"><button type="button" class="fila-confirm-cancelar" data-fila-manter>Manter na fila</button><button type="button" class="fila-confirm-apagar" data-fila-remover>🗑 Tirar da fila</button></div></section>';
+      overlay.querySelector('.fila-confirm-nome').textContent = nomeFicha || 'Este pedido';
+      const encerrar = resposta => {
+        document.removeEventListener('keydown', tecla);
+        overlay.remove();
+        if (anterior && anterior.isConnected && typeof anterior.focus === 'function') anterior.focus();
+        resolve(resposta);
+      };
+      const tecla = event => {
+        if (event.key === 'Escape') { encerrar(false); return; }
+        if (event.key !== 'Tab') return;
+        const botoes = Array.from(overlay.querySelectorAll('button:not([disabled])'));
+        if (!botoes.length) { event.preventDefault(); return; }
+        const primeiro = botoes[0], ultimo = botoes[botoes.length - 1];
+        if (event.shiftKey && (document.activeElement === primeiro || !overlay.contains(document.activeElement))) {
+          event.preventDefault(); ultimo.focus();
+        } else if (!event.shiftKey && (document.activeElement === ultimo || !overlay.contains(document.activeElement))) {
+          event.preventDefault(); primeiro.focus();
+        }
+      };
+      overlay.addEventListener('click', event => {
+        if (event.target === overlay || event.target.closest('[data-fila-manter]')) encerrar(false);
+        else if (event.target.closest('[data-fila-remover]')) encerrar(true);
+      });
+      document.addEventListener('keydown', tecla);
+      document.body.appendChild(overlay);
+      overlay.querySelector('[data-fila-manter]').focus();
+    });
+  }
+
   function montarSnapshotPedido(pedido, tipo) {
     const campos = [
       'id', 'numero', 'numeroDia', 'data', 'finalizadoEm', 'tipo', 'cliente', 'clienteNumero',
@@ -418,7 +459,7 @@
       if (excluir) {
         const idExcluir = excluir.dataset.filaExcluir;
         const nomeFicha = excluir.dataset.filaExcluirNome || 'esta ficha';
-        if (!confirm('Excluir ' + nomeFicha + ' da fila compartilhada? Ela não será impressa.')) return;
+        if (!await confirmarRemocaoFila(nomeFicha)) return;
         excluir.disabled = true;
         try {
           const { data, error } = await supa.from(TABLE).delete()
