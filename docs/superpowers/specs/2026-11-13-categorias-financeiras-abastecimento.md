@@ -6,6 +6,7 @@ Facilitar o lançamento e a edição de despesas, registrar os dados de abasteci
 ## Objetivos
 - Manter todas as categorias financeiras atuais e permitir criar, renomear e excluir pelo gerenciador.
 - Substituir a caixa branca por um campo escuro pesquisável com autopreenchimento; ordenar as sugestões e a lista do gerenciador alfabeticamente em português.
+- Manter o texto do campo pesquisável sincronizado ao valor canônico: ao sair/confirmar, nome exato escolhe a categoria correspondente; busca parcial sem confirmação volta à categoria selecionada. Criar categoria exige a ação explícita de adicionar.
 - Ao confirmar uma categoria digitada que ainda não existe, adicioná-la ao catálogo compartilhado para aparecer nas próximas despesas e nos demais aparelhos.
 - No lançamento avulso, incluir o número da nota. Para categorias que indiquem posto, abastecimento ou combustível, exibir litros e preço por litro; quando ambos forem informados, calcular o total por litros × preço/L.
 - Deixar o valor total opcional e aceitar R$ 0,00, inclusive para registrar um gasto antes de saber o valor.

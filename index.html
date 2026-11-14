@@ -3562,6 +3562,11 @@ function formatarNumeroFinanceiroEditavel(valor){
   return new Intl.NumberFormat('pt-BR',{useGrouping:false,maximumFractionDigits:15}).format(numero);
 }
 
+function formatarPrecoLitroDetalhe(valor){
+  var numero=Number(valor);if(!Number.isFinite(numero))return'';
+  return new Intl.NumberFormat('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:6}).format(numero);
+}
+
 function calcularTotalAbastecimento(litros,precoPorLitro){
   var qtd=interpretarNumeroFinanceiroBR(litros),preco=interpretarNumeroFinanceiroBR(precoPorLitro);
   if(qtd===null||preco===null||qtd<=0||preco<=0)return null;
@@ -3579,8 +3584,8 @@ function calcularTotalDespesaAvulsa(itens,litros,precoPorLitro,valorManual){
 function formatarDetalhesFinanceirosDespesa(d){
   if(!d)return'';var detalhes=[],nf=String(d.nf||'').trim(),ab=d.abastecimento||{},litros=Number(ab.litros),preco=Number(ab.precoPorLitro);
   if(nf)detalhes.push('NF '+esc(nf));
-  if(Number.isFinite(litros)&&litros>0)detalhes.push(litros.toLocaleString('pt-BR',{maximumFractionDigits:3})+' L'+(Number.isFinite(preco)&&preco>0?' × '+moeda(preco)+'/L':''));
-  else if(Number.isFinite(preco)&&preco>0)detalhes.push(moeda(preco)+'/L');
+  if(Number.isFinite(litros)&&litros>0)detalhes.push(litros.toLocaleString('pt-BR',{maximumFractionDigits:3})+' L'+(Number.isFinite(preco)&&preco>0?' × R$ '+formatarPrecoLitroDetalhe(preco)+'/L':''));
+  else if(Number.isFinite(preco)&&preco>0)detalhes.push('R$ '+formatarPrecoLitroDetalhe(preco)+'/L');
   return detalhes.join(' · ');
 }
 
@@ -3787,7 +3792,8 @@ function renderDRE() {
       const info = DESPESA_LABEL[d.categoria] || DESPESA_LABEL.outro;
       const dataFmt = new Date(d.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const detalhesDespesa = formatarDetalhesFinanceirosDespesa(d);
-      html.push(`<div class="desp-item"><div class="desp-icone">${info.e}</div><div class="desp-info"><strong>${esc(d.descricao)}</strong><small>${info.txt} · ${dataFmt}${detalhesDespesa ? ' · ' + detalhesDespesa : ''}${d.obs ? ' · ' + esc(d.obs) : ''}</small></div><div class="desp-valor">−${moeda(d.valor)}</div><div class="desp-acoes"><button data-acao="editar" data-id="${esc(d.id)}">✏️</button><button data-acao="excluir" data-id="${esc(d.id)}" class="perigo">🗑️</button></div></div>`);
+      const categoriaHistorica = rotuloCategoriaFinanceira(d);
+      html.push(`<div class="desp-item"><div class="desp-icone">${info.e}</div><div class="desp-info"><strong>${esc(d.descricao)}</strong><small>${esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)} · ${dataFmt}${detalhesDespesa ? ' · ' + detalhesDespesa : ''}${d.obs ? ' · ' + esc(d.obs) : ''}</small></div><div class="desp-valor">−${moeda(d.valor)}</div><div class="desp-acoes"><button data-acao="editar" data-id="${esc(d.id)}">✏️</button><button data-acao="excluir" data-id="${esc(d.id)}" class="perigo">🗑️</button></div></div>`);
     });
     html.push(`</div>`);
   }
@@ -4895,6 +4901,7 @@ function listaCategoriaCompraLocal(k){try{var a=JSON.parse(localStorage.getItem(
 function objetoCategoriaCompraLocal(k){try{var o=JSON.parse(localStorage.getItem(k)||'{}');return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}catch(e){return{}}}
 function normalizarCategoriaFinanceira(nome){var texto=String(nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();texto=texto.replace(/^[^a-z0-9]+/,'').replace(/^\d+\s*[-.)]\s*/,'').replace(/^[^a-z0-9]+/,'');return texto.replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
 function ordenarCategoriasFinanceiras(categorias){return(Array.isArray(categorias)?categorias:[]).slice().sort(function(a,b){var an=typeof a==='string'?a:(a&& (a.n||a.nome||a.textContent||a.text)||''),bn=typeof b==='string'?b:(b&& (b.n||b.nome||b.textContent||b.text)||'');return normalizarCategoriaFinanceira(an).localeCompare(normalizarCategoriaFinanceira(bn),'pt-BR',{sensitivity:'base',numeric:true})})}
+function resolverCategoriaFinanceiraPorTexto(termo,opcoes){var alvo=normalizarCategoriaFinanceira(termo);if(!alvo)return'';var op=(Array.isArray(opcoes)?opcoes:[]).find(function(x){return normalizarCategoriaFinanceira(x&&(x.text||x.textContent)||'')===alvo});return op?String(op.value||''):''}
 function garantirCategoriaFinanceira(nome,emoji){
   nome=String(nome||'').trim();if(!nome)return'';
   var sel=document.getElementById('despCategoria'),alvo=normalizarCategoriaFinanceira(nome),opcoes=sel?Array.prototype.slice.call(sel.options):[];
@@ -5065,7 +5072,7 @@ function renderDespesasAvulsas(){
   var box=document.getElementById('listaDespesasAvulsas');
   if(!box)return;
   if(!filtradas.length){box.innerHTML='<div class="dre-vazio">Nenhuma despesa encontrada neste filtro.</div>';return}
-  box.innerHTML=filtradas.map(function(d){var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'',itens=(Array.isArray(d.itens)?d.itens:[]).filter(function(it){return String(it.nome||'').trim()}),resumo=itens.slice(0,3).map(function(it){return esc(it.qtd||1)+'× '+esc(it.nome)+' — '+moeda((Number(it.qtd)||0)*(Number(it.valor)||0))}).join(' · ')+(itens.length>3?' · +'+(itens.length-3)+' itens':''),detalhes=formatarDetalhesFinanceirosDespesa(d);return'<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(info.txt)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+(detalhes?' · '+detalhes:'')+(d.obs?' · '+esc(d.obs):'')+'</small>'+(resumo?'<small class="desp-itens-resumo">📦 '+resumo+'</small>':'')+'</div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes"><button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button></div></div>'}).join('');
+  box.innerHTML=filtradas.map(function(d){var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,categoriaHistorica=rotuloCategoriaFinanceira(d),dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'',itens=(Array.isArray(d.itens)?d.itens:[]).filter(function(it){return String(it.nome||'').trim()}),resumo=itens.slice(0,3).map(function(it){return esc(it.qtd||1)+'× '+esc(it.nome)+' — '+moeda((Number(it.qtd)||0)*(Number(it.valor)||0))}).join(' · ')+(itens.length>3?' · +'+(itens.length-3)+' itens':''),detalhes=formatarDetalhesFinanceirosDespesa(d);return'<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+(detalhes?' · '+detalhes:'')+(d.obs?' · '+esc(d.obs):'')+'</small>'+(resumo?'<small class="desp-itens-resumo">📦 '+resumo+'</small>':'')+'</div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes"><button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button></div></div>'}).join('');
 }
 document.getElementById('btnNovaDespesaPagina').addEventListener('click',function(){abrirModalDespesaAvulsa(null)});document.getElementById('btnCancelarDespesaAvulsa').addEventListener('click',function(){document.getElementById('modalDespesaAvulsa').classList.remove('aberto')});document.getElementById('modalDespesaAvulsa').addEventListener('click',function(e){if(e.target===this)this.classList.remove('aberto')});document.getElementById('formDespesaAvulsa').addEventListener('submit',salvarDespesaAvulsa);document.getElementById('despAvulsaValor').addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);e.target.setSelectionRange(e.target.value.length,e.target.value.length)});document.getElementById('filtroMesDespesas').addEventListener('change',function(e){despesasAvulsasMes=e.target.value;renderDespesasAvulsas()});document.getElementById('filtroStatusDespesas').addEventListener('change',renderDespesasAvulsas);document.getElementById('buscaDespesasAvulsas').addEventListener('input',renderDespesasAvulsas);document.getElementById('listaDespesasAvulsas').addEventListener('click',function(e){var b=e.target.closest('button[data-acao]');if(!b)return;var id=b.dataset.id;if(b.dataset.acao==='editar-despesa')abrirModalDespesaAvulsa(id);else if(b.dataset.acao==='excluir-despesa'){var d=(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)});if(!d||!confirm('Excluir esta despesa?\n\n'+(d.descricao||'Despesa')+' — '+moeda(d.valor||0)))return;despesas=despesas.filter(function(x){return String(x.id)!==String(id)});salvar();renderDespesasAvulsas();renderDRE();toast('🗑️ Despesa excluída')}});
 document.getElementById('btnAddItemDespesaAvulsa').addEventListener('click',function(){despesaAvulsaItensTemp.push({nome:'',qtd:1,valor:0,unid:'un'});renderItensDespesaAvulsa()});
@@ -5307,7 +5314,7 @@ function instalarCampoCategoriaFinanceira(selId){
   function fechar(){resultados.hidden=true;input.setAttribute('aria-expanded','false');ativo=-1}
   function criar(nome){var valor=garantirCategoriaFinanceira(nome,'🏷️');if(!valor)return;popularCategoriasDespesaAvulsa();escolher(valor);toast('✅ Categoria adicionada')}
   function desenhar(){
-    var termo=String(input.value||'').trim(),normalizado=normalizarCategoriaFinanceira(termo),todas=opcoes(),filtradas=normalizado?todas.filter(function(o){return normalizarCategoriaFinanceira(o.text).indexOf(normalizado)>=0}):todas.slice(0,8),exata=todas.find(function(o){return normalizarCategoriaFinanceira(o.text)===normalizado});
+    var termo=String(input.value||'').trim(),normalizado=normalizarCategoriaFinanceira(termo),todas=opcoes(),filtradas=normalizado?todas.filter(function(o){return normalizarCategoriaFinanceira(o.text).indexOf(normalizado)>=0}):todas.slice(0,8),valorExato=resolverCategoriaFinanceiraPorTexto(termo,todas),exata=todas.find(function(o){return o.value===valorExato});
     var html=filtradas.slice(0,8).map(function(o,i){return'<button type="button" role="option" aria-selected="'+(i===ativo?'true':'false')+'" class="categoria-financeira-opcao'+(i===ativo?' ativa':'')+'" data-valor="'+esc(o.value)+'">'+esc(o.text)+'</button>'}).join('');
     if(termo&&!exata)html+='<button type="button" role="option" class="categoria-financeira-opcao criar" data-criar="1">➕ Adicionar “'+esc(termo)+'”</button>';
     if(!html)html='<div class="categoria-financeira-sem-resultado">Nenhuma categoria encontrada.</div>';
@@ -5315,8 +5322,8 @@ function instalarCampoCategoriaFinanceira(selId){
     resultados.querySelectorAll('button[data-valor]').forEach(function(btn){btn.addEventListener('click',function(){escolher(btn.dataset.valor)})});
     var novo=resultados.querySelector('[data-criar]');if(novo)novo.addEventListener('click',function(){criar(termo)});
   }
-  input.addEventListener('focus',desenhar);input.addEventListener('input',function(){ativo=-1;desenhar()});
-  input.addEventListener('keydown',function(e){var botoes=Array.prototype.slice.call(resultados.querySelectorAll('button[role="option"]'));if(e.key==='Escape'){fechar();return}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!botoes.length)return;ativo=(ativo+(e.key==='ArrowDown'?1:-1)+botoes.length)%botoes.length;botoes.forEach(function(b,i){b.classList.toggle('ativa',i===ativo);b.setAttribute('aria-selected',i===ativo?'true':'false')});return}if(e.key==='Enter'){e.preventDefault();var escolha=botoes[ativo>=0?ativo:0];if(escolha){if(escolha.dataset.criar)criar(String(input.value||'').trim());else escolher(escolha.dataset.valor)}}});
+  input.addEventListener('focus',desenhar);input.addEventListener('input',function(){ativo=-1;desenhar()});input.addEventListener('change',function(){var valor=resolverCategoriaFinanceiraPorTexto(input.value,opcoes());if(valor)escolher(valor);else atualizar()});
+  input.addEventListener('keydown',function(e){var botoes=Array.prototype.slice.call(resultados.querySelectorAll('button[role="option"]'));if(e.key==='Escape'){fechar();return}if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();if(!botoes.length)return;ativo=(ativo+(e.key==='ArrowDown'?1:-1)+botoes.length)%botoes.length;botoes.forEach(function(b,i){b.classList.toggle('ativa',i===ativo);b.setAttribute('aria-selected',i===ativo?'true':'false')});return}if(e.key==='Enter'){e.preventDefault();var valorExato=resolverCategoriaFinanceiraPorTexto(input.value,opcoes());if(valorExato){escolher(valorExato);return}var escolha=botoes[ativo>=0?ativo:0];if(escolha){if(escolha.dataset.criar)criar(String(input.value||'').trim());else escolher(escolha.dataset.valor)}}});
   sel.addEventListener('change',atualizar);document.addEventListener('pointerdown',function(e){if(!container.contains(e.target))fechar()});atualizar();
 }
 function atualizarCampoCategoriaFinanceira(selId){var sel=document.getElementById(selId);if(!sel)return;var input=document.getElementById('buscaFinanceira'+(selId==='despCategoria'?'Compra':'Despesa'));if(!input)return;var op=Array.prototype.find.call(sel.options,function(o){return o.value===sel.value});input.value=op?op.textContent:''}
@@ -5401,6 +5408,7 @@ function abrirModalDespesa(despesa){
   $('#despData').value=despesa?despesa.data:dataHojeLocal();
   $('#despNF').value=despesa?(despesa.nf||''):'';
   $('#despCategoria').value=despesa?(despesa.categoria||'insumo'):'insumo';
+  atualizarCampoCategoriaFinanceira('despCategoria');
   $('#despSubcategoria').value=despesa?(despesa.subcategoria||''):'';
   $('#despFornecedor').value=despesa?(despesa.fornecedor||''):'';
   $('#despStatus').value=despesa?(despesa.status||'pago'):'pago';
@@ -6161,6 +6169,7 @@ window.salvarVendaManual = function() {
     document.getElementById('despData').value=despesa?despesa.data:dataHojeLocal();
     document.getElementById('despNF').value=despesa?(despesa.nf||''):'';
     document.getElementById('despCategoria').value=despesa?(despesa.categoria||'insumo'):'insumo';
+    atualizarCampoCategoriaFinanceira('despCategoria');
     document.getElementById('despSubcategoria').value=despesa?(despesa.subcategoria||''):'';
     document.getElementById('despFornecedor').value=despesa?(despesa.fornecedor||''):'';
     document.getElementById('despStatus').value=despesa?(despesa.status||'pago'):'pago';

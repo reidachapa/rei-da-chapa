@@ -14,6 +14,7 @@ const interpretarSource = extrairFunction('interpretarNumeroFinanceiroBR', '\nfu
 const formatarEditavelSource = extrairFunction('formatarNumeroFinanceiroEditavel', '\nfunction calcularTotalAbastecimento(');
 const abastecimentoSource = extrairFunction('calcularTotalAbastecimento', '\nfunction calcularTotalDespesaAvulsa(');
 const totalSource = extrairFunction('calcularTotalDespesaAvulsa', '\nfunction formatarDetalhesFinanceirosDespesa(');
+const formatarPrecoLitroSource = extrairFunction('formatarPrecoLitroDetalhe', '\nfunction formatarDetalhesFinanceirosDespesa(');
 const detalhesSource = extrairFunction('formatarDetalhesFinanceirosDespesa', '\nfunction calcularTotalItensDespesaAvulsa(');
 const normalizarCategoriaSource = extrairFunction('normalizarCategoriaFinanceira', '\nfunction ordenarCategoriasFinanceiras(');
 const categoriaAbastecimentoSource = extrairFunction('categoriaEhAbastecimento', '\nfunction calcularTotalItensDespesaAvulsa(');
@@ -32,7 +33,7 @@ const calcularTotal = new Function(
   `${interpretarSource}\n${abastecimentoSource}\n${totalizarItensSource}\n${itemComConteudoSource}\n${totalSource}; return calcularTotalDespesaAvulsa;`
 )();
 const formatarDetalhes = new Function(
-  'esc', 'moeda', `${interpretarSource}\n${detalhesSource}; return formatarDetalhesFinanceirosDespesa;`
+  'esc', 'moeda', `${interpretarSource}\n${formatarPrecoLitroSource}\n${detalhesSource}; return formatarDetalhesFinanceirosDespesa;`
 )((value) => String(value), (value) => `R$ ${value.toFixed(2).replace('.', ',')}`);
 const calcularItens = new Function(`${totalizarItensSource}; return calcularTotalItensDespesaAvulsa;`)();
 const validarItens = new Function(`${validarItensSource}; return validarItensDespesaAvulsa;`)();
@@ -78,6 +79,7 @@ assert.equal(calcularTotal([], '', '', '0,00'), 0, 'aceita valor manual zero');
 const combustivel = { nf: '000.123', abastecimento: { litros: 2.475, precoPorLitro: 6.09 } };
 assert.match(formatarDetalhes(combustivel), /NF 000\.123/, 'mostra o número da nota');
 assert.match(formatarDetalhes(combustivel), /2,475 L × R\$ 6,09\/L/, 'mostra litros e preço por litro');
+assert.match(formatarDetalhes({ abastecimento: { litros: 50, precoPorLitro: 6.099 } }), /50 L × R\$ 6,099\/L/, 'mostra a precisão original do preço por litro na conferência');
 
 function salvarCom({ categoria = 'c_posto', label = '⛽ Posto Avenida', nf = '000.123', litros = '2,475', preco = '6,09', valor = '', existente = null, itens = [] } = {}) {
   const fields = {
@@ -162,7 +164,9 @@ assert.doesNotMatch(modal.match(/id="despAvulsaValor"[^>]+/)[0], /required/, 'o 
 const renderDreSource = extrairFunction('renderDRE', '\ndocument.addEventListener(\'DOMContentLoaded\'');
 assert.match(renderDreSource, /despesasOperacionais\.forEach\(d\s*=>/, 'o DRE inclui despesas de valor zero no agrupamento por categoria');
 assert.match(renderDreSource, /formatarDetalhesFinanceirosDespesa\(d\)/, 'o DRE mostra dados de abastecimento por lançamento');
+assert.match(renderDreSource, /rotuloCategoriaFinanceira\(d\)/, 'o detalhe do DRE mantém o rótulo histórico da categoria');
 assert.match(extrairFunction('renderDespesasAvulsas', '\ndocument.getElementById(\'btnNovaDespesaPagina\')'), /formatarDetalhesFinanceirosDespesa\(d\)/, 'o histórico de despesas mostra dados de abastecimento');
+assert.match(extrairFunction('renderDespesasAvulsas', '\ndocument.getElementById(\'btnNovaDespesaPagina\')'), /rotuloCategoriaFinanceira\(d\)/, 'o histórico de despesas mantém o rótulo histórico da categoria');
 const abrirDespesaSource = extrairFunction('abrirModalDespesaAvulsa', '\nfunction itemDespesaAvulsaTemConteudo(');
 assert.match(abrirDespesaSource, /formatarNumeroFinanceiroEditavel\(d\.abastecimento\.litros\)/, 'a edição reabre litros sem separador de milhar');
 assert.match(abrirDespesaSource, /formatarNumeroFinanceiroEditavel\(d\.abastecimento\.precoPorLitro\)/, 'a edição reabre o preço sem arredondamento');

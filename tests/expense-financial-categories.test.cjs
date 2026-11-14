@@ -12,12 +12,16 @@ function extrairFunction(nome, proximaAssinatura) {
 
 const normalizarSource = extrairFunction('normalizarCategoriaFinanceira', '\nfunction ordenarCategoriasFinanceiras(');
 const ordenarSource = extrairFunction('ordenarCategoriasFinanceiras', '\nfunction garantirCategoriaFinanceira(');
+const resolverCategoriaSource = extrairFunction('resolverCategoriaFinanceiraPorTexto', '\nfunction garantirCategoriaFinanceira(');
 const garantirSource = extrairFunction('garantirCategoriaFinanceira', '\nfunction categoriaLabelSelecionada(');
 
 const normalizar = new Function(`${normalizarSource}; return normalizarCategoriaFinanceira;`)();
 const ordenar = new Function(`${normalizarSource}\n${ordenarSource}; return ordenarCategoriasFinanceiras;`)();
+const resolverCategoria = new Function(`${normalizarSource}\n${resolverCategoriaSource}; return resolverCategoriaFinanceiraPorTexto;`)();
 
 assert.equal(normalizar('  🏷️ 12 - Distribuidóras  '), 'distribuidoras', 'normaliza rótulos sem alterar o texto exibido');
+assert.equal(resolverCategoria('luz', [{ value: 'agua', text: '💧 Água' }, { value: 'luz', text: '💡 02 - Luz' }]), 'luz', 'texto exato resolve para o valor da categoria correspondente');
+assert.equal(resolverCategoria('Lu', [{ value: 'agua', text: '💧 Água' }, { value: 'luz', text: '💡 02 - Luz' }]), '', 'texto parcial não troca a categoria sem confirmação');
 
 const categorias = [
   { k: 'luz', n: '💡 02 - Luz' },
@@ -68,6 +72,10 @@ assert.deepEqual(calls, { sincronizar: 2, popular: 2, salvar: 2 }, 'reativar cat
 
 assert.match(html, /categoria-financeira-busca/, 'os seletores usam a interface escura de busca');
 assert.match(html, /ArrowDown[\s\S]*ArrowUp/, 'a lista de categorias pode ser usada pelo teclado');
+assert.match(extrairFunction('instalarCampoCategoriaFinanceira', '\nfunction atualizarCampoCategoriaFinanceira('), /input\.addEventListener\('change'[\s\S]*resolverCategoriaFinanceiraPorTexto/, 'ao sair do campo, texto exato seleciona categoria e texto parcial volta ao valor canônico');
+for (const match of html.matchAll(/(?:document\.getElementById\('despCategoria'\)|\$\('#despCategoria'\))\.value=/g)) {
+  assert.match(html.slice(match.index, match.index + 260), /atualizarCampoCategoriaFinanceira\('despCategoria'\)/, 'cada abertura de compra sincroniza o campo visível com o select canônico');
+}
 const popularDespesasSource = extrairFunction('popularCategoriasDespesaAvulsa', '\nfunction atualizarCamposAbastecimento(');
 assert.match(popularDespesasSource, /op\.value===preservarCategoria/, 'categorias ocultadas continuam disponíveis ao editar um lançamento antigo');
 assert.match(extrairFunction('abrirModalDespesaAvulsa', '\nfunction itemDespesaAvulsaTemConteudo('), /popularCategoriasDespesaAvulsa\(d&&d\.categoria/, 'a edição reabre a categoria já usada pela despesa');

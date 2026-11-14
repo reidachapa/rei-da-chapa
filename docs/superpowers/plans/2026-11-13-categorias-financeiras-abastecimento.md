@@ -43,7 +43,7 @@
 - [x] **Step 1: Escrever testes que provem ordenação, equivalência sem acento/caixa, preservação das categorias atuais e cadastro de uma categoria nova.**
 - [x] **Step 2: Executar `node tests/expense-financial-categories.test.cjs` e confirmar falha pela ausência do comportamento.**
 - [x] **Step 3: Implementar a interface pesquisável escura para os campos financeiros de compra e despesa avulsa, mantendo criação/edição/exclusão no gerenciador e ordenando sua lista.**
-- [x] **Step 4: Executar o teste específico e corrigir até passar; teclado, foco e estilos revisados no código. A conferência visual no navegador ficou indisponível: a automação do navegador isolado não acessou localhost e o Computer Use encerrou ao não conseguir identificar a URL do Chrome.**
+- [x] **Step 4: Executar o teste específico; confirmar que texto exato, busca parcial, saída do campo e abertura de outra compra deixam o campo visível sincronizado ao valor canônico. Teclado, foco e estilos revisados no código. A conferência visual no navegador ficou indisponível: a automação do navegador isolado não acessou localhost e o Computer Use encerrou ao não conseguir identificar a URL do Chrome.**
 
 ### Task 2: Dados de abastecimento, NF, valor zero e DRE
 
