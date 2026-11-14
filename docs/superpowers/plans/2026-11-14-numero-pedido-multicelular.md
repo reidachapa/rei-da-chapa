@@ -52,6 +52,8 @@
 - [x] Bloquear toque duplo durante a reserva e gravação.
 - [x] Aguardar `salvar()` antes de fechar o modal, anunciar sucesso ou mandar imprimir.
 - [x] Reusar a mesma tentativa após falha sem duplicar o pedido ou a ficha.
+- [x] Persistir o payload completo e deltas de estoque no aparelho enquanto o salvamento estiver pendente; recuperar após recarga e usar o mesmo ID.
+- [x] Mesclar baixas de estoque de vendas simultâneas em aparelhos diferentes.
 - [x] Mesclar contador geral pelo maior número e contador diário pela data comercial e maior número, evitando conflito no salvamento simultâneo.
 
 ### Tarefa 3: Revisão final

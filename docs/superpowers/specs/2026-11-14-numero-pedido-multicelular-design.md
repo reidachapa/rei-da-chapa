@@ -16,6 +16,8 @@ Hoje cada aparelho incrementa os contadores locais e depois salva o estado compa
 - Inicializar os contadores a partir dos dados atuais, incluindo pedidos abertos e histórico.
 - Não modificar nem renumerar pedidos já existentes, inclusive os dois pedidos que apareceram com nº 1 na inspeção inicial.
 - Salvar o pedido antes de encaminhá-lo à fila compartilhada de impressão.
+- Guardar no aparelho os dados completos de um pedido cuja gravação esteja pendente e recuperá-lo após fechar/atualizar, usando o mesmo ID idempotente.
+- Mesclar baixas de estoque de vendas concluídas em paralelo em aparelhos diferentes.
 - Mesclar os campos dos contadores por máximo de sequência para dois salvamentos simultâneos não entrarem em conflito no `estado`.
 - Permitir retirar da fila uma ficha ainda pendente; fichas em impressão ficam protegidas.
 - Manter a fila e o comportamento da estação de impressão existentes.
@@ -31,8 +33,8 @@ Hoje cada aparelho incrementa os contadores locais e depois salva o estado compa
 
 Migrações aditivas criam contadores e reservas no schema não exposto `app_internal`, com RLS e permissões explícitas para a RPC `SECURITY INVOKER`. A migração semeia os contadores com o maior número já lançado, sem atualizar `public.estado` nem alterar pedidos existentes. Uma policy permite excluir somente filas com status `pendente`.
 
-O fechamento do PDV aguarda a RPC, usa o par retornado no pedido e só considera a operação concluída depois que `salvar()` confirmar o estado compartilhado. O ID da tentativa fica salvo no aparelho para permitir retry sem consumir outro número. A fila existente recebe o pedido somente após essa confirmação. Se a reserva falhar, o carrinho continua aberto; se a gravação falhar, a mesma tentativa fica disponível para retry sem criar outro ID. Os itens só baixam do estoque depois que os detalhes do pedido estão montados.
+O fechamento do PDV aguarda a RPC, usa o par retornado no pedido e só considera a operação concluída depois que `salvar()` confirmar o estado compartilhado. O ID e o payload completo da tentativa ficam no aparelho até a confirmação para permitir retomada após recarga sem consumir outro número. A fila existente recebe o pedido somente após essa confirmação. Se a reserva falhar, o carrinho continua aberto; se a gravação falhar, a mesma tentativa fica disponível para retry sem criar outro ID. As baixas de estoque são guardadas como deltas recuperáveis e mescladas quando aparelhos fecham vendas simultaneamente.
 
 ## Limites
 
-O escopo corrige numeração concorrente e evita enfileirar uma ficha antes da confirmação do pedido. Não altera a segurança global, não renumera pedidos antigos e não muda a lógica de estoque entre vendas simultâneas.
+O escopo corrige numeração concorrente e evita enfileirar uma ficha antes da confirmação do pedido. Não altera a segurança global, não renumera pedidos antigos e exige que todos os aparelhos atualizem para a versão nova antes de fechar pedidos ao mesmo tempo.
