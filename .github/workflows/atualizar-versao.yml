@@ -41,14 +41,25 @@ jobs:
               anterior = html
 
           versao_anterior = marcador.search(anterior)
-          if versao_anterior:
-              major, minor, patch = map(int, versao_anterior.groups())
+          versao_atual = marcador.search(html)
+          tupla_anterior = tuple(map(int, versao_anterior.groups())) if versao_anterior else None
+          tupla_atual = tuple(map(int, versao_atual.groups())) if versao_atual else None
+          if tupla_atual and tupla_anterior:
+              if tupla_atual > tupla_anterior:
+                  versao = tupla_atual
+              elif tupla_atual < tupla_anterior:
+                  # A rollback must still use a new cache key, never the parent's old one.
+                  versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
+              else:
+                  versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
+          elif tupla_atual:
+              versao = tupla_atual
+          elif tupla_anterior:
+              versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
           else:
-              versao_atual = marcador.search(html)
-              major, minor, patch = map(int, versao_atual.groups()) if versao_atual else (1, 0, 0)
+              versao = (1, 0, 1)
 
-          patch += 1
-          nova = f'{major}.{minor}.{patch}'
+          nova = '.'.join(map(str, versao))
           html, qtd = marcador.subn(f'<!-- APP_VERSION: {nova} -->', html, count=1)
           if not qtd:
               html = html.replace('<meta name="theme-color"', f'<!-- APP_VERSION: {nova} -->\n<meta name="theme-color"', 1)
