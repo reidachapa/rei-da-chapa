@@ -15,6 +15,9 @@ const validarItensSource = extrairFunction('validarItensDespesaAvulsa', '\nfunct
 const separarDreSource = extrairFunction('separarDespesasDRE', '\nfunction totalizarDespesasOperacionais(');
 const totalizarDreSource = extrairFunction('totalizarDespesasOperacionais', '\nfunction renderDRE(');
 const itemComConteudoSource = extrairFunction('itemDespesaAvulsaTemConteudo', '\nfunction renderItensDespesaAvulsa(');
+const interpretarNumeroSource = extrairFunction('interpretarNumeroFinanceiroBR', '\nfunction calcularTotalAbastecimento(');
+const calcularAbastecimentoSource = extrairFunction('calcularTotalAbastecimento', '\nfunction calcularTotalDespesaAvulsa(');
+const calcularTotalDespesaSource = extrairFunction('calcularTotalDespesaAvulsa', '\nfunction formatarDetalhesFinanceirosDespesa(');
 const compraExcelSource = extrairFunction('despesaEhCompraExcel', '\nfunction excelPlanilhaCompleta(');
 
 const calcularTotalItens = new Function(`${totalizarItensSource}; return calcularTotalItensDespesaAvulsa;`)();
@@ -22,6 +25,9 @@ const validarItens = new Function(`${validarItensSource}; return validarItensDes
 const separarDRE = new Function('alvoEstoque', `${separarDreSource}; return separarDespesasDRE;`)(() => null);
 const totalizarDespesas = new Function(`${totalizarDreSource}; return totalizarDespesasOperacionais;`)();
 const itemTemConteudo = new Function(`${itemComConteudoSource}; return itemDespesaAvulsaTemConteudo;`)();
+const interpretarNumero = new Function(`${interpretarNumeroSource}; return interpretarNumeroFinanceiroBR;`)();
+const calcularAbastecimento = new Function(`${interpretarNumeroSource}\n${calcularAbastecimentoSource}; return calcularTotalAbastecimento;`)();
+const calcularTotalDespesa = new Function(`${interpretarNumeroSource}\n${calcularAbastecimentoSource}\n${totalizarItensSource}\n${itemComConteudoSource}\n${calcularTotalDespesaSource}; return calcularTotalDespesaAvulsa;`)();
 const ehCompraExcel = new Function(`${compraExcelSource}; return despesaEhCompraExcel;`)();
 
 assert.equal(
@@ -74,6 +80,7 @@ function salvarCom({ itens = [], valor = '0,00', existente = null } = {}) {
     'document', 'souGerente', 'lerMoeda', 'uid', 'despesas', 'salvar',
     'renderDespesasAvulsas', 'renderDRE', 'toast', 'despesaAvulsaEditandoId',
     'despesaAvulsaItensTemp', 'calcularTotalItensDespesaAvulsa', 'validarItensDespesaAvulsa', 'itemDespesaAvulsaTemConteudo',
+    'calcularTotalAbastecimento', 'calcularTotalDespesaAvulsa', 'categoriaEhAbastecimento', 'categoriaLabelSelecionada', 'interpretarNumeroFinanceiroBR',
     extrairFunction('salvarDespesaAvulsa', '\nfunction renderDespesasAvulsas') + '\nreturn salvarDespesaAvulsa;'
   )(
     { getElementById(id) { return campos[id]; } },
@@ -89,7 +96,12 @@ function salvarCom({ itens = [], valor = '0,00', existente = null } = {}) {
     itens,
     calcularTotalItens,
     validarItens,
-    itemTemConteudo
+    itemTemConteudo,
+    calcularAbastecimento,
+    calcularTotalDespesa,
+    () => false,
+    () => '',
+    interpretarNumero
   );
   run({ preventDefault() {} });
   assert.equal(atualizacoesDre, despesas.length ? 1 : 0, 'o DRE só atualiza depois de salvar uma despesa');
