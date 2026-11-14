@@ -34,9 +34,9 @@ const localStorage = {
   setItem(key, value) { stored[key] = value; },
 };
 const abrir = new Function(
-  'document', 'localStorage', 'confirm', 'toast', 'esc',
+  'document', 'localStorage', 'confirm', 'toast', 'esc', 'sincronizarCategoriasFinanceiras', 'popularCategoriasDespesaAvulsa', 'atualizarCampoCategoriaFinanceira',
   html.slice(start, end) + '\nreturn abrirGerenciadorCategorias;'
-)(document, localStorage, () => false, () => {}, (value) => String(value));
+)(document, localStorage, () => false, () => {}, (value) => String(value), () => {}, () => {}, () => {});
 
 abrir('despCategoria', 'desp');
 assert.match(modal.innerHTML, /Supermercados/, 'categorias ativas continuam gerenciáveis');
