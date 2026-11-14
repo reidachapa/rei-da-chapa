@@ -1,6 +1,6 @@
 /*
  * Pure purchase pricing projection. calcular({itens, produtos, notaAnterior,
- * descontoNota, descontoNotaTipo}) returns {porIndice, grupos}; each product
+ * descontoNota, descontoNotaTipo, incluirRascunhosSemNome}) returns {porIndice, grupos}; each product
  * group supplies indices, produtoId, projected custoMedio/estoque, modoPreco,
  * lucroPct and preco. Non-product/incomplete lines map to null in porIndice.
  * Inputs are never changed. Discounts are allocated across all valid note
@@ -8,6 +8,8 @@
  * Explicit pricing modes take precedence over legacy fields. The last explicit
  * choice in a group wins; otherwise lucroPct selects percentage pricing, then
  * pv selects manual pricing. A null price means preserve the catalog price.
+ * incluirRascunhosSemNome is opt-in for preview only: unnamed lines stay in
+ * separate groups and cannot reuse a catalog product or a stale stock link.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -31,7 +33,7 @@
     if (it.descontoTipo === 'percent') desconto = total * Math.min(100, desconto) / 100;
     return Math.min(total, desconto);
   }
-  function itemValido(it) { return !!(it && String(it.nome || '').trim() && numero(it.qtd) > 0); }
+  function itemValido(it, incluirSemNome) { return !!(it && (String(it.nome || '').trim() || incluirSemNome) && numero(it.qtd) > 0); }
 
   // Keep the product branch equivalent to reverterCompraEstoque, including its
   // fallback for legacy notes without an aplicado snapshot.
@@ -85,6 +87,7 @@
 
   function calcular(entrada) {
     entrada = entrada || {};
+    var incluirSemNome = entrada.incluirRascunhosSemNome === true;
     var itens = Array.isArray(entrada.itens) ? entrada.itens : [];
     var catalogo = Array.isArray(entrada.produtos) ? entrada.produtos : [];
     var produtosPorId = new Map(), produtosPorNome = new Map();
@@ -95,7 +98,7 @@
       if (nome && !produtosPorNome.has(nome)) produtosPorNome.set(nome, copia);
     });
     reverterNota(entrada.notaAnterior, produtosPorId);
-    var validos = itens.filter(itemValido);
+    var validos = itens.filter(function (it) { return itemValido(it, incluirSemNome); });
     var subtotal = validos.reduce(function (s, it) { return s + bruto(it) - descontoItem(it); }, 0);
     var descontoNota = numero(entrada.descontoNota);
     if (entrada.descontoNotaTipo === 'percent') descontoNota = subtotal * Math.min(100, descontoNota) / 100;
@@ -103,13 +106,14 @@
     var grupos = [], porIndice = itens.map(function () { return null; }), porChave = new Map();
 
     itens.forEach(function (it, indice) {
-      if (!itemValido(it)) return;
-      var vinc = String(it.vinc || ''), vincProduto = vinc.indexOf('prod:') === 0 ? produtosPorId.get(vinc.slice(5)) : null;
+      if (!itemValido(it, incluirSemNome)) return;
+      var nome = nomeNormalizado(it.nome);
+      var vinc = nome ? String(it.vinc || '') : '', vincProduto = vinc.indexOf('prod:') === 0 ? produtosPorId.get(vinc.slice(5)) : null;
       var tipo = vinc.indexOf('ing:') === 0 ? 'ing' : vinc.indexOf('pao:') === 0 ? 'pao' : it.tipoItem === 'ing' || it.tipoItem === 'pao' ? it.tipoItem : 'prod';
       if (vincProduto) tipo = 'prod';
       if (tipo !== 'prod') return;
-      var nome = nomeNormalizado(it.nome), produto = vincProduto || produtosPorNome.get(nome);
-      var chave = produto ? 'id:' + String(produto.id) : 'nome:' + nome;
+      var produto = nome ? vincProduto || produtosPorNome.get(nome) : null;
+      var chave = !nome ? 'rascunho:' + indice : produto ? 'id:' + String(produto.id) : 'nome:' + nome;
       var grupo = porChave.get(chave);
       if (!grupo) {
         grupo = { indices: [], produtoId: produto ? String(produto.id) : null, custoMedio: produto ? numero(produto.custo) : 0, estoque: produto ? numero(produto.estoque) : 0, modoPreco: null, lucroPct: null, preco: null };

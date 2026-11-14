@@ -9551,6 +9551,7 @@ window.salvarVendaManual = function() {
     atualizarListaAutocomplete();
     
     if(!arr.length){
+      window.__atualizarPrecosCompra=null;window.__definirModoPrecoCompra=null;
       cont.innerHTML = '<div style="color:var(--muted);font-size:12px;text-align:center;padding:16px;background:#171719;border:1px dashed var(--iron-5);border-radius:10px">Nenhum item. Toque em <b>➕ Adicionar item</b>.</div>';
       if(typeof window.atualizarTotaisDesp === 'function') window.atualizarTotaisDesp();
       return;
@@ -9562,23 +9563,26 @@ window.salvarVendaManual = function() {
 
     function projetarPrecos(){
       var id=window.editandoDespesaId||editandoDespesaId||(typeof window.__obterIdRascunhoCompra==='function'?window.__obterIdRascunhoCompra():null);
-      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerMoeda((document.getElementById('despDesconto')||{}).value)||0,descontoNotaTipo:window._descontoNotaTipo||'valor'});
+      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerMoeda((document.getElementById('despDesconto')||{}).value)||0,descontoNotaTipo:window._descontoNotaTipo||'valor',incluirRascunhosSemNome:true});
     }
     function atualizarPrecosProjetados(){
+      if(arr!==window.despItensTemp)return;
       var calculo=projetarPrecos();
       calculo.porIndice.forEach(function(info,i){
         if(!info)return;
         var it=arr[i];
         if(info.preco!==null){it.pv=info.preco;it.lucroPct=info.lucroPct;it.modoPreco=info.modoPreco;}
         var venda=cont.querySelector('.ic-pv[data-idx="'+i+'"]'),margem=cont.querySelector('.ic-margem[data-idx="'+i+'"]'),media=cont.querySelector('.ic-media-info[data-idx="'+i+'"]');
-        if(venda&&document.activeElement!==venda)venda.value=info.preco===null?'':info.preco.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+        var precoExibido=info.preco;
+        if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
+        if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         if(margem&&document.activeElement!==margem)margem.value=info.lucroPct===null?'':String(Math.round(info.lucroPct*100)/100).replace('.',',');
         if(media)media.textContent='Custo médio com esta compra: '+moeda(info.custoMedio)+' por unidade';
       });
       return calculo;
     }
     window.__atualizarPrecosCompra=atualizarPrecosProjetados;
-    window.__definirModoPrecoCompra=function(idx,modo,valor){var item=arr[idx];if(!item)return;item.modoPreco=modo;if(modo==='percentual')item.lucroPct=valor;else item.pv=valor;var grupo=projetarPrecos().porIndice[idx];if(!grupo)return;grupo.indices.forEach(function(i){arr[i].modoPreco=modo;if(modo==='percentual')arr[i].lucroPct=valor;else arr[i].pv=valor;});};
+    window.__definirModoPrecoCompra=function(idx,modo,valor){if(arr!==window.despItensTemp)return;var item=arr[idx];if(!item)return;item.modoPreco=modo;if(modo==='percentual')item.lucroPct=valor;else item.pv=valor;var grupo=projetarPrecos().porIndice[idx];if(!grupo)return;grupo.indices.forEach(function(i){arr[i].modoPreco=modo;if(modo==='percentual')arr[i].lucroPct=valor;else arr[i].pv=valor;});};
     var precosProjetados=atualizarPrecosProjetados();
     cont.innerHTML = arr.map(function(it, i){
       var categoriaAntigaOculta=!!(it.categoria&&categoriaPDVOculta(it.categoria));
@@ -9601,7 +9605,9 @@ window.salvarVendaManual = function() {
       var custoExibido = it.custoModo === 'total' ? (Number(it.totalCusto)||0) : (Number(it.valor)||0);
       var vStr = custoExibido > 0 ? custoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
       var custoInfo = infoCustoLinha(it);
-      var pvStr = precosProjetados.porIndice[i]&&precosProjetados.porIndice[i].preco!==null ? Number(it.pv).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}) : '';
+      var infoPreco=precosProjetados.porIndice[i],precoExibido=infoPreco?infoPreco.preco:null;
+      if(infoPreco&&precoExibido===null){var cadastroPreco=produtos.find(function(p){return String(p.id)===infoPreco.produtoId});if(cadastroPreco&&Number.isFinite(Number(cadastroPreco.preco)))precoExibido=Number(cadastroPreco.preco);}
+      var pvStr=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
       var lucroStr = it.lucroPct != null && Number.isFinite(Number(it.lucroPct)) ? String(Math.round(Number(it.lucroPct)*100)/100).replace('.',',') : '';
       var unidadesCompra=['un','kg','g','L','ml','pé','fatia','porção','pacote','caixa'];
       if(it.unid && !unidadesCompra.some(function(u){return u.toLocaleLowerCase('pt-BR')===String(it.unid).toLocaleLowerCase('pt-BR');})) unidadesCompra.unshift(String(it.unid));
@@ -9740,14 +9746,16 @@ window.salvarVendaManual = function() {
     if(typeof window.atualizarTotaisDesp === 'function') window.atualizarTotaisDesp();
   };
 
-  document.addEventListener('input',function(e){
+  function atualizarPrecoAoEditarCompra(e){
     var campo=e.target;if(!campo||!campo.closest)return;
     if(campo.id!=='despDesconto'&&!campo.closest('#despItensLista'))return;
     if(typeof window.__atualizarPrecosCompra!=='function')return;
     if(campo.classList.contains('ic-pv'))window.__definirModoPrecoCompra(Number(campo.dataset.idx),'manual',lerMoeda(campo.value));
     if(campo.classList.contains('ic-margem')){var valor=campo.value.trim();window.__definirModoPrecoCompra(Number(campo.dataset.idx),valor===''?'manual':'percentual',valor===''?Number((window.despItensTemp||[])[campo.dataset.idx].pv)||0:parseFloat(valor.replace(',','.'))||0);}
     window.__atualizarPrecosCompra();
-  });
+  }
+  document.addEventListener('input',atualizarPrecoAoEditarCompra);
+  document.addEventListener('change',function(e){if(e.target&&e.target.matches&&e.target.matches('.ic-margem,.ic-pv'))atualizarPrecoAoEditarCompra(e);});
   document.addEventListener('click',function(e){if(e.target&&e.target.closest&&e.target.closest('#toggle-nota-desc')&&typeof window.__atualizarPrecosCompra==='function')window.__atualizarPrecosCompra();});
 
   // 4. Salva a compra e aplica os itens ao estoque
