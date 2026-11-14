@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.30 -->
+<!-- APP_VERSION: 1.0.31 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1002,7 +1002,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
     </button>
-    <span id="appVersion" title="Versão do aplicativo">v1.0.30</span>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.31</span>
   </div>
 </header>  
 <main>
@@ -1572,6 +1572,7 @@ let clienteSelecionadoId=null,editandoClienteId=null;
 let imagemTemp='',imagemIngTemp='',editandoId=null,role='atendente';
 let tipoSelecionado='retirada',pgtoSelecionado='pix';
 let pagamentosAtuais={pix:0,dinheiro:0,debito:0,credito:0};
+let checkoutFinalizando=false,checkoutPedidoPendente=null,checkoutRequestId=null,checkoutRequestLojaId=null;
 let pedidoAddId=null,itensAddTemp={},pedidoFichaId=null;
 var contadores={geral:0,diario:0,dataRef:''};
 let configLoja={nome:'Rei Da Chapa'};
@@ -2348,6 +2349,12 @@ function atualizarTotalModal(){
   modal.dataset.totalCalculado=String(valores.total);
   atualizarResumoPgto();
 }
+function chaveTentativaCheckout(){return'rei_chapa_pedido_checkout_'+String(lojaAtivaId||'l1')}
+function obterIdTentativaCheckout(){const loja=String(lojaAtivaId||'l1');if(checkoutRequestId&&checkoutRequestLojaId===loja)return checkoutRequestId;checkoutRequestLojaId=loja;let id='';try{id=localStorage.getItem(chaveTentativaCheckout())||''}catch(e){}if(id&&(pedidos||[]).concat(historico||[]).some(function(p){return String(p.id)===id})){try{localStorage.removeItem(chaveTentativaCheckout())}catch(e){}id=''}if(!id){id=uid();try{localStorage.setItem(chaveTentativaCheckout(),id)}catch(e){}}checkoutRequestId=id;return id}
+function limparIdTentativaCheckout(){try{localStorage.removeItem(chaveTentativaCheckout())}catch(e){}checkoutRequestId=null;checkoutRequestLojaId=null}
+async function reservarNumeroPedidoCompartilhado(requestId){if(!window.__authPermitido||!supa)throw new Error('O app ainda não confirmou a conexão com o servidor. O carrinho foi mantido.');const{data,error}=await supa.rpc('reservar_numero_pedido',{p_loja_id:String(lojaAtivaId||''),p_request_id:String(requestId||'')});if(error)throw error;const reserva=Array.isArray(data)?data[0]:data;const numero=Number(reserva&&reserva.numero_geral),numeroDia=Number(reserva&&reserva.numero_dia),dataRef=String(reserva&&reserva.data_comercial||'');if(!Number.isSafeInteger(numero)||numero<1||!Number.isSafeInteger(numeroDia)||numeroDia<1||!/^\d{4}-\d{2}-\d{2}$/.test(dataRef))throw new Error('O servidor não retornou uma numeração válida. Tente confirmar de novo; o mesmo número reservado será reutilizado.');return{numero:numero,numeroDia:numeroDia,dataRef:dataRef}}
+function travarCamposCheckout(travar){$$('#modalFinalizar input,#modalFinalizar select,#modalFinalizar textarea,#modalFinalizar button:not(#btnConfirmarPedido):not(#btnFecharModal)').forEach(function(el){el.disabled=!!travar})}
+function concluirCheckoutSalvo(pendente){const pedido=pendente.pedido,todosBebida=pendente.todosBebida;travarCamposCheckout(false);limparIdTentativaCheckout();checkoutPedidoPendente=null;renderTudo();$('#modalFinalizar').classList.remove('aberto');toast(todosBebida?`🥤 Pedido #${pedido.numeroDia} já está PRONTO (só bebida) — ${pedido.pago?'PAGO':'A RECEBER'}`:`👑 Pedido #${pedido.numeroDia} enviado — ${pedido.pago?'PAGO':'A RECEBER'}`);if(window.Notificacoes)window.Notificacoes.novoPedido(pedido).catch(e=>console.warn('Aviso de novo pedido:',e));document.querySelector('.tab[data-tab="pedidos"]').click();if(window.__autoPrint&&window.__autoPrint())setTimeout(()=>{try{window.imprimirPedido(pedido.id)}catch(e){console.warn(e)}} ,500);if(todosBebida){setTimeout(()=>{const pp=pedidos.find(x=>String(x.id)===String(pedido.id));if(pp&&pp.status==='recebido'){pp.status='pronto';pp.log.push({status:'pronto',data:new Date().toISOString()});salvar();renderTudo();toast('🥤 Pedido #'+numeroPedidoExibicao(pp)+' — só bebida, já está PRONTO!');if(window.Notificacoes)Notificacoes.pedidoPronto(pp);avisarClientePedidoPronto(pp)}},2500)}}
 function abrirModalFinalizar(){if($('#modalFinalizar').classList.contains('aberto'))return;const chaves=Object.keys(carrinho).filter(k=>carrinho[k]>0);if(!chaves.length)return;tipoSelecionado='retirada';pgtoSelecionado='pix';pagamentosAtuais={pix:0,dinheiro:0,debito:0,credito:0};$('#inpDescontoPedido').value='';$$('#pgtoMultiplo .pgto-input').forEach(inp=>{inp.value='';delete inp.dataset.autoPreenchido});$$('#pgtoMultiplo .pgto-linha').forEach(l=>l.classList.remove('ativo'));if($('#campoTroco'))$('#campoTroco').style.display='none';if($('#inpTroco'))$('#inpTroco').value='';$('#modalFinalizar').dataset.totalCalculado='0';$$('#opcoesTipo .opcao').forEach(b=>b.classList.toggle('sel',b.dataset.tipo==='retirada'));$('#campoEndereco').style.display='none';$('#campoTaxa').style.display='none';$('#inpTaxaEntrega').value=TAXA_ENTREGA_PADRAO.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});['#inpCliente','#inpTelefone','#inpRua','#inpObs','#inpInstagram','#inpPlaca','#inpReferencia'].forEach(s=>{const el=$(s);if(el)el.value=''});if($('#inpNumero'))$('#inpNumero').value='';if($('#inpBairro'))$('#inpBairro').value='';clienteSelecionadoId=null;prepararNovoEnderecoCheckout();$('#clienteSelecionadoInfo').style.display='none';$('#autocompleteLista').classList.remove('aberto');atualizarTotalModal();$('#modalFinalizar').classList.add('aberto')}
 function atualizarResumoPgto(){const totalFinal=valoresModalPedido().total;let soma=0;pagamentosAtuais={pix:0,dinheiro:0,debito:0,credito:0};$$('#pgtoMultiplo .pgto-input').forEach(inp=>{const v=lerMoeda(inp.value);pagamentosAtuais[inp.dataset.pgto]=v;soma+=v});const resumo=$('#pgtoResumo');if(!resumo)return;const dif=totalFinal-soma;const campoTroco=$('#campoTroco');const inpTroco=$('#inpTroco');if(Math.abs(dif)<0.01){resumo.style.color='var(--green)';resumo.style.borderColor='rgba(63,185,114,.4)';resumo.style.background='rgba(63,185,114,.08)';resumo.textContent='✅ Total pago: '+moeda(soma);if(campoTroco)campoTroco.style.display='none';if(inpTroco)inpTroco.value=''}else if(dif>0){resumo.style.color='#ffb703';resumo.style.borderColor='rgba(255,183,3,.4)';resumo.style.background='rgba(255,183,3,.08)';resumo.textContent='⚠️ Falta '+moeda(dif)+' de '+moeda(totalFinal);if(campoTroco)campoTroco.style.display='none';if(inpTroco)inpTroco.value=''}else{resumo.style.color='var(--green)';resumo.style.borderColor='rgba(63,185,114,.5)';resumo.style.background='rgba(63,185,114,.12)';resumo.textContent='💚 Troco: '+moeda(-dif)+' — Total '+moeda(totalFinal);if(campoTroco)campoTroco.style.display='flex';if(inpTroco)inpTroco.value=(-dif).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}$$('#pgtoMultiplo .pgto-linha').forEach(l=>{const m=l.dataset.pgto;l.classList.toggle('ativo',(pagamentosAtuais[m]||0)>0)})}
 let checkoutPago=true;
@@ -2357,9 +2364,10 @@ const abrirModalFinalizarBase=abrirModalFinalizar;
 abrirModalFinalizar=function(){checkoutPago=true;$$('#opcoesStatusPagamento .opcao-pagamento').forEach(function(b){b.classList.toggle('ativa',b.dataset.pago==='sim')});abrirModalFinalizarBase();atualizarResumoPgto()};
 $$('#opcoesStatusPagamento .opcao-pagamento').forEach(function(btn){btn.addEventListener('click',function(){var novoPago=btn.dataset.pago==='sim';if(checkoutPago===novoPago)return;checkoutPago=novoPago;if(!novoPago){$$('#pgtoMultiplo .pgto-input').forEach(function(inp){inp.value='';delete inp.dataset.autoPreenchido});pagamentosAtuais={pix:0,dinheiro:0,debito:0,credito:0}}$$('#opcoesStatusPagamento .opcao-pagamento').forEach(function(b){b.classList.toggle('ativa',b===btn)});atualizarResumoPgto()})});
 function abrirModalFinalizarSeguro(event){if(event)event.preventDefault();const modal=$('#modalFinalizar');if(modal&&modal.classList.contains('aberto'))return;try{abrirModalFinalizar()}catch(err){console.error('Falha ao abrir fechamento do pedido:',err);if(typeof toast==='function')toast('❌ Erro ao abrir fechamento: '+(err.message||err));else alert('Erro ao abrir fechamento do pedido: '+(err.message||err))}}
-$('#btnFecharModal').addEventListener('click',()=>$('#modalFinalizar').classList.remove('aberto'));
-$('#modalFinalizar').addEventListener('click',e=>{if(e.target===$('#modalFinalizar'))$('#modalFinalizar').classList.remove('aberto')});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalFinalizar').classList.contains('aberto'))$('#modalFinalizar').classList.remove('aberto')});
+function bloquearFechamentoCheckout(){if(checkoutFinalizando||checkoutPedidoPendente){toast('⚠️ O pedido ainda está sendo salvo. Toque em “Tentar salvar” e mantenha esta tela aberta.');return true}return false}
+$('#btnFecharModal').addEventListener('click',()=>{if(!bloquearFechamentoCheckout())$('#modalFinalizar').classList.remove('aberto')});
+$('#modalFinalizar').addEventListener('click',e=>{if(e.target===$('#modalFinalizar')&&!bloquearFechamentoCheckout())$('#modalFinalizar').classList.remove('aberto')});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#modalFinalizar').classList.contains('aberto')&&!bloquearFechamentoCheckout())$('#modalFinalizar').classList.remove('aberto')});
 $$('#opcoesTipo .opcao').forEach(b=>b.addEventListener('click',()=>{tipoSelecionado=b.dataset.tipo;$$('#opcoesTipo .opcao').forEach(x=>x.classList.toggle('sel',x===b));const ehEntrega=tipoSelecionado==='entrega';$('#campoEndereco').style.display=ehEntrega?'flex':'none';$('#campoTaxa').style.display=ehEntrega?'flex':'none';atualizarTotalModal()}));
 function preencherPagamentoAoSelecionar(inp){
   if(lerMoeda(inp.value)>0)return;
@@ -2371,8 +2379,14 @@ function preencherPagamentoAoSelecionar(inp){
 $$('#pgtoMultiplo .pgto-linha').forEach(linha=>{const inp=linha.querySelector('.pgto-input');linha.addEventListener('click',e=>{if(e.target!==inp)inp.focus()});inp.addEventListener('input',()=>{delete inp.dataset.autoPreenchido;inp.value=formatarMoedaDigitada(inp.value);inp.setSelectionRange(inp.value.length,inp.value.length);atualizarResumoPgto()});inp.addEventListener('focus',()=>{pgtoSelecionado=inp.dataset.pgto;preencherPagamentoAoSelecionar(inp);atualizarResumoPgto()})});
 $('#inpTaxaEntrega').addEventListener('input',()=>{const el=$('#inpTaxaEntrega');el.value=formatarMoedaDigitada(el.value);atualizarTotalModal()});
 $('#inpDescontoPedido').addEventListener('input',()=>{const el=$('#inpDescontoPedido');el.value=formatarMoedaDigitada(el.value);atualizarTotalModal()});
-$('#btnConfirmarPedido').addEventListener('click',()=>{
+$('#btnConfirmarPedido').addEventListener('click',async()=>{
+  if(checkoutFinalizando)return;
+  checkoutFinalizando=true;
+  const botaoCheckout=$('#btnConfirmarPedido');
+  botaoCheckout.disabled=true;
+  botaoCheckout.textContent=checkoutPedidoPendente?'⏳ Tentando salvar…':'⏳ Reservando número…';
   try{
+    if(checkoutPedidoPendente){const repeticao=await salvar();if(!repeticao||!repeticao.ok){toast('⚠️ O pedido continua neste aparelho. Confira a conexão e toque em “Tentar salvar” novamente.');return}concluirCheckoutSalvo(checkoutPedidoPendente);return}
     const chaves=Object.keys(carrinho).filter(k=>carrinho[k]>0);if(!chaves.length){toast('⚠️ Carrinho vazio');return}
     const nomeCliente=$('#inpCliente').value.trim();
     const telefone=$('#inpTelefone').value.trim();
@@ -2414,6 +2428,12 @@ $('#btnConfirmarPedido').addEventListener('click',()=>{
       if(somaPags>fechamento.total+0.009&&!confirm('⚠️ Valor pago ('+moeda(somaPags)+') é maior que o total ('+moeda(fechamento.total)+').\n\nContinuar mesmo assim?'))return;
     }
 
+    const requestId=obterIdTentativaCheckout();
+    const reservaNumero=await reservarNumeroPedidoCompartilhado(requestId);
+    contadores.geral=Math.max(Number(contadores.geral)||0,reservaNumero.numero);
+    if(contadores.dataRef!==reservaNumero.dataRef){contadores.diario=reservaNumero.numeroDia;contadores.dataRef=reservaNumero.dataRef}
+    else contadores.diario=Math.max(Number(contadores.diario)||0,reservaNumero.numeroDia);
+
     let clienteFinal=null;
     if(clienteSelecionadoId){
       clienteFinal=clientes.find(c=>c.id===clienteSelecionadoId);
@@ -2448,8 +2468,7 @@ $('#btnConfirmarPedido').addEventListener('click',()=>{
       const it=getItemCarrinho(chave);if(!it)return;
       const q=carrinho[chave];
       let baixaIngrediente=null;
-      if(it.produto.isIng){const ing=ingredientes.find(x=>String(x.id)===String(it.produto.ingredienteId));if(ing){const saldoAntes=ing.semEstoque&&ing.estoqueEstimado!==null&&ing.estoqueEstimado!==undefined&&ing.estoqueEstimado!==''?Math.max(0,Number(ing.estoqueEstimado)||0):null,pesoAntes=Number(ing.pesoVendidoDesdeContagem)||0;consumirSaldoIngrediente(ing,q);baixaIngrediente={semEstoque:!!ing.semEstoque,consumoMedia:!!ing.consumoMedia,estoque:ing.semEstoque?0:q,estoqueEstimado:saldoAntes===null?0:Math.max(0,saldoAntes-(Number(ing.estoqueEstimado)||0)),pesoVendido:ing.semEstoque&&ing.consumoMedia?Math.max(0,(Number(ing.pesoVendidoDesdeContagem)||0)-pesoAntes):0}}}else if(it.paoId){const pao=getPao(it.paoId);if(pao)pao.estoque-=q}else if(!ehRefeicao(it.produto)||usaLoteRefeicao(it.produto))it.produto.estoque-=q;
-      for(const ingId in it.ings){const ing=getIng(ingId);if(!ing)continue;const qtdIng=it.ings[ingId]||0;consumirSaldoIngrediente(ing,qtdIng*q)}
+      if(it.produto.isIng){const ing=ingredientes.find(x=>String(x.id)===String(it.produto.ingredienteId));if(ing){const saldoAntes=ing.semEstoque&&ing.estoqueEstimado!==null&&ing.estoqueEstimado!==undefined&&ing.estoqueEstimado!==''?Math.max(0,Number(ing.estoqueEstimado)||0):null,pesoAntes=Number(ing.pesoVendidoDesdeContagem)||0,ingDepois=Object.assign({},ing);consumirSaldoIngrediente(ingDepois,q);baixaIngrediente={semEstoque:!!ing.semEstoque,consumoMedia:!!ing.consumoMedia,estoque:ing.semEstoque?0:q,estoqueEstimado:saldoAntes===null?0:Math.max(0,saldoAntes-(Number(ingDepois.estoqueEstimado)||0)),pesoVendido:ing.semEstoque&&ing.consumoMedia?Math.max(0,(Number(ingDepois.pesoVendidoDesdeContagem)||0)-pesoAntes):0}}}
       
       const extra=precoExtraItem(it.produto,it.ings);let custoUnit=custoItem(it.produto,it.ings);
       if(it.paoId){const pao=getPao(it.paoId);if(pao)custoUnit+=pao.custo||0}
@@ -2470,16 +2489,11 @@ $('#btnConfirmarPedido').addEventListener('click',()=>{
     const trocoVal=lerMoeda($('#inpTroco')?.value||'');
     const todosBebida=itensPedido.length>0&&itensPedido.every(it=>{const prod=produtos.find(x=>x.id===it.produtoId);return prod&&prod.isBebida});
     const statusInicial='recebido';
-   if(!contadores.geral) contadores.geral = 0;
-if(!contadores.diario) contadores.diario = 0;
-recalcContadores();
-contadores.geral++;
-contadores.diario++;
-const numero = contadores.geral;
-const numeroDia = contadores.diario;
+    const numero=reservaNumero.numero;
+    const numeroDia=reservaNumero.numeroDia;
     
     const novoPedido={
-      id:uid(),numero,numeroDia,data:new Date().toISOString(),tipo:tipoSelecionado,
+      id:requestId,numero,numeroDia,data:new Date().toISOString(),tipo:tipoSelecionado,
       cliente:clienteFinal?clienteFinal.nome:(nomeCliente||'Balcão'),
       clienteId:clienteFinal?clienteFinal.id:null,
       clienteNumero:clienteFinal?clienteFinal.numero:null,
@@ -2491,35 +2505,24 @@ const numeroDia = contadores.diario;
        pagamento:principal,pagamentos:pags,pago:pedidoPago,saldoDevido:pedidoPago?0:total,status:statusInicial,
       log:[{status:statusInicial,data:new Date().toISOString()}],finalizadoEm:null
     };
+
+    chaves.forEach(function(chave){const it=getItemCarrinho(chave);if(!it)return;const q=carrinho[chave];if(it.produto.isIng){const ing=ingredientes.find(x=>String(x.id)===String(it.produto.ingredienteId));if(ing)consumirSaldoIngrediente(ing,q)}else if(it.paoId){const pao=getPao(it.paoId);if(pao)pao.estoque-=q}else if(!ehRefeicao(it.produto)||usaLoteRefeicao(it.produto))it.produto.estoque-=q;for(const ingId in it.ings){const ing=getIng(ingId);if(ing)consumirSaldoIngrediente(ing,(it.ings[ingId]||0)*q)}});
     
     pedidos.push(novoPedido);
     carrinho={};
-    salvar();
-    renderTudo();
-    $('#modalFinalizar').classList.remove('aberto');
-    toast(todosBebida?`🥤 Pedido #${numeroDia} já está PRONTO (só bebida) — ${pedidoPago?'PAGO':'A RECEBER'}`:`👑 Pedido #${numeroDia} enviado — ${pedidoPago?'PAGO':'A RECEBER'}`);
-    if(window.Notificacoes)window.Notificacoes.novoPedido(novoPedido).catch(e=>console.warn('Aviso de novo pedido:',e));
-    document.querySelector('.tab[data-tab="pedidos"]').click();
-
-    
-    if(window.__autoPrint&&window.__autoPrint())setTimeout(()=>{try{window.imprimirPedido(novoPedido.id)}catch(e){console.warn(e)}},500);
-    if(todosBebida){
-      setTimeout(()=>{
-        const pp=pedidos.find(x=>x.id===novoPedido.id);
-        if(pp&&pp.status==='recebido'){
-          pp.status='pronto';
-          pp.log.push({status:'pronto',data:new Date().toISOString()});
-          salvar();
-          renderTudo();
-          toast('🥤 Pedido #'+numeroPedidoExibicao(pp)+' — só bebida, já está PRONTO!');
-          if(window.Notificacoes)Notificacoes.pedidoPronto(pp);
-          avisarClientePedidoPronto(pp);
-        }
-      },2500);
-    }
+    checkoutPedidoPendente={pedido:novoPedido,todosBebida:todosBebida};
+    travarCamposCheckout(true);
+    const resultadoSalvar=await salvar();
+    if(!resultadoSalvar||!resultadoSalvar.ok){toast('⚠️ O pedido continua neste aparelho. Confira a conexão e toque em “Tentar salvar” novamente; não confirme outra vez em outro celular.');return}
+    concluirCheckoutSalvo(checkoutPedidoPendente);
   }catch(err){
     console.error('Erro ao confirmar pedido:',err);
-    alert('❌ Erro ao confirmar pedido:\n\n'+err.message);
+    if(checkoutPedidoPendente)toast('⚠️ O pedido continua neste aparelho. Confira a conexão e toque em “Tentar salvar” novamente.');
+    else alert('❌ Erro ao confirmar pedido:\n\n'+err.message);
+  }finally{
+    checkoutFinalizando=false;
+    botaoCheckout.disabled=false;
+    botaoCheckout.textContent=checkoutPedidoPendente?'↻ Tentar salvar':'✅ Confirmar';
   }
 });
 function pedidoPertenceCliente(p,c){if(!p||!c)return false;if(p.clienteId!=null&&p.clienteId!=='')return String(p.clienteId)===String(c.id);return String(p.cliente||'').trim().toLocaleLowerCase('pt-BR')===String(c.nome||'').trim().toLocaleLowerCase('pt-BR')}
@@ -4248,7 +4251,13 @@ function mesclarEstadosConcorrentes(base,local,remoto){
   function mesclarObjeto(b,l,r,caminho,opts){
     var out={},keys=new Set(Object.keys(b||{}).concat(Object.keys(l||{}),Object.keys(r||{})));
     var campoQtd=(b&&b.semEstoque||l&&l.semEstoque||r&&r.semEstoque)?'estoqueEstimado':'estoque';
-    keys.forEach(function(k){var vb=b?b[k]:undefined,vl=l?l[k]:undefined,vr=r?r[k]:undefined,p=caminho+'.'+k;
+  keys.forEach(function(k){var vb=b?b[k]:undefined,vl=l?l[k]:undefined,vr=r?r[k]:undefined,p=caminho+'.'+k;
+      if(/\.contadores$/.test(caminho)&&k==='geral'&&(vb!==undefined||vl!==undefined||vr!==undefined)){out[k]=Math.max(num(vb),num(vl),num(vr));return}
+      if(/\.contadores$/.test(caminho)&&k==='dataRef'){var refs=[vb,vl,vr].filter(function(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)}).sort();out[k]=refs.length?refs[refs.length-1]:mesclarValor(vb,vl,vr,p,opts);return}
+      if(/\.contadores$/.test(caminho)&&k==='diario'){
+        var refsDiarios=[b&&b.dataRef,l&&l.dataRef,r&&r.dataRef].filter(function(v){return typeof v==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(v)}).sort(),diaEscolhido=refsDiarios.length?refsDiarios[refsDiarios.length-1]:null;
+        if(diaEscolhido){var valoresDia=[b,l,r].filter(function(v){return v&&v.dataRef===diaEscolhido}).map(function(v){return num(v.diario)});out[k]=valoresDia.length?Math.max.apply(null,valoresDia):0;return}
+      }
       if(k==='comprasDesdeContagem'&&opts.inventoryType==='ing'&&(b&&b.consumoMedia||l&&l.consumoMedia||r&&r.consumoMedia)&&typeof vl==='number'&&typeof vr==='number'){
         var deltaCompraContagem=opts.sharedInventoryDelta&&opts.sharedInventoryDelta.estoqueEstimado||{qtd:0};
         if(deltaCompraContagem.qtd){out[k]=num(vb)+(vl-num(vb))+(vr-num(vb))-num(deltaCompraContagem.qtd);return}
@@ -5117,8 +5126,11 @@ function recalcContadores(){
   }
   
   const agora = new Date();
-  const dataAjustada = new Date(agora.getTime() - ((6 * 60 + 30) * 60 * 1000));
-  const hojeComercial = dataAjustada.getFullYear() + '-' + String(dataAjustada.getMonth() + 1).padStart(2, '0') + '-' + String(dataAjustada.getDate()).padStart(2, '0');
+  let hojeComercial='';
+  try{
+    const partes=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(agora).map(function(p){return[p.type,p.value]}));
+    hojeComercial=new Date(Date.UTC(Number(partes.year),Number(partes.month)-1,Number(partes.day),Number(partes.hour),Number(partes.minute))-((6*60+30)*60*1000)).toISOString().slice(0,10);
+  }catch(e){const dataAjustada=new Date(agora.getTime()-((6*60+30)*60*1000));hojeComercial=dataAjustada.getFullYear()+'-'+String(dataAjustada.getMonth()+1).padStart(2,'0')+'-'+String(dataAjustada.getDate()).padStart(2,'0')}
   
   if(!contadores.dataRef || contadores.dataRef !== hojeComercial) {
     contadores.diario = 0;
