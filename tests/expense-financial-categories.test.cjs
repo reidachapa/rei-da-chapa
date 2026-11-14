@@ -29,14 +29,15 @@ const categorias = [
   { k: 'agua', n: '💧 03 - Água' },
   { k: 'aluguel', n: '🏠 01 - Aluguel' },
   { k: 'manutencao', n: '🔧 08 - Manutenção' },
+  { k: 'numero_no_meio', n: '🥩 Carnes 2 - Outros' },
   { k: 'sem_numero', n: '🚗 Combustível avulso' },
 ];
 assert.deepEqual(
   ordenar(categorias).map((categoria) => categoria.k),
-  ['aluguel', 'agua', 'luz', 'manutencao', 'posto', 'sem_numero'],
+  ['aluguel', 'agua', 'luz', 'manutencao', 'posto', 'numero_no_meio', 'sem_numero'],
   'ordena pelo número inicial em ordem crescente e depois alfabeticamente as categorias sem número'
 );
-assert.deepEqual(categorias.map((categoria) => categoria.k), ['luz', 'posto', 'agua', 'aluguel', 'manutencao', 'sem_numero'], 'não altera o catálogo original');
+assert.deepEqual(categorias.map((categoria) => categoria.k), ['luz', 'posto', 'agua', 'aluguel', 'manutencao', 'numero_no_meio', 'sem_numero'], 'não altera o catálogo original');
 
 const options = [
   { value: 'luz', textContent: '💡 Luz' },

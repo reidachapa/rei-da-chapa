@@ -3596,7 +3596,7 @@ function categoriaEhAbastecimento(categoria,nome){
 }
 
 function categoriaEhAbastecimentoDespesa(categoria,nome,registro){
-  var categoriaAnterior=registro&&String(registro.categoria||'')===String(categoria)&&registro.abastecimento?registro.categoriaNome:'';
+  var categoriaAnterior=registro&&String(registro.categoria||'')===String(categoria)?registro.categoriaNome:'';
   return categoriaEhAbastecimento(categoria,nome)||!!(categoriaAnterior&&categoriaEhAbastecimento(categoria,categoriaAnterior));
 }
 
@@ -4915,7 +4915,7 @@ function getCategoriasCustom(){try{return JSON.parse(localStorage.getItem('rei_c
 function listaCategoriaCompraLocal(k){try{var a=JSON.parse(localStorage.getItem(k)||'[]');return Array.isArray(a)?a:[]}catch(e){return[]}}
 function objetoCategoriaCompraLocal(k){try{var o=JSON.parse(localStorage.getItem(k)||'{}');return o&&typeof o==='object'&&!Array.isArray(o)?o:{}}catch(e){return{}}}
 function normalizarCategoriaFinanceira(nome){var texto=String(nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').trim();texto=texto.replace(/^[^a-z0-9]+/,'').replace(/^\d+\s*[-.)]\s*/,'').replace(/^[^a-z0-9]+/,'');return texto.replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
-function ordenarCategoriasFinanceiras(categorias){return(Array.isArray(categorias)?categorias:[]).slice().sort(function(a,b){var an=typeof a==='string'?a:(a&& (a.n||a.nome||a.textContent||a.text)||''),bn=typeof b==='string'?b:(b&& (b.n||b.nome||b.textContent||b.text)||''),am=String(an).match(/(?:^|\s)(\d+)\s*[-.)]/),bm=String(bn).match(/(?:^|\s)(\d+)\s*[-.)]/);if(am||bm){if(!am)return 1;if(!bm)return-1;var diferenca=Number(am[1])-Number(bm[1]);if(diferenca)return diferenca}return normalizarCategoriaFinanceira(an).localeCompare(normalizarCategoriaFinanceira(bn),'pt-BR',{sensitivity:'base',numeric:true})})}
+function ordenarCategoriasFinanceiras(categorias){return(Array.isArray(categorias)?categorias:[]).slice().sort(function(a,b){var an=typeof a==='string'?a:(a&& (a.n||a.nome||a.textContent||a.text)||''),bn=typeof b==='string'?b:(b&& (b.n||b.nome||b.textContent||b.text)||''),am=String(an).match(/^[^A-Za-z0-9]*\s*(\d+)\s*[-.)]/),bm=String(bn).match(/^[^A-Za-z0-9]*\s*(\d+)\s*[-.)]/);if(am||bm){if(!am)return 1;if(!bm)return-1;var diferenca=Number(am[1])-Number(bm[1]);if(diferenca)return diferenca}return normalizarCategoriaFinanceira(an).localeCompare(normalizarCategoriaFinanceira(bn),'pt-BR',{sensitivity:'base',numeric:true})})}
 function resolverCategoriaFinanceiraPorTexto(termo,opcoes){var alvo=normalizarCategoriaFinanceira(termo);if(!alvo)return'';var op=(Array.isArray(opcoes)?opcoes:[]).find(function(x){return normalizarCategoriaFinanceira(x&&(x.text||x.textContent)||'')===alvo});return op?String(op.value||''):''}
 function garantirCategoriaFinanceira(nome,emoji){
   nome=String(nome||'').trim();if(!nome)return'';

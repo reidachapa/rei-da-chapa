@@ -64,6 +64,8 @@ assert.equal(ehCategoriaAbastecimento('luz', '💡 Luz'), false, 'não mostra ca
 const abastecimentoRenomeado = { categoria: 'outro', categoriaNome: '⛽ Posto Avenida', abastecimento: { litros: 50, precoPorLitro: 6.099 } };
 assert.equal(ehCategoriaAbastecimentoDespesa('outro', '🚗 Transporte', abastecimentoRenomeado), true, 'usa o rótulo histórico para preservar abastecimento após renomear a categoria');
 assert.equal(ehCategoriaAbastecimentoDespesa('manutencao', '🔧 Manutenção', abastecimentoRenomeado), false, 'não carrega dados de abastecimento quando a categoria do registro foi alterada');
+const abastecimentoLegadoRenomeado = { categoria: 'outro', categoriaNome: '⛽ 14 - Abastecimento Gasolina' };
+assert.equal(ehCategoriaAbastecimentoDespesa('outro', '🍴 Outro', abastecimentoLegadoRenomeado), true, 'reconhece categoria histórica de combustível mesmo em registro anterior aos campos estruturados');
 const camposAbastecimento = { hidden: true };
 const seletorCategoriaRenomeada = { value: 'outro', selectedIndex: 0, options: [{ textContent: '🚗 Transporte' }] };
 const atualizarCamposRenomeados = atualizarCamposAbastecimento(
@@ -74,6 +76,15 @@ const atualizarCamposRenomeados = atualizarCamposAbastecimento(
  )();
 assert.equal(atualizarCamposRenomeados, true, 'mostra litros e preço/L ao editar uma categoria renomeada com abastecimento histórico');
 assert.equal(camposAbastecimento.hidden, false, 'o formulário mantém visíveis os detalhes do abastecimento antigo');
+const camposAbastecimentoLegado = { hidden: true };
+const atualizarCamposLegadosRenomeados = atualizarCamposAbastecimento(
+  { getElementById(id) { return id === 'despAvulsaCategoria' ? seletorCategoriaRenomeada : camposAbastecimentoLegado; } },
+  ehCategoriaAbastecimentoDespesa,
+  'despesa-legada-posto',
+  [{ ...abastecimentoLegadoRenomeado, id: 'despesa-legada-posto' }]
+)();
+assert.equal(atualizarCamposLegadosRenomeados, true, 'permite completar placa e dados de um abastecimento legado após renomeação');
+assert.equal(camposAbastecimentoLegado.hidden, false, 'mantém campos de abastecimento acessíveis em um registro legado');
 assert.equal(calcularAbastecimento('', '6,09'), null, 'não calcula enquanto faltar litros');
 assert.equal(calcularAbastecimento('2,475', ''), null, 'não calcula enquanto faltar preço por litro');
 assert.equal(calcularTotal([{ nome: 'Luva', qtd: 1, valor: 10.1 }], '2,475', '6,09', ''), 25.17, 'soma combustível e itens uma vez cada');
