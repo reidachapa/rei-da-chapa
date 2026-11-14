@@ -7120,15 +7120,36 @@ window.salvarVendaManual = function() {
       if(acao==='excluir'){
         if(!confirm('Excluir esta compra?\n\n'+(d.fornecedor||d.descricao)+' — '+moeda(d.valor)))return;
         var estadoAntes={produtos:clonarDadosEstado(produtos),ingredientes:clonarDadosEstado(ingredientes),paes:clonarDadosEstado(paes),despesas:clonarDadosEstado(despesas)};
+        var gravacaoIniciada=false;
+        async function reconciliarExclusao(){
+          var recarga=null;
+          try{recarga=await baixarDoServidor()}catch(erroRecarga){console.warn('Não consegui confirmar a exclusão no servidor:',erroRecarga)}
+          if(recarga&&recarga.ok){
+            renderCompras();renderDRE();
+            var notaNoServidor=buscarNotaPorId(estadoBaseSincronizado,id);
+            toast(notaNoServidor?'⚠️ A nota continua no servidor. Recarreguei os dados; tente excluir novamente.':'✅ A exclusão foi confirmada no servidor.');
+            return true;
+          }
+          estadoLocalSujo=true;
+          toast('⚠️ Não consegui confirmar a exclusão nem recarregar o servidor. Mantive a alteração neste aparelho; deixe o app aberto e tente sincronizar quando a conexão voltar.');
+          return false;
+        }
         btn.disabled=true;btn.textContent='⏳';
         try{
           reverterCompraEstoque(d.itens,d);
           despesas=despesas.filter(function(x){return String(x.id)!==String(id)});
           refrescarEstoqueUI();
+          gravacaoIniciada=true;
           var resultadoExcluir=await salvar();
-          if(!resultadoExcluir||!resultadoExcluir.ok){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;refrescarEstoqueUI();renderCompras();renderDRE();if(resultadoExcluir&&resultadoExcluir.conflict&&typeof baixarDoServidor==='function')await baixarDoServidor();return toast('⚠️ A exclusão não foi confirmada no servidor. A compra e o estoque foram restaurados; tente novamente.')}
+          if(!resultadoExcluir||!resultadoExcluir.ok)return await reconciliarExclusao();
           renderCompras();renderDRE();toast('🗑️ Compra excluída')
-        }catch(err){produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;try{refrescarEstoqueUI();renderCompras();renderDRE()}catch(e2){console.error('Falha ao restaurar compra excluída:',e2)}console.error('Falha ao excluir compra:',err);toast('⚠️ Não consegui excluir a compra. Os dados foram restaurados.')}
+        }catch(err){
+          console.error('Falha ao excluir compra:',err);
+          if(gravacaoIniciada)return await reconciliarExclusao();
+          produtos=estadoAntes.produtos;ingredientes=estadoAntes.ingredientes;paes=estadoAntes.paes;despesas=estadoAntes.despesas;
+          try{refrescarEstoqueUI();renderCompras();renderDRE()}catch(e2){console.error('Falha ao restaurar compra excluída:',e2)}
+          toast('⚠️ Não consegui excluir a compra. Os dados foram restaurados.');
+        }
       }
     });
     novaLista.addEventListener('click',function(e){

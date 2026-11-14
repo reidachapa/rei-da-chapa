@@ -53,7 +53,18 @@
         if (anterior && anterior.isConnected && typeof anterior.focus === 'function') anterior.focus();
         resolve(resposta);
       };
-      const tecla = event => { if (event.key === 'Escape') encerrar(false); };
+      const tecla = event => {
+        if (event.key === 'Escape') { encerrar(false); return; }
+        if (event.key !== 'Tab') return;
+        const botoes = Array.from(overlay.querySelectorAll('button:not([disabled])'));
+        if (!botoes.length) { event.preventDefault(); return; }
+        const primeiro = botoes[0], ultimo = botoes[botoes.length - 1];
+        if (event.shiftKey && (document.activeElement === primeiro || !overlay.contains(document.activeElement))) {
+          event.preventDefault(); ultimo.focus();
+        } else if (!event.shiftKey && (document.activeElement === ultimo || !overlay.contains(document.activeElement))) {
+          event.preventDefault(); primeiro.focus();
+        }
+      };
       overlay.addEventListener('click', event => {
         if (event.target === overlay || event.target.closest('[data-fila-manter]')) encerrar(false);
         else if (event.target.closest('[data-fila-remover]')) encerrar(true);
