@@ -3557,6 +3557,11 @@ function interpretarNumeroFinanceiroBR(valor){
   var numero=Number(texto);return Number.isFinite(numero)?numero:null;
 }
 
+function formatarNumeroFinanceiroEditavel(valor){
+  var numero=Number(valor);if(!Number.isFinite(numero))return'';
+  return new Intl.NumberFormat('pt-BR',{useGrouping:false,maximumFractionDigits:15}).format(numero);
+}
+
 function calcularTotalAbastecimento(litros,precoPorLitro){
   var qtd=interpretarNumeroFinanceiroBR(litros),preco=interpretarNumeroFinanceiroBR(precoPorLitro);
   if(qtd===null||preco===null||qtd<=0||preco<=0)return null;
@@ -3582,6 +3587,11 @@ function formatarDetalhesFinanceirosDespesa(d){
 function categoriaEhAbastecimento(categoria,nome){
   var texto=(normalizarCategoriaFinanceira(categoria)+' '+normalizarCategoriaFinanceira(nome)).trim();
   return/(^|\s)(posto\w*|abastec\w*|combustivel\w*)(\s|$)/.test(texto);
+}
+
+function categoriaEhAbastecimentoDespesa(categoria,nome,registro){
+  var categoriaAnterior=registro&&String(registro.categoria||'')===String(categoria)&&registro.abastecimento?registro.categoriaNome:'';
+  return categoriaEhAbastecimento(categoria,nome)||!!(categoriaAnterior&&categoriaEhAbastecimento(categoria,categoriaAnterior));
 }
 
 function calcularTotalItensDespesaAvulsa(itens){
@@ -4889,9 +4899,10 @@ function garantirCategoriaFinanceira(nome,emoji){
   nome=String(nome||'').trim();if(!nome)return'';
   var sel=document.getElementById('despCategoria'),alvo=normalizarCategoriaFinanceira(nome),opcoes=sel?Array.prototype.slice.call(sel.options):[];
   var existente=opcoes.find(function(op){return op.value&&!String(op.value).startsWith('__')&&normalizarCategoriaFinanceira(op.textContent)===alvo});
-  if(existente)return existente.value;
+  function ativarCategoriaOculta(valor){var ocultas=listaCategoriaCompraLocal('rei_chapa_hide_desp'),indiceOculta=ocultas.indexOf(valor),op=opcoes.find(function(x){return x.value===valor});if(indiceOculta<0&&!(op&&op.disabled))return;if(indiceOculta>=0){ocultas.splice(indiceOculta,1);guardarCategoriaCompraLocal('rei_chapa_hide_desp',ocultas)}sincronizarCategoriasFinanceiras({});popularCategoriasDespesaAvulsa();var persistencia=typeof salvar==='function'?salvar():null;if(persistencia&&typeof persistencia.then==='function')persistencia.then(function(res){if(!res||!res.ok)toast('⚠️ Categoria reativada neste aparelho; a sincronização será tentada novamente.')}).catch(function(){toast('⚠️ Categoria reativada neste aparelho; confira a conexão para sincronizar.')})}
+  if(existente){ativarCategoriaOculta(existente.value);return existente.value}
   var categorias=listaCategoriaCompraLocal('rei_chapa_cats_desp'),doCatalogo=categorias.find(function(c){return c&&normalizarCategoriaFinanceira(c.n)===alvo});
-  if(doCatalogo){var ocultas=listaCategoriaCompraLocal('rei_chapa_hide_desp'),indiceOculta=ocultas.indexOf(doCatalogo.k);if(indiceOculta>=0){ocultas.splice(indiceOculta,1);guardarCategoriaCompraLocal('rei_chapa_hide_desp',ocultas);sincronizarCategoriasFinanceiras({});popularCategoriasDespesaAvulsa();if(typeof salvar==='function')salvar()}return doCatalogo.k}
+  if(doCatalogo){ativarCategoriaOculta(doCatalogo.k);return doCatalogo.k}
   var slug=alvo.replace(/\s+/g,'_')||'categoria',chave='c_'+slug,sufixo=2,ocupada=function(valor){return opcoes.some(function(op){return op.value===valor})||categorias.some(function(c){return c.k===valor})};
   while(ocupada(chave))chave='c_'+slug+'_'+sufixo++;
   categorias.push({k:chave,n:nome,e:String(emoji||'🏷️').trim()||'🏷️'});
@@ -4970,7 +4981,7 @@ function renderCompras(){
 }
 var despesaAvulsaEditandoId=null,despesasAvulsasMes='',despesaAvulsaItensTemp=[],despesaAvulsaValorManual='';
 function popularCategoriasDespesaAvulsa(preservarCategoria){var sel=document.getElementById('despAvulsaCategoria'),orig=document.getElementById('despCategoria');if(!sel||!orig)return;var atual=sel.value||preservarCategoria;sel.innerHTML='';var cats=ordenarCategoriasFinanceiras(Array.prototype.filter.call(orig.options,function(op){return op.value&&op.value!=='insumo'&&String(op.value).indexOf('__')!==0&&(!op.disabled||op.value===preservarCategoria||op.value===atual)}));cats.forEach(function(op){var n=document.createElement('option');n.value=op.value;n.textContent=op.textContent;n.disabled=!!op.disabled;sel.appendChild(n)});if(!sel.options.length){[['aluguel','🏠 Aluguel'],['luz','💡 Luz'],['agua','💧 Água'],['gas','🔥 Gás'],['internet','📶 Internet/Telefone'],['funcionario','👤 Salário/Diária'],['motoboy','🛵 Motoboy'],['marketing','📣 Marketing'],['manutencao','🔧 Manutenção'],['outro','🍴 Outro']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.appendChild(o)})}if(Array.prototype.some.call(sel.options,function(o){return o.value===preservarCategoria}))sel.value=preservarCategoria;else if(Array.prototype.some.call(sel.options,function(o){return o.value===atual}))sel.value=atual;instalarCampoCategoriaFinanceira('despAvulsaCategoria');atualizarCampoCategoriaFinanceira('despAvulsaCategoria')}
-function atualizarCamposAbastecimento(){var categoria=document.getElementById('despAvulsaCategoria'),box=document.getElementById('despAvulsaAbastecimentoCampos');if(!categoria||!box)return;var op=categoria.options[categoria.selectedIndex],mostrar=categoriaEhAbastecimento(categoria.value,op&&op.textContent);box.hidden=!mostrar;return mostrar}
+function atualizarCamposAbastecimento(){var categoria=document.getElementById('despAvulsaCategoria'),box=document.getElementById('despAvulsaAbastecimentoCampos');if(!categoria||!box)return;var op=categoria.options[categoria.selectedIndex],registro=despesaAvulsaEditandoId&&(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}),mostrar=categoriaEhAbastecimentoDespesa(categoria.value,op&&op.textContent,registro);box.hidden=!mostrar;return mostrar}
 function abrirModalDespesaAvulsa(id){
   if(!souGerente())return toast('🔒 Só o gerente pode lançar despesas');
   var d=id?(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)}):null;
@@ -4983,8 +4994,8 @@ function abrirModalDespesaAvulsa(id){
   document.getElementById('despAvulsaCategoria').value=d?d.categoria:(document.getElementById('despAvulsaCategoria').options[0]||{}).value||'outro';
   document.getElementById('despAvulsaDescricao').value=d?(d.subcategoria||d.descricao||''):'';
   document.getElementById('despAvulsaNF').value=d?(d.nf||''):'';
-  document.getElementById('despAvulsaLitros').value=d&&d.abastecimento&&d.abastecimento.litros!=null?Number(d.abastecimento.litros).toLocaleString('pt-BR',{maximumFractionDigits:3}):'';
-  document.getElementById('despAvulsaPrecoLitro').value=d&&d.abastecimento&&d.abastecimento.precoPorLitro!=null?Number(d.abastecimento.precoPorLitro).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
+  document.getElementById('despAvulsaLitros').value=d&&d.abastecimento&&d.abastecimento.litros!=null?formatarNumeroFinanceiroEditavel(d.abastecimento.litros):'';
+  document.getElementById('despAvulsaPrecoLitro').value=d&&d.abastecimento&&d.abastecimento.precoPorLitro!=null?formatarNumeroFinanceiroEditavel(d.abastecimento.precoPorLitro):'';
   despesaAvulsaValorManual=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   document.getElementById('despAvulsaValor').value=despesaAvulsaValorManual;
   document.getElementById('despAvulsaStatus').value=d?(d.status||'pago'):'pago';
@@ -5017,7 +5028,7 @@ function renderItensDespesaAvulsa(){
 function atualizarResumoItensDespesaAvulsa(){
   var valorEl=document.getElementById('despAvulsaValor'),ajuda=document.getElementById('despAvulsaValorAjuda');
   despesaAvulsaItensTemp.forEach(function(it,idx){var sub=document.getElementById('despAvulsaItemSubtotal'+idx);if(sub)sub.textContent='Subtotal: '+moeda(Math.max(0,(Number(it.qtd)||0)*(Number(it.valor)||0)))});
-  var temRascunho=despesaAvulsaItensTemp.some(itemDespesaAvulsaTemConteudo),litros=document.getElementById('despAvulsaLitros'),preco=document.getElementById('despAvulsaPrecoLitro'),categoria=document.getElementById('despAvulsaCategoria'),op=categoria&&categoria.options[categoria.selectedIndex],temCombustivel=!!(categoria&&categoriaEhAbastecimento(categoria.value,op&&op.textContent)),totalCombustivel=temCombustivel&&litros&&preco?calcularTotalAbastecimento(litros.value,preco.value):null,temCalculoCombustivel=totalCombustivel!==null;
+  var temRascunho=despesaAvulsaItensTemp.some(itemDespesaAvulsaTemConteudo),litros=document.getElementById('despAvulsaLitros'),preco=document.getElementById('despAvulsaPrecoLitro'),categoria=document.getElementById('despAvulsaCategoria'),op=categoria&&categoria.options[categoria.selectedIndex],registro=despesaAvulsaEditandoId&&(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}),temCombustivel=!!(categoria&&categoriaEhAbastecimentoDespesa(categoria.value,op&&op.textContent,registro)),totalCombustivel=temCombustivel&&litros&&preco?calcularTotalAbastecimento(litros.value,preco.value):null,temCalculoCombustivel=totalCombustivel!==null;
   if(!valorEl)return;
   if(temRascunho||temCalculoCombustivel){if(!valorEl.readOnly)despesaAvulsaValorManual=valorEl.value;valorEl.value=calcularTotalDespesaAvulsa(despesaAvulsaItensTemp,temCombustivel&&litros?litros.value:'',temCombustivel&&preco?preco.value:'',despesaAvulsaValorManual).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});valorEl.readOnly=true;if(ajuda)ajuda.textContent=temRascunho&&temCalculoCombustivel?'Total calculado pelos itens e abastecimento.':(temRascunho?'Total calculado pela soma dos itens.':'Total calculado por litros × preço por litro.')}
   else{if(valorEl.readOnly)valorEl.value=despesaAvulsaValorManual;valorEl.readOnly=false;if(ajuda)ajuda.textContent=temCombustivel?'Preencha litros e preço por litro para calcular, ou digite o total manualmente.':'Valor opcional. Se não souber, deixe em branco ou informe 0,00.'}
@@ -5028,9 +5039,8 @@ function salvarDespesaAvulsa(e){
   var data=document.getElementById('despAvulsaData').value,cat=document.getElementById('despAvulsaCategoria').value,desc=document.getElementById('despAvulsaDescricao').value.trim();
   if(!validarItensDespesaAvulsa(despesaAvulsaItensTemp))return toast('⚠️ Complete ou remova os itens adicionados');
   var itens=(despesaAvulsaItensTemp||[]).filter(itemDespesaAvulsaTemConteudo).map(function(it){return{nome:String(it.nome||'').trim(),qtd:Number(it.qtd),valor:Number(it.valor),unid:it.unid||'un',vinc:'',semEstoque:true}});
-  var categoriaNome=categoriaLabelSelecionada(cat),ehCombustivel=categoriaEhAbastecimento(cat,categoriaNome),nf=(document.getElementById('despAvulsaNF')||{}).value||'',litrosTexto=ehCombustivel?(document.getElementById('despAvulsaLitros')||{}).value||'':'',precoTexto=ehCombustivel?(document.getElementById('despAvulsaPrecoLitro')||{}).value||'':'',litros=interpretarNumeroFinanceiroBR(litrosTexto),precoPorLitro=interpretarNumeroFinanceiroBR(precoTexto),valor=calcularTotalDespesaAvulsa(itens,litrosTexto,precoTexto,(document.getElementById('despAvulsaValor')||{}).value);
+  var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null,categoriaNome=categoriaLabelSelecionada(cat),ehCombustivel=categoriaEhAbastecimentoDespesa(cat,categoriaNome,ant),nf=(document.getElementById('despAvulsaNF')||{}).value||'',litrosTexto=ehCombustivel?(document.getElementById('despAvulsaLitros')||{}).value||'':'',precoTexto=ehCombustivel?(document.getElementById('despAvulsaPrecoLitro')||{}).value||'':'',litros=interpretarNumeroFinanceiroBR(litrosTexto),precoPorLitro=interpretarNumeroFinanceiroBR(precoTexto),valor=calcularTotalDespesaAvulsa(itens,litrosTexto,precoTexto,(document.getElementById('despAvulsaValor')||{}).value);
   if(!data||!cat||!desc||!Number.isFinite(valor)||valor<0)return toast('⚠️ Preencha data, categoria e descrição. O valor pode ficar em branco ou ser zero.');
-  var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null;
   var abastecimento=ehCombustivel&&(litros!==null||precoPorLitro!==null)?{litros:litros,precoPorLitro:precoPorLitro}:null;
   var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,categoriaNome:ant&&ant.categoria===cat&&ant.categoriaNome||categoriaNome,fornecedor:'',nf:String(nf).trim(),abastecimento:abastecimento,status:document.getElementById('despAvulsaStatus').value||'pago',obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:itens,valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};
   if(ant)Object.assign(ant,d);else despesas.push(d);

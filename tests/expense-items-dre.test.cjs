@@ -80,7 +80,7 @@ function salvarCom({ itens = [], valor = '0,00', existente = null } = {}) {
     'document', 'souGerente', 'lerMoeda', 'uid', 'despesas', 'salvar',
     'renderDespesasAvulsas', 'renderDRE', 'toast', 'despesaAvulsaEditandoId',
     'despesaAvulsaItensTemp', 'calcularTotalItensDespesaAvulsa', 'validarItensDespesaAvulsa', 'itemDespesaAvulsaTemConteudo',
-    'calcularTotalAbastecimento', 'calcularTotalDespesaAvulsa', 'categoriaEhAbastecimento', 'categoriaLabelSelecionada', 'interpretarNumeroFinanceiroBR',
+    'calcularTotalAbastecimento', 'calcularTotalDespesaAvulsa', 'categoriaEhAbastecimento', 'categoriaEhAbastecimentoDespesa', 'categoriaLabelSelecionada', 'interpretarNumeroFinanceiroBR',
     extrairFunction('salvarDespesaAvulsa', '\nfunction renderDespesasAvulsas') + '\nreturn salvarDespesaAvulsa;'
   )(
     { getElementById(id) { return campos[id]; } },
@@ -99,6 +99,7 @@ function salvarCom({ itens = [], valor = '0,00', existente = null } = {}) {
     itemTemConteudo,
     calcularAbastecimento,
     calcularTotalDespesa,
+    () => false,
     () => false,
     () => '',
     interpretarNumero

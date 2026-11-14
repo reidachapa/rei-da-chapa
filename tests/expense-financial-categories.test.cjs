@@ -59,6 +59,13 @@ assert.equal(garantir('Combustível', '⛽'), 'c_combustivel', 'gera chave está
 assert.deepEqual(JSON.parse(storage.get('rei_chapa_cats_desp')), [{ k: 'c_combustivel', n: 'Combustível', e: '⛽' }], 'salva categoria nova no catálogo financeiro compartilhado');
 assert.deepEqual(calls, { sincronizar: 1, popular: 1, salvar: 1 }, 'atualiza os dois formulários e persiste o estado');
 
+options.push({ value: 'c_transporte', textContent: '🚗 Transporte', disabled: true });
+storage.set('rei_chapa_cats_desp', JSON.stringify([{ k: 'c_transporte', n: 'Transporte', e: '🚗' }]));
+storage.set('rei_chapa_hide_desp', JSON.stringify(['c_transporte']));
+assert.equal(garantir('Transporte', '🚗'), 'c_transporte', 'reutiliza uma categoria antiga que estava oculta');
+assert.deepEqual(JSON.parse(storage.get('rei_chapa_hide_desp')), [], 'reativar uma categoria remove o marcador de ocultação');
+assert.deepEqual(calls, { sincronizar: 2, popular: 2, salvar: 2 }, 'reativar categoria oculta atualiza e persiste os seletores');
+
 assert.match(html, /categoria-financeira-busca/, 'os seletores usam a interface escura de busca');
 assert.match(html, /ArrowDown[\s\S]*ArrowUp/, 'a lista de categorias pode ser usada pelo teclado');
 const popularDespesasSource = extrairFunction('popularCategoriasDespesaAvulsa', '\nfunction atualizarCamposAbastecimento(');
