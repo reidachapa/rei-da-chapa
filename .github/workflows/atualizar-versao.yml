@@ -32,7 +32,10 @@ jobs:
 
           arquivo = Path('index.html')
           html = arquivo.read_text(encoding='utf-8')
+          arquivo_sw = Path('sw.js')
+          sw = arquivo_sw.read_text(encoding='utf-8')
           marcador = re.compile(r'<!-- APP_VERSION: (\d+)\.(\d+)\.(\d+) -->')
+          marcador_cache = re.compile(r"const CACHE = ['\"]rei-da-chapa(?:-v(\d+)\.(\d+)\.(\d+))?['\"];")
           try:
               anterior = subprocess.check_output(
                   ['git', 'show', 'HEAD^:index.html'], text=True, stderr=subprocess.DEVNULL
@@ -44,20 +47,15 @@ jobs:
           versao_atual = marcador.search(html)
           tupla_anterior = tuple(map(int, versao_anterior.groups())) if versao_anterior else None
           tupla_atual = tuple(map(int, versao_atual.groups())) if versao_atual else None
-          if tupla_atual and tupla_anterior:
-              if tupla_atual > tupla_anterior:
-                  versao = tupla_atual
-              elif tupla_atual < tupla_anterior:
-                  # A rollback must still use a new cache key, never the parent's old one.
-                  versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
-              else:
-                  versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
-          elif tupla_atual:
+          cache_atual = marcador_cache.search(sw)
+          tupla_cache = tuple(map(int, cache_atual.groups())) if cache_atual and cache_atual.group(1) else None
+          referencias = [v for v in (tupla_anterior, tupla_cache) if v]
+          if tupla_atual and (not referencias or tupla_atual > max(referencias)):
               versao = tupla_atual
-          elif tupla_anterior:
-              versao = (tupla_anterior[0], tupla_anterior[1], tupla_anterior[2] + 1)
           else:
-              versao = (1, 0, 1)
+              candidatas = referencias + ([tupla_atual] if tupla_atual else [])
+              base = max(candidatas) if candidatas else (1, 0, 0)
+              versao = (base[0], base[1], base[2] + 1)
 
           nova = '.'.join(map(str, versao))
           html, qtd = marcador.subn(f'<!-- APP_VERSION: {nova} -->', html, count=1)
@@ -69,8 +67,6 @@ jobs:
           )
           if not qtd:
               html = html.replace('</header>', f'<span id="appVersion">v{nova}</span>\n</header>', 1)
-          arquivo_sw = Path('sw.js')
-          sw = arquivo_sw.read_text(encoding='utf-8')
           sw, qtd = re.subn(
               r"const CACHE = ['\"]rei-da-chapa(?:-v\d+\.\d+\.\d+)?['\"];",
               f"const CACHE = 'rei-da-chapa-v{nova}';",
