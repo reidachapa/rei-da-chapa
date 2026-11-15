@@ -79,7 +79,7 @@
     const campos = [
       'id', 'numero', 'numeroDia', 'data', 'finalizadoEm', 'tipo', 'cliente', 'clienteNumero',
       'telefone', 'endereco', 'enderecoNumero', 'enderecoBairro', 'motoboyNome', 'obs',
-      'subtotal', 'subtotalBruto', 'descontoPedido', 'desconto', 'taxaEntrega', 'total',
+      'subtotal', 'subtotalBruto', 'descontoPedido', 'desconto', 'jurosPedido', 'taxaEntrega', 'total',
       'pagamento', 'pagamentos', 'pago', 'troco'
     ];
     const ticket = {};

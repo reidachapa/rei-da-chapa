@@ -171,10 +171,11 @@ test('compra com rendimento preserva a unidade de porções cadastrada apesar do
   assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 20);
 });
 
-test('autocomplete reúne marcas do catálogo e das notas sem duplicar e ordena em português', () => {
-  const marcas = new Function('ingredientes', 'despesas', source('normalizarNomeCadastro', 'unidadeCanonicaMedida') + '\n' + source('listaMarcasIngredientes', 'atualizarMarcasIngredientes') + '\nreturn listaMarcasIngredientes();')(
+test('autocomplete reúne marcas de ingredientes, produtos e notas sem duplicar e ordena em português', () => {
+  const marcas = new Function('ingredientes', 'produtos', 'despesas', source('normalizarNomeCadastro', 'unidadeCanonicaMedida') + '\n' + source('listaMarcasIngredientes', 'atualizarMarcasIngredientes') + '\nreturn listaMarcasIngredientes();')(
     [{ marca: 'Zulu' }, { marca: 'água' }, { marca: 'Quero' }],
-    [{ itens: [{ tipoItem: 'ing', marca: 'quero' }, { tipoItem: 'ing', marca: 'Bonduelle' }, { tipoItem: 'prod', marca: 'Ignorar' }] }]
+    [{ marca: 'Coca-Cola' }, { marca: 'QUERO' }],
+    [{ itens: [{ tipoItem: 'ing', marca: 'quero' }, { tipoItem: 'ing', marca: 'Bonduelle' }, { tipoItem: 'prod', marca: 'Del Valle' }] }]
   );
-  assert.deepEqual(marcas, ['água', 'Bonduelle', 'Quero', 'Zulu']);
+  assert.deepEqual(marcas, ['água', 'Bonduelle', 'Coca-Cola', 'Del Valle', 'Quero', 'Zulu']);
 });
