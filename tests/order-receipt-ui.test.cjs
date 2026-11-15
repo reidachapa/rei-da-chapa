@@ -33,14 +33,12 @@ function original(extra = {}) {
 function harness(pedido = original(), save = async () => ({ ok: true })) {
   const records = [structuredClone(pedido), structuredClone(pedido)];
   const nodes = {};
-  for (const id of ['modalReceberPagamento', 'inpAjusteReceber', 'labelAjusteReceber', 'receberSaldoAnterior', 'receberAjusteLabel', 'receberValorAjuste', 'receberTotal', 'receberErro', 'receberResumo', 'btnFecharReceber']) nodes['#' + id] = node();
-  const types = [node({ ajuste: 'juros' }), node({ ajuste: 'desconto' })];
+  for (const id of ['modalReceberPagamento', 'inpDescontoReceber', 'inpJurosReceber', 'receberSaldoAnterior', 'receberValorDesconto', 'receberValorJuros', 'receberTotal', 'receberErro', 'receberResumo', 'btnFecharReceber']) nodes['#' + id] = node();
   const methods = ['pix', 'dinheiro', 'debito', 'credito'].map(metodo => node({ metodoRecebimento: metodo }));
   const $ = selector => { assert(nodes[selector], 'known test UI node: ' + selector); return nodes[selector]; };
   const $$ = selector => {
-    if (selector === '#opcoesAjusteReceber [data-ajuste]') return types;
     if (selector === '#modalReceberPagamento [data-metodo-recebimento]') return methods;
-    if (selector === '#modalReceberPagamento button, #modalReceberPagamento input') return [...types, ...methods, nodes['#btnFecharReceber'], nodes['#inpAjusteReceber']];
+    if (selector === '#modalReceberPagamento button, #modalReceberPagamento input') return [...methods, nodes['#btnFecharReceber'], nodes['#inpDescontoReceber'], nodes['#inpJurosReceber']];
     throw new Error('Unexpected selector: ' + selector);
   };
   const messages = [];
@@ -61,9 +59,9 @@ function harness(pedido = original(), save = async () => ({ ok: true })) {
     ${currencyCode}
     ${due}
     ${code}
-    return {abrirModalReceberPedido,fecharModalReceber,definirTipoAjusteReceber,atualizarCalculoRecebimento,confirmarRecebimentoPedido};
+    return {abrirModalReceberPedido,fecharModalReceber,atualizarCalculoRecebimento,confirmarRecebimentoPedido};
   `)(deps);
-  function adjust(tipo, valor) { app.definirTipoAjusteReceber(tipo); nodes['#inpAjusteReceber'].value = valor; app.atualizarCalculoRecebimento(); }
+  function adjust(tipo, valor) { nodes[tipo === 'juros' ? '#inpJurosReceber' : '#inpDescontoReceber'].value = valor; app.atualizarCalculoRecebimento(); }
   return { app, records, nodes, methods, stats, messages, adjust };
 }
 
@@ -113,6 +111,53 @@ test('recebimento confirmado atualiza todas as cópias do pedido com valores e a
   }
 });
 
+test('receber com desconto e juros juntos mantém ambos separados na prévia e na quitação', async () => {
+  const h = harness();
+  const antes = structuredClone(h.records);
+  h.app.abrirModalReceberPedido('fiado');
+  h.adjust('desconto', '10,00');
+  h.adjust('juros', '5,00');
+  assert.equal(h.nodes['#receberTotal'].textContent, 'R$ 100,00');
+  assert.match(h.nodes['#receberValorDesconto'].textContent, /− R\$ 10,00/);
+  assert.match(h.nodes['#receberValorJuros'].textContent, /\+ R\$ 5,00/);
+  assert.equal(h.nodes['#inpDescontoReceber'].value, '10,00');
+  assert.deepEqual(h.records, antes);
+  await h.app.confirmarRecebimentoPedido('pix');
+  for (const p of h.records) {
+    assert.equal(p.total, 100);
+    assert.equal(p.descontoPedido, 10);
+    assert.equal(p.jurosPedido, 5);
+    assert.equal(p.subtotal, 95);
+    assert.equal(p.lucro, 55);
+    assert.deepEqual(p.pagamentos, { pix: 100 });
+    assert.deepEqual(p.ajustesRecebimento.map(a => [a.tipo, a.valor]), [['desconto', 10], ['juros', 5]]);
+  }
+});
+
+test('desconto e juros no saldo parcial preservam o que já foi recebido', async () => {
+  const h = harness(original({ pagamento: 'pix', pagamentos: { pix: 65 }, saldoDevido: 40 }));
+  h.app.abrirModalReceberPedido('fiado');
+  h.adjust('desconto', '5,00');h.adjust('juros', '2,00');
+  assert.equal(h.nodes['#receberTotal'].textContent, 'R$ 37,00');
+  await h.app.confirmarRecebimentoPedido('dinheiro');
+  assert.equal(h.records[0].total, 102);
+  assert.equal(h.records[0].descontoPedido, 5);
+  assert.equal(h.records[0].jurosPedido, 2);
+  assert.deepEqual(h.records[0].pagamentos, { pix: 65, dinheiro: 37 });
+});
+
+test('editar um ajuste preserva o outro e cancelar mantém a dívida original', () => {
+  const h = harness();
+  const antes = structuredClone(h.records);
+  h.app.abrirModalReceberPedido('fiado');
+  h.adjust('juros', '5,00');h.adjust('desconto', '10,00');h.adjust('juros', '2,00');
+  assert.equal(h.nodes['#inpDescontoReceber'].value, '10,00');
+  assert.equal(h.nodes['#receberTotal'].textContent, 'R$ 97,00');
+  h.app.fecharModalReceber();
+  assert.deepEqual(h.records, antes);
+  assert.equal(h.stats.saves, 0);
+});
+
 test('cliques repetidos durante gravação confirmam somente um recebimento', async () => {
   let confirmar;
   const h = harness(original(), () => new Promise(resolve => { confirmar = resolve; }));
@@ -136,13 +181,15 @@ for (const mode of ['retorno sem confirmação', 'exceção de rede']) {
     const antes = structuredClone(h.records);
     assert(!Object.hasOwn(h.records[0], 'jurosPedido'));
     h.app.abrirModalReceberPedido('fiado');
-    h.adjust('juros', '10,00');
+    h.adjust('juros', '10,00');h.adjust('desconto', '3,00');
     await h.app.confirmarRecebimentoPedido('pix');
     assert.deepEqual(h.records, antes);
     assert(h.nodes['#modalReceberPagamento'].classList.contains('aberto'));
     assert.equal(h.stats.saves, 1);
     assert(h.messages.some(m => /Não consegui confirmar/.test(m)));
     assert(!h.methods.some(b => b.disabled));
+    assert.equal(h.nodes['#inpJurosReceber'].value, '10,00');
+    assert.equal(h.nodes['#inpDescontoReceber'].value, '3,00');
   });
 }
 
@@ -156,7 +203,8 @@ test('mudança de saldo desde a abertura exige conferir valores antes de salvar'
   assert.equal(h.stats.saves, 0);
   assert.deepEqual(h.records, atualizado);
   assert(h.messages.some(m => /mudou em outro aparelho/.test(m)));
-  assert.equal(h.nodes['#inpAjusteReceber'].value, '');
+  assert.equal(h.nodes['#inpJurosReceber'].value, '');
+  assert.equal(h.nodes['#inpDescontoReceber'].value, '');
   assert.equal(h.nodes['#receberTotal'].textContent, 'R$ 125,00');
 });
 

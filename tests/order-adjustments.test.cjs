@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { calcularFechamento, prepararRecebimento, resumo } = require('../order-adjustments.js');
+const { calcularFechamento, prepararRecebimento, simularRecebimento, resumo } = require('../order-adjustments.js');
 
 const data = '2026-11-15T12:00:00.000Z';
 function pedido(extra = {}) {
@@ -164,4 +164,76 @@ test('resumo legado reconstrói itens brutos retirando juros do subtotal líquid
   assert.equal(recebido.subtotalBruto, 102);
   assert.equal(recebido.total, 113);
   assert.deepEqual(recebido.pagamentos, { pix: 113 });
+});
+
+test('recebimento aplica desconto e juros separados ao mesmo saldo e registra os dois ajustes', () => {
+  const original = pedido();
+  const antes = structuredClone(original);
+  const previa = simularRecebimento(original, { desconto: 10, juros: 5 });
+  assert.equal(previa.desconto, 10);
+  assert.equal(previa.juros, 5);
+  assert.equal(previa.totalReceber, 100);
+  assert.deepEqual(original, antes, 'simular e cancelar não alteram o pedido');
+  const r = prepararRecebimento(original, { desconto: 10, juros: 5, metodo: 'pix', data });
+  assert.equal(r.total, 100);
+  assert.equal(r.subtotal, 95);
+  assert.equal(r.descontoPedido, 10);
+  assert.equal(r.jurosPedido, 5);
+  assert.equal(r.lucro, 55);
+  assert.deepEqual(r.pagamentos, { pix: 100 });
+  assert.deepEqual(r.ajustesRecebimento.map(a => [a.tipo, a.valor]), [['desconto', 10], ['juros', 5]]);
+  assert(r.ajustesRecebimento.every(a => a.data === data && a.valorRecebido === 100));
+  assert.deepEqual(original, antes);
+});
+
+test('desconto e juros novos preservam os recebimentos parciais e quitam só o saldo ajustado', () => {
+  const r = prepararRecebimento(pedido({ pagamento: 'pix', pagamentos: { pix: 65 }, saldoDevido: 40 }), { desconto: 5, juros: 2, metodo: 'dinheiro', data });
+  assert.equal(r.total, 102);
+  assert.equal(r.subtotal, 97);
+  assert.equal(r.descontoPedido, 5);
+  assert.equal(r.jurosPedido, 2);
+  assert.deepEqual(r.pagamentos, { pix: 65, dinheiro: 37 });
+  assert.equal(r.pago, true);
+  assert.equal(r.saldoDevido, 0);
+});
+
+test('desconto separado reduz produtos antes de abater juros antigos e conserva os novos juros', () => {
+  const original = pedido({ jurosPedido: 8, subtotal: 108, total: 113, saldoDevido: 113 });
+  const r = prepararRecebimento(original, { desconto: 10, juros: 5, metodo: 'credito', data });
+  assert.equal(r.descontoPedido, 10);
+  assert.equal(r.jurosPedido, 13);
+  assert.equal(r.total, 108);
+  assert.deepEqual(r.pagamentos, { credito: 108 });
+  const esgotado = prepararRecebimento(original, { desconto: 108, juros: 5, metodo: 'pix', data });
+  assert.equal(esgotado.descontoPedido, 100);
+  assert.equal(esgotado.jurosPedido, 5);
+  assert.equal(esgotado.total, 10, 'mantém taxa de 5 e os juros novos de 5');
+});
+
+test('juros novos não ampliam limite de desconto nem permitem descontar a taxa', () => {
+  const original = pedido();
+  assert.throws(() => prepararRecebimento(original, { desconto: 100.01, juros: 50, metodo: 'pix', data }));
+  const r = prepararRecebimento(original, { desconto: 100, juros: 5, metodo: 'pix', data });
+  assert.equal(r.total, 10);
+  assert.equal(r.taxaEntrega, 5);
+  assert.equal(r.jurosPedido, 5);
+});
+
+test('ambos ajustes mantêm centavos exatos e zero permite receber sem novos ajustes', () => {
+  const r = prepararRecebimento(pedido(), { desconto: 0.1 + 0.2, juros: 0.2, metodo: 'pix', data });
+  assert.equal(r.descontoPedido, 0.3);
+  assert.equal(r.jurosPedido, 0.2);
+  assert.equal(r.total, 104.9);
+  assert.deepEqual(r.pagamentos, { pix: 104.9 });
+  const semAjuste = prepararRecebimento(pedido(), { desconto: 0, juros: 0, metodo: 'pix', data });
+  assert.equal(semAjuste.total, 105);
+  assert.deepEqual(semAjuste.ajustesRecebimento, []);
+});
+
+test('cada campo rejeita valores inválidos e o formato novo não se mistura ao legado', () => {
+  for (const valor of [-1, NaN, Infinity, 'invalido']) {
+    assert.throws(() => simularRecebimento(pedido(), { desconto: valor, juros: 0 }));
+    assert.throws(() => simularRecebimento(pedido(), { desconto: 0, juros: valor }));
+  }
+  assert.throws(() => simularRecebimento(pedido(), { desconto: 2, juros: 3, tipo: 'desconto', valor: 2 }));
 });
