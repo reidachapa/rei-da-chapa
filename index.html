@@ -1182,10 +1182,11 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
       <div class="dre-topo">
         <h2>📊 DRE — Demonstrativo</h2>
         <div class="dre-filtros" id="dreFiltros">
-          <button class="dre-filtro ativo" data-filtro="hoje">Hoje</button>
+          <button class="dre-filtro" data-filtro="hoje">Hoje</button>
           <button class="dre-filtro" data-filtro="ontem">Ontem</button>
           <button class="dre-filtro" data-filtro="semana">7 dias</button>
-          <button class="dre-filtro" data-filtro="mes">Este mês</button>
+          <button class="dre-filtro ativo" data-filtro="mes">Mês</button>
+          <button class="dre-filtro" data-filtro="ano">Ano</button>
           <button class="dre-filtro" data-filtro="todos">Tudo</button>
         </div>
 <select id="selMesDre" class="sel-mes-dre"><option value="">📅 Escolher mês</option></select>
@@ -1620,6 +1621,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="purchase-pricing.js"></script>
 <script src="order-adjustments.js"></script>
 <script src="patrimonio.js"></script>
+<script src="dre-periods.js"></script>
 <script>const SUPABASE_URL = 'https://etzbidgbyntiidtsarln.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emJpZGdieW50aWlkdHNhcmxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3Mzc0ODEsImV4cCI6MjEwNjMxMzQ4MX0.HlDpYLJQymY3ELHciWDGbIKHEuztT78SVlByXZrdaC0';
 
@@ -1640,7 +1642,7 @@ let localStorageOk=true;
 let tipoProdutoForm='pao',editandoIngId=null,tipoIngForm='com';
 let persoProdutoId=null,persoPaoId=null,persoIngs={},persoModoAdd=false,persoBase={};
 let buscaAddTermo='';
-let dreFiltro='hoje';
+let dreFiltro='mes';
 let histFiltro='hoje';
 let histBusca='';
 let editandoDespesaId=null;
@@ -3673,27 +3675,8 @@ $('#despDesconto').addEventListener('input', function(e) {
   if(typeof atualizarTotaisDesp === 'function') atualizarTotaisDesp();
 });
 
-function periodoDRE(filtro) {
-  if (filtro && filtro.indexOf('custom-') === 0) {
-    var pp = filtro.replace('custom-', '').split('-');
-    var yy = parseInt(pp[0]);
-    var mm = parseInt(pp[1]) - 1;
-    var iniC = new Date(yy, mm, 1);
-    var fimC = new Date(yy, mm + 1, 1);
-    var nomeC = new Date(yy, mm, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    nomeC = nomeC.charAt(0).toUpperCase() + nomeC.slice(1);
-    return { ini: iniC, fim: fimC, label: nomeC };
-  }
-  const agora = new Date();
-  const hoje = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate());
-  if (filtro === 'hoje') return { ini: hoje, fim: new Date(hoje.getTime() + 86400000), label: 'Hoje' };
-  if (filtro === 'ontem') { const ontem = new Date(hoje.getTime() - 86400000); return { ini: ontem, fim: hoje, label: 'Ontem' }; }
-  if (filtro === 'semana') { const ini = new Date(hoje.getTime() - 6 * 86400000); return { ini, fim: new Date(hoje.getTime() + 86400000), label: 'Últimos 7 dias' }; }
-  if (filtro === 'mes') { const ini = new Date(agora.getFullYear(), agora.getMonth(), 1); return { ini, fim: new Date(hoje.getTime() + 86400000), label: 'Este mês' }; }
-  return { ini: new Date(0), fim: new Date(8640000000000), label: 'Todo o período' };
-}
-
-
+function periodoDRE(filtro){return window.PeriodosDRE.periodo(filtro)}
+function dataRegistroDRE(valor){return window.PeriodosDRE.data(valor)}
 
 window.renderDespItens = function() {
   var cont = document.getElementById('despItensLista');
@@ -3830,7 +3813,7 @@ function validarItensDespesaAvulsa(itens){
 
 function separarDespesasDRE(despFiltradas){
   var lista=Array.isArray(despFiltradas)?despFiltradas:[];
-  var comprasEstoque=lista.filter(function(d){return(Array.isArray(d.itens)?d.itens:[]).some(function(it){
+  var comprasEstoque=lista.filter(function(d){if(d.tipoRegistro==='despesa')return false;return(Array.isArray(d.itens)?d.itens:[]).some(function(it){
     if(Number(it.aplicado&&it.aplicado.qtdEst)>0)return true;
     var alvo=typeof alvoEstoque==='function'?alvoEstoque(it.vinc):null;
     return!!(alvo&&!alvo.obj.semEstoque);
@@ -3852,11 +3835,12 @@ function totalizarAbastecimentosNoPeriodo(despesasOperacionais){
 
 function renderDRE() {
   if (!souGerente()) return;
+  popularMesesDRE();
   
   const { ini, fim, label } = periodoDRE(dreFiltro);
   const filtrados = [...historico].filter(p => {
-    const d = new Date(p.finalizadoEm || p.data);
-    return d >= ini && d < fim;
+    const d = dataRegistroDRE(p.finalizadoEm || p.data);
+    return !!d && d >= ini && d < fim;
   });
   
   let vendasProdutos = 0, custoTotal = 0, taxasRecebidas = 0;
@@ -3906,13 +3890,13 @@ function renderDRE() {
   });
 
   const despFiltradas = despesas.filter(d => {
-    const dt = new Date(d.data + 'T12:00:00');
-    return dt >= ini && dt < fim;
+    const dt = dataRegistroDRE(d.data);
+    return !!dt && dt >= ini && dt < fim;
   });
   
   const perdasPeriodo = (window.perdas || []).filter(p => {
-    const d = new Date(p.data);
-    return d >= ini && d < fim;
+    const d = dataRegistroDRE(p.data);
+    return !!d && d >= ini && d < fim;
   });
   
   const totalPerdas = perdasPeriodo.reduce((s, p) => s + (Number(p.valorTotal) || 0), 0);
@@ -3927,7 +3911,8 @@ function renderDRE() {
   despesasOperacionais.forEach(d => {
     const categoria = d.categoria || 'outro';
     despPorCategoria[categoria] = (despPorCategoria[categoria] || 0) + (Number(d.valor) || 0);
-    const dia = d.data;
+    const dataDespesa=dataRegistroDRE(d.data);
+    const dia=[dataDespesa.getFullYear(),String(dataDespesa.getMonth()+1).padStart(2,'0'),String(dataDespesa.getDate()).padStart(2,'0')].join('-');
     if (porDia[dia]) porDia[dia].desp += Number(d.valor) || 0;
     else porDia[dia] = { total: 0, custo: 0, qtd: 0, desp: Number(d.valor) || 0, taxa: 0 };
   });
@@ -4025,9 +4010,9 @@ function renderDRE() {
     html.push(`<div class="dre-linha total"><span class="label"><b>TOTAL DE DESPESAS OPERACIONAIS</b></span><span class="valor-dre" style="color:var(--red)">−${moeda(totalDespesasOperacionais)}</span></div>`);
     html.push(`<div style="margin-top:12px;border-top:1px solid var(--iron-5);padding-top:8px">`);
     
-    despesasOperacionais.slice().sort((a, b) => b.data.localeCompare(a.data)).forEach(d => {
+    despesasOperacionais.slice().sort((a, b) => dataRegistroDRE(b.data)-dataRegistroDRE(a.data)).forEach(d => {
       const info = DESPESA_LABEL[d.categoria] || DESPESA_LABEL.outro;
-      const dataFmt = new Date(d.data + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const dataFmt = dataRegistroDRE(d.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const detalhesDespesa = formatarDetalhesFinanceirosDespesa(d);
       const categoriaHistorica = rotuloCategoriaFinanceira(d);
       html.push(`<div class="desp-item"><div class="desp-icone">${info.e}</div><div class="desp-info"><strong>${esc(d.descricao)}</strong><small>${esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)} · ${dataFmt}${detalhesDespesa ? ' · ' + detalhesDespesa : ''}${d.obs ? ' · ' + esc(d.obs) : ''}</small></div><div class="desp-valor">−${moeda(d.valor)}</div><div class="desp-acoes"><button data-acao="editar" data-id="${esc(d.id)}">✏️</button><button data-acao="excluir" data-id="${esc(d.id)}" class="perigo">🗑️</button></div></div>`);
@@ -4071,7 +4056,7 @@ function renderDRE() {
   $('#dreConteudo').innerHTML = html.join('');
 
   const btnAdd = $('#btnAddDespesa');
-  if (btnAdd) btnAdd.addEventListener('click', () => abrirModalDespesa(null));
+  if (btnAdd) btnAdd.addEventListener('click', () => abrirModalDespesaAvulsa(null));
   
   $('#dreConteudo').querySelectorAll('.desp-acoes button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4110,7 +4095,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 });
 $('#dreFiltros').addEventListener('click',e=>{const btn=e.target.closest('.dre-filtro');if(!btn)return;dreFiltro=btn.dataset.filtro;$$('#dreFiltros .dre-filtro').forEach(b=>b.classList.toggle('ativo',b===btn));renderDRE()});
-function popularMesesDRE(){var sel=document.getElementById('selMesDre');if(!sel)return;var meses={};(historico||[]).forEach(function(h){var d=new Date(h.finalizadoEm||h.data);var k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');meses[k]=true});var arr=Object.keys(meses).sort().reverse();var html='<option value="">📅 Escolher mês</option>';arr.forEach(function(k){var p=k.split('-');var n=new Date(parseInt(p[0]),parseInt(p[1])-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});n=n.charAt(0).toUpperCase()+n.slice(1);html+='<option value="custom-'+k+'">'+n+'</option>'});sel.innerHTML=html}
+function popularMesesDRE(){var sel=document.getElementById('selMesDre');if(!sel)return;var arr=window.PeriodosDRE.mesesDisponiveis({historico:historico,despesas:despesas,perdas:window.perdas,bensEmpresa:bensEmpresa}),selecionado=String(dreFiltro||'');if(/^custom-\d{4}-(0[1-9]|1[0-2])$/.test(selecionado)&&!arr.includes(selecionado.slice(7)))arr.push(selecionado.slice(7));arr.sort().reverse();sel.innerHTML='<option value="">📅 Escolher mês</option>'+arr.map(function(k){var partes=k.split('-'),nome=new Date(Number(partes[0]),Number(partes[1])-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});nome=nome.charAt(0).toUpperCase()+nome.slice(1);return '<option value="custom-'+k+'">'+esc(nome)+'</option>'}).join('');sel.value=selecionado.startsWith('custom-')?selecionado:''}
 document.addEventListener('change',function(e){if(e.target&&e.target.id==='selMesDre'){if(!e.target.value)return;dreFiltro=e.target.value;$$('#dreFiltros .dre-filtro').forEach(function(b){b.classList.remove('ativo')});renderDRE()}});
 $('#fabBackup').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só gerente');$('#modalBackup').classList.add('aberto');requestAnimationFrame(()=>{injetarListaNoModalBackup();renderListaBackupsArquivados()})});
 $('#btnFecharBackup').addEventListener('click',()=>{$('#modalBackup').classList.remove('aberto');$('#textareaBackup').style.display='none';$('#acoesBackupExport').style.display='none'});
@@ -4772,7 +4757,7 @@ function restaurarEstoqueDaPerda(perda){
   if(perda.tipo==='ing'){const antes=item.estoqueEstimado;Object.assign(item,window.EstoqueIngredientes.restaurarPerda(item,perda));return{ok:true,msg:perda.incluidaNaContagem||item.semEstoque&&antes===item.estoqueEstimado?'histórico ajustado; saldo contado preservado':'saldo de '+item.nome+' restaurado'}}
   const devolvida=perda.qtdEstoqueBaixada===undefined?Number(perda.qtdEstoqueInterno)||Number(perda.qtd)||0:Number(perda.qtdEstoqueBaixada)||0;item.estoque=(Number(item.estoque)||0)+devolvida;return{ok:true,msg:'+'+formatarQtdMedida(devolvida)+' '+item.nome+' devolvido(s)'};
 }
-function injetarPerdasNoDRE(){const conteudo = document.getElementById('dreConteudo');if(!conteudo || !souGerente() || conteudo.querySelector('#secaoPerdas')) return;const per = periodoDRE(dreFiltro);const filtradas = (window.perdas || []).filter(p => { const d = new Date(p.data); return d >= per.ini && d < per.fim; });const total = filtradas.reduce((s, p) => s + p.valorTotal, 0);const sec = document.createElement('div');sec.id = 'secaoPerdas';sec.className = 'dre-secao';let html = '<h3>📉 Perdas do período <button class="btn-mini vermelho" id="btnNovaPerda">➕ Nova perda</button></h3>';if(!filtradas.length){html += '<div class="dre-vazio">Nenhuma perda registrada no período. 🎉</div>';} else {html += '<div class="dre-linha total" style="margin-bottom:12px"><span class="label"><b>TOTAL DE PERDAS</b></span><span class="valor-dre" style="color:var(--red)">−' + moeda(total) + '</span></div>';const porMotivo = {};filtradas.forEach(p => { porMotivo[p.motivo] = (porMotivo[p.motivo] || 0) + p.valorTotal; });Object.entries(porMotivo).sort((a,b) => b[1] - a[1]).forEach(entry => {const mot = entry[0], val = entry[1];const info = MOTIVOS_PERDA[mot] || MOTIVOS_PERDA.outro;const pct = total > 0 ? (val/total*100).toFixed(0) : 0;html += '<div class="dre-linha"><span class="label">' + info.e + ' <b>' + info.txt + '</b> · ' + pct + '%</span><span class="valor-dre" style="color:var(--red)">' + moeda(val) + '</span></div>';});html += '<div style="margin-top:12px;border-top:1px solid var(--iron-5);padding-top:8px">';filtradas.slice().sort((a,b) => b.data.localeCompare(a.data)).forEach(p => {const info = MOTIVOS_PERDA[p.motivo] || MOTIVOS_PERDA.outro;const dt = new Date(p.data);const dataFmt = dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });const horaFmt = dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });const qtdTxt = p.tipo==='ing'?' ('+formatarQtdMedida(p.qtd||0)+' '+esc(p.unidadeQtd||unidadeIngredienteEstoqueLabel(ingredientes.find(function(i){return i.id===p.itemId})||{}))+')':(p.qtd>1?' ('+p.qtd+'x)':'');const obsTxt = p.obs ? ' · ' + esc(p.obs) : '';html += '<div class="desp-item"><div class="desp-icone">' + info.e + '</div><div class="desp-info"><strong>' + esc(p.itemNome) + qtdTxt + '</strong><small>' + info.txt + ' · ' + dataFmt + ' ' + horaFmt + obsTxt + '</small></div><div class="desp-valor">−' + moeda(p.valorTotal) + '</div><div class="desp-acoes"><button data-acao="excluir-perda" data-id="' +esc(p.id)+ '" class="perigo">🗑️</button></div></div>';});html += '</div>';}sec.innerHTML = html;conteudo.appendChild(sec);const btnNovaPerda = document.getElementById('btnNovaPerda');if(btnNovaPerda) btnNovaPerda.addEventListener('click', abrirModalPerda);sec.querySelectorAll('button[data-acao="excluir-perda"]').forEach(btn => {btn.addEventListener('click', () => {if(!souGerente())return toast('🔒 Só o gerente');const perda = (window.perdas || []).find(p => p.id === btn.dataset.id);if(!perda) return;let msg = '🗑️ Excluir esta perda?\n\n';msg += '📦 Detalhes:\n';msg += `• Item: ${perda.itemNome}${perda.tipo==='ing'?' ('+formatarQtdMedida(perda.qtd||0)+' '+(perda.unidadeQtd||'un.')+')':(perda.qtd>1?' ('+perda.qtd+'x)':'')}\n`;msg += `• Valor: R$ ${(perda.valorTotal || 0).toFixed(2).replace('.', ',')}\n`;msg += `• Motivo: ${(MOTIVOS_PERDA[perda.motivo] || MOTIVOS_PERDA.outro).txt}\n\n`;if(perda.tipo==='ing'&&ingredientes.some(function(i){return i.id===perda.itemId&&i.semEstoque;})){msg += perda.qtdEstimativaBaixada>0?'✅ O saldo estimado será restaurado.\n\n':'ℹ️ Ingrediente sem controle ou sem saldo estimado; não há estoque para restaurar.\n\n';}else if(perda.tipo !== 'outro'){msg += '✅ O item VAI VOLTAR para o estoque.\n\n';} else {msg += '⚠️ Perda avulsa (só valor) — nada volta ao estoque.\n\n';}msg += 'Confirmar exclusão?';if(!confirm(msg)) return;const resultado = restaurarEstoqueDaPerda(perda);window.perdas = window.perdas.filter(p => p.id !== perda.id);salvarPerdas();if(typeof salvar === 'function') salvar();if(typeof renderPaes === 'function') renderPaes();if(typeof renderEstoque === 'function') renderEstoque();if(typeof renderIngredientes === 'function') renderIngredientes();if(typeof renderVendas === 'function') renderVendas();const s = document.getElementById('secaoPerdas');if(s) s.remove();injetarPerdasNoDRE();toast('🗑️ Perda excluída — ' + resultado.msg);});});}
+function injetarPerdasNoDRE(){const conteudo = document.getElementById('dreConteudo');if(!conteudo || !souGerente() || conteudo.querySelector('#secaoPerdas')) return;const per = periodoDRE(dreFiltro);const filtradas = (window.perdas || []).filter(p => { const d = dataRegistroDRE(p.data); return !!d && d >= per.ini && d < per.fim; });const total = filtradas.reduce((s, p) => s + p.valorTotal, 0);const sec = document.createElement('div');sec.id = 'secaoPerdas';sec.className = 'dre-secao';let html = '<h3>📉 Perdas do período <button class="btn-mini vermelho" id="btnNovaPerda">➕ Nova perda</button></h3>';if(!filtradas.length){html += '<div class="dre-vazio">Nenhuma perda registrada no período. 🎉</div>';} else {html += '<div class="dre-linha total" style="margin-bottom:12px"><span class="label"><b>TOTAL DE PERDAS</b></span><span class="valor-dre" style="color:var(--red)">−' + moeda(total) + '</span></div>';const porMotivo = {};filtradas.forEach(p => { porMotivo[p.motivo] = (porMotivo[p.motivo] || 0) + p.valorTotal; });Object.entries(porMotivo).sort((a,b) => b[1] - a[1]).forEach(entry => {const mot = entry[0], val = entry[1];const info = MOTIVOS_PERDA[mot] || MOTIVOS_PERDA.outro;const pct = total > 0 ? (val/total*100).toFixed(0) : 0;html += '<div class="dre-linha"><span class="label">' + info.e + ' <b>' + info.txt + '</b> · ' + pct + '%</span><span class="valor-dre" style="color:var(--red)">' + moeda(val) + '</span></div>';});html += '<div style="margin-top:12px;border-top:1px solid var(--iron-5);padding-top:8px">';filtradas.slice().sort((a,b) => b.data.localeCompare(a.data)).forEach(p => {const info = MOTIVOS_PERDA[p.motivo] || MOTIVOS_PERDA.outro;const dt = new Date(p.data);const dataFmt = dt.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });const horaFmt = dt.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });const qtdTxt = p.tipo==='ing'?' ('+formatarQtdMedida(p.qtd||0)+' '+esc(p.unidadeQtd||unidadeIngredienteEstoqueLabel(ingredientes.find(function(i){return i.id===p.itemId})||{}))+')':(p.qtd>1?' ('+p.qtd+'x)':'');const obsTxt = p.obs ? ' · ' + esc(p.obs) : '';html += '<div class="desp-item"><div class="desp-icone">' + info.e + '</div><div class="desp-info"><strong>' + esc(p.itemNome) + qtdTxt + '</strong><small>' + info.txt + ' · ' + dataFmt + ' ' + horaFmt + obsTxt + '</small></div><div class="desp-valor">−' + moeda(p.valorTotal) + '</div><div class="desp-acoes"><button data-acao="excluir-perda" data-id="' +esc(p.id)+ '" class="perigo">🗑️</button></div></div>';});html += '</div>';}sec.innerHTML = html;conteudo.appendChild(sec);const btnNovaPerda = document.getElementById('btnNovaPerda');if(btnNovaPerda) btnNovaPerda.addEventListener('click', abrirModalPerda);sec.querySelectorAll('button[data-acao="excluir-perda"]').forEach(btn => {btn.addEventListener('click', () => {if(!souGerente())return toast('🔒 Só o gerente');const perda = (window.perdas || []).find(p => p.id === btn.dataset.id);if(!perda) return;let msg = '🗑️ Excluir esta perda?\n\n';msg += '📦 Detalhes:\n';msg += `• Item: ${perda.itemNome}${perda.tipo==='ing'?' ('+formatarQtdMedida(perda.qtd||0)+' '+(perda.unidadeQtd||'un.')+')':(perda.qtd>1?' ('+perda.qtd+'x)':'')}\n`;msg += `• Valor: R$ ${(perda.valorTotal || 0).toFixed(2).replace('.', ',')}\n`;msg += `• Motivo: ${(MOTIVOS_PERDA[perda.motivo] || MOTIVOS_PERDA.outro).txt}\n\n`;if(perda.tipo==='ing'&&ingredientes.some(function(i){return i.id===perda.itemId&&i.semEstoque;})){msg += perda.qtdEstimativaBaixada>0?'✅ O saldo estimado será restaurado.\n\n':'ℹ️ Ingrediente sem controle ou sem saldo estimado; não há estoque para restaurar.\n\n';}else if(perda.tipo !== 'outro'){msg += '✅ O item VAI VOLTAR para o estoque.\n\n';} else {msg += '⚠️ Perda avulsa (só valor) — nada volta ao estoque.\n\n';}msg += 'Confirmar exclusão?';if(!confirm(msg)) return;const resultado = restaurarEstoqueDaPerda(perda);window.perdas = window.perdas.filter(p => p.id !== perda.id);salvarPerdas();if(typeof salvar === 'function') salvar();if(typeof renderPaes === 'function') renderPaes();if(typeof renderEstoque === 'function') renderEstoque();if(typeof renderIngredientes === 'function') renderIngredientes();if(typeof renderVendas === 'function') renderVendas();const s = document.getElementById('secaoPerdas');if(s) s.remove();injetarPerdasNoDRE();toast('🗑️ Perda excluída — ' + resultado.msg);});});}
 setTimeout(() => {if(typeof window.renderDRE === 'function'){const _orig = window.renderDRE;window.renderDRE = function(){_orig.apply(this, arguments);injetarPerdasNoDRE();};if(document.getElementById('view-dre') && document.getElementById('view-dre').classList.contains('ativo')){window.renderDRE();}}}, 600);
 carregarPerdas();
 
@@ -6917,7 +6902,7 @@ window.salvarVendaManual = function() {
   
   // Se o modal de compras for aberto, garante que o monitor está ativo
   document.addEventListener('click', function(e){
-    if(e.target && (e.target.id === 'btnNovaCompraHist' || e.target.id === 'btnAddDespesa')){
+    if(e.target && e.target.id === 'btnNovaCompraHist'){
       setTimeout(monitorarCategorias, 300);
     }
   });
@@ -7068,7 +7053,7 @@ window.salvarVendaManual = function() {
 
   // Reforça o botão toda vez que abrir o modal de compras
   document.addEventListener('click', function(e){
-    if(e.target && (e.target.id === 'btnNovaCompraHist' || e.target.id === 'btnAddDespesa')){
+    if(e.target && e.target.id === 'btnNovaCompraHist'){
       setTimeout(reinjetarSalvar, 100);
     }
   });

@@ -136,12 +136,13 @@ test('DRE mostra aquisições separadas e preserva o lucro operacional',()=>{
   const start=html.indexOf('function renderDRE()');const end=html.indexOf("\ndocument.addEventListener('DOMContentLoaded'",start);
   assert(start>=0&&end>start,'real DRE function exists');
   const node={innerHTML:'',querySelectorAll(){return[]}};
-  const deps={node,Patrimonio};
+  const deps={node,Patrimonio,PeriodosDRE:require('../dre-periods.js')};
   const run=new Function('deps',`
     var window={Patrimonio:deps.Patrimonio,perdas:[]},bensEmpresa=[{nome:'Forno',valor:50,data:'2026-11-10',estado:'Ativo'},{nome:'Geladeira antiga',valor:200,data:'2026-10-10',estado:'Baixado'}],dreFiltro='mes';
     var historico=[{total:105,subtotal:100,taxaEntrega:5,custoTotal:20,pago:true,pagamento:'pix',tipo:'retirada',data:'2026-11-15T12:00:00Z',itens:[{nome:'Produto',preco:100,qtd:1,custoUnit:20}]}];
     var despesas=[{categoria:'manutencao',descricao:'Conserto',valor:10,data:'2026-11-15'}],DESPESA_LABEL={manutencao:{txt:'Manutenção',e:'🔧'}},PAGAMENTO_LABEL={pix:{txt:'Pix',cls:'pix'}};
     function souGerente(){return true} function periodoDRE(){return{ini:new Date(2026,10,1),fim:new Date(2026,11,1),label:'Nov/2026'}}
+    function popularMesesDRE(){} function dataRegistroDRE(v){return deps.PeriodosDRE.data(v)}
     function $(selector){return selector==='#dreConteudo'?deps.node:null}
     function moeda(v){return 'R$ '+Number(v).toFixed(2).replace('.',',')} function esc(v){return String(v)}
     function valorDevidoPedido(){return 0} function pagamentosDoPedido(p){return [['pix',p.total]]}
