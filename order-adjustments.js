@@ -48,18 +48,31 @@
   function simularRecebimento(p, op) {
     op = op || {};
     if (!p || p.pago === true || valorDevido(p) <= 0) throw new Error('Este pedido não tem valor em aberto.');
-    if (op.tipo !== 'juros' && op.tipo !== 'desconto') throw new Error('Escolha desconto ou juros.');
-    var valor = centavos(op.valor), devido = centavos(valorDevido(p)), f = resumo(p);
+    var tem = function (campo) { return Object.prototype.hasOwnProperty.call(op, campo); };
+    var legado = tem('tipo') || tem('valor'), separado = tem('desconto') || tem('juros');
+    if (legado && separado) throw new Error('Informe desconto e juros nos campos separados.');
+    if (legado && op.tipo !== 'juros' && op.tipo !== 'desconto') throw new Error('Escolha desconto ou juros.');
+    var valorLegado = legado ? centavos(op.valor) : 0;
+    var novoDesconto = legado ? (op.tipo === 'desconto' ? valorLegado : 0) : centavos(op.desconto);
+    var novosJuros = legado ? (op.tipo === 'juros' ? valorLegado : 0) : centavos(op.juros);
+    var devido = centavos(valorDevido(p)), f = resumo(p);
     var total = centavos(f.total), taxa = centavos(f.taxaEntrega), juros = centavos(f.jurosPedido), desconto = centavos(f.descontoPedido);
     // O total salvo é a referência também para pedidos antigos editados manualmente.
     if (total < taxa + juros) throw new Error('O total não confere com os juros e a taxa de entrega. Confira os valores do pedido antes de receber.');
     var bruto = total - taxa - juros + desconto, limite = Math.min(devido, Math.max(0, total - taxa));
-    if (op.tipo === 'desconto' && valor > limite) throw new Error('O desconto máximo é R$ ' + dinheiro(limite).toFixed(2).replace('.', ',') + ', preservando a taxa de entrega.');
-    if (op.tipo === 'juros') juros += valor;
-    else { var sobreJuros = Math.min(juros, valor); juros -= sobreJuros; desconto += valor - sobreJuros; }
+    if (novoDesconto > limite) throw new Error('O desconto máximo é R$ ' + dinheiro(limite).toFixed(2).replace('.', ',') + ', preservando a taxa de entrega.');
+    if (legado) {
+      var sobreJuros = Math.min(juros, novoDesconto); juros -= sobreJuros; desconto += novoDesconto - sobreJuros;
+    } else {
+      // Desconto e juros novos permanecem discriminados. Só um desconto além
+      // dos produtos abate juros antigos; ele nunca consome os juros novos.
+      var sobreProdutos = Math.min(bruto - desconto, novoDesconto);
+      desconto += sobreProdutos; juros -= novoDesconto - sobreProdutos;
+    }
+    juros += novosJuros;
     var financeiro = calcularFechamento({ subtotalBruto: dinheiro(bruto), descontoPedido: dinheiro(desconto), jurosPedido: dinheiro(juros), taxaEntrega: dinheiro(taxa) });
-    if (centavos(financeiro.total) !== total + (op.tipo === 'juros' ? valor : -valor)) throw new Error('Os valores do pedido não conferem. Confira o total antes de receber.');
-    return { financeiro: financeiro, valorAnterior: dinheiro(devido), valorAjuste: dinheiro(valor), totalReceber: dinheiro(devido + (op.tipo === 'juros' ? valor : -valor)), limiteDesconto: dinheiro(limite) };
+    if (centavos(financeiro.total) !== total + novosJuros - novoDesconto) throw new Error('Os valores do pedido não conferem. Confira o total antes de receber.');
+    return { financeiro: financeiro, valorAnterior: dinheiro(devido), valorAjuste: dinheiro(novoDesconto + novosJuros), desconto: dinheiro(novoDesconto), juros: dinheiro(novosJuros), totalReceber: dinheiro(devido + novosJuros - novoDesconto), limiteDesconto: dinheiro(limite) };
   }
   function prepararRecebimento(p, op) {
     if (!op || metodos.indexOf(op.metodo) < 0) throw new Error('Escolha uma forma de pagamento válida.');
@@ -77,9 +90,12 @@
     Object.assign(novo, simulacao.financeiro, { pagamentos: pagamentos, pagamento: ativos.length > 1 ? 'misto' : (ativos[0] || op.metodo), pago: true, saldoDevido: 0, troco: 0, pagoEm: data });
     novo.lucro = Math.round((novo.subtotal - (Number(p.custoTotal) || 0)) * 100) / 100;
     novo.ajustesRecebimento = Array.isArray(novo.ajustesRecebimento) ? novo.ajustesRecebimento : [];
-    if (simulacao.valorAjuste > 0) novo.ajustesRecebimento.push({ tipo: op.tipo, valor: simulacao.valorAjuste, data: data, saldoAntes: simulacao.valorAnterior, valorRecebido: simulacao.totalReceber, metodo: op.metodo });
+    ['desconto', 'juros'].forEach(function (tipo) {
+      if (simulacao[tipo] > 0) novo.ajustesRecebimento.push({ tipo: tipo, valor: simulacao[tipo], data: data, saldoAntes: simulacao.valorAnterior, valorRecebido: simulacao.totalReceber, metodo: op.metodo });
+    });
     novo.log = Array.isArray(novo.log) ? novo.log : [];
-    novo.log.push({ status: 'pagamento_recebido', data: data, metodo: op.metodo, valor: simulacao.totalReceber, ajusteTipo: op.tipo, ajusteValor: simulacao.valorAjuste });
+    var ajusteTipo = simulacao.desconto > 0 && simulacao.juros > 0 ? 'desconto_e_juros' : (simulacao.desconto > 0 ? 'desconto' : 'juros');
+    novo.log.push({ status: 'pagamento_recebido', data: data, metodo: op.metodo, valor: simulacao.totalReceber, ajusteTipo: ajusteTipo, ajusteValor: simulacao.valorAjuste, desconto: simulacao.desconto, juros: simulacao.juros });
     return novo;
   }
   return { calcularFechamento: calcularFechamento, resumo: resumo, valorDevido: valorDevido, simularRecebimento: simularRecebimento, prepararRecebimento: prepararRecebimento };

@@ -25,12 +25,10 @@ function app(cart={produto:2}) {
   const $ = selector => nodes[selector] || (nodes[selector]=element());
   const payments=['pix','dinheiro','debito','credito'].map(pgto=>element({pgto}));
   const rows=payments.map(p=>element({pgto:p.dataset.pgto}));
-  const adjustments=['desconto','juros'].map(ajuste=>element({ajuste}));
   const types=['retirada','entrega'].map(tipo=>element({tipo}));
   const $$ = selector => {
     if(selector==='#pgtoMultiplo .pgto-input')return payments;
     if(selector==='#pgtoMultiplo .pgto-linha')return rows;
-    if(selector==='#opcoesAjustePedido [data-ajuste]')return adjustments;
     if(selector==='#opcoesTipo .opcao')return types;
     throw new Error('unexpected collection selector '+selector);
   };
@@ -48,24 +46,23 @@ function app(cart={produto:2}) {
     ${opening}
     ${paymentSummary}
     ${fillPayment}
-    return {abrirModalFinalizar,definirTipoAjustePedido,valoresModalPedido,atualizarTotalModal,preencherPagamentoAoSelecionar,tipo(tipo){tipoSelecionado=tipo}};
+    return {abrirModalFinalizar,valoresModalPedido,atualizarTotalModal,preencherPagamentoAoSelecionar,tipo(tipo){tipoSelecionado=tipo}};
   `)(deps);
-  return {functions,nodes,$,payments,adjustments,types};
+  return {functions,nodes,$,payments,types};
 }
 
 test('abrir fechamento com carrinho limpa juros anteriores e todos os pagamentos sem erro', () => {
   const h=app();
-  h.$('#inpTipoAjustePedido').value='juros';
   h.$('#inpDescontoPedido').value='7,00';
+  h.$('#inpJurosPedido').value='4,00';
   h.payments.forEach(p=>{p.value='10,00';p.dataset.autoPreenchido='1'});
   assert.doesNotThrow(()=>h.functions.abrirModalFinalizar());
   assert(h.$('#modalFinalizar').classList.contains('aberto'));
-  assert.equal(h.$('#inpTipoAjustePedido').value,'desconto');
   assert.equal(h.$('#inpDescontoPedido').value,'');
+  assert.equal(h.$('#inpJurosPedido').value,'');
   assert.equal(h.$('#modalTotal').textContent,'R$ 40,00');
   assert(h.payments.every(p=>p.value===''&&!p.dataset.autoPreenchido));
   assert.equal(h.$('#campoTaxa').style.display,'none');
-  assert(h.adjustments.find(b=>b.dataset.ajuste==='desconto').classList.contains('ativo'));
 });
 
 test('carrinho vazio não abre fechamento',()=>{
@@ -74,17 +71,17 @@ test('carrinho vazio não abre fechamento',()=>{
   assert(!h.$('#modalFinalizar').classList.contains('aberto'));
 });
 
-test('alternar desconto para juros recalcula total com entrega e sinal correto',()=>{
+test('desconto e juros independentes são aplicados juntos com entrega e sinal correto',()=>{
   const h=app();h.functions.abrirModalFinalizar();
   h.functions.tipo('entrega');h.$('#inpTaxaEntrega').value='5,00';h.$('#inpDescontoPedido').value='3,00';
-  h.functions.definirTipoAjustePedido('juros');
-  assert.equal(h.$('#modalTotal').textContent,'R$ 48,00');
-  assert.equal(h.functions.valoresModalPedido().jurosPedido,3);
-  assert.equal(h.functions.valoresModalPedido().descontoPedido,0);
-  h.functions.definirTipoAjustePedido('desconto');
-  assert.equal(h.$('#modalTotal').textContent,'R$ 42,00');
-  assert.equal(h.functions.valoresModalPedido().jurosPedido,0);
+  h.$('#inpJurosPedido').value='5,00';h.functions.atualizarTotalModal();
+  assert.equal(h.$('#modalTotal').textContent,'R$ 47,00');
+  assert.equal(h.functions.valoresModalPedido().jurosPedido,5);
   assert.equal(h.functions.valoresModalPedido().descontoPedido,3);
+  h.$('#inpDescontoPedido').value='7,00';h.functions.atualizarTotalModal();
+  assert.equal(h.$('#modalTotal').textContent,'R$ 43,00');
+  assert.equal(h.$('#inpJurosPedido').value,'5,00');
+  assert.equal(h.functions.valoresModalPedido().jurosPedido,5);
 });
 
 test('pagamento automático acompanha juros e conserva divisão digitada em outro método',()=>{
@@ -93,12 +90,13 @@ test('pagamento automático acompanha juros e conserva divisão digitada em outr
   const pix=h.payments.find(p=>p.dataset.pgto==='pix'),debito=h.payments.find(p=>p.dataset.pgto==='debito');
   h.functions.preencherPagamentoAoSelecionar(pix);
   assert.equal(pix.value,'45,00');
-  h.$('#inpDescontoPedido').value='3,00';h.functions.definirTipoAjustePedido('juros');
+  h.$('#inpJurosPedido').value='3,00';h.functions.atualizarTotalModal();
   assert.equal(pix.value,'48,00');
   assert.match(h.$('#pgtoResumo').textContent,/Total pago: R\$ 48,00/);
   debito.value='10,00';h.functions.atualizarTotalModal();
   assert.equal(pix.value,'38,00');
-  h.functions.definirTipoAjustePedido('desconto');
-  assert.equal(pix.value,'32,00');assert.equal(debito.value,'10,00');
-  assert.match(h.$('#pgtoResumo').textContent,/Total pago: R\$ 42,00/);
+  h.$('#inpDescontoPedido').value='3,00';h.functions.atualizarTotalModal();
+  assert.equal(pix.value,'35,00');assert.equal(debito.value,'10,00');
+  assert.equal(h.$('#inpJurosPedido').value,'3,00');
+  assert.match(h.$('#pgtoResumo').textContent,/Total pago: R\$ 45,00/);
 });
