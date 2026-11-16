@@ -54,6 +54,34 @@
     });
   }
 
+  function ehCompraNovaRascunho(registro, igual) {
+    if (!registro) return false;
+    if (registro.operacao === 'nova') return true;
+    if (registro.operacao === 'editar') return false;
+    if (registro.editId == null) return true;
+    return !!(registro.savedRecordId != null && String(registro.savedRecordId) === String(registro.editId)
+      && registro.baseNota && registro.savedNote && typeof igual === 'function'
+      && igual(registro.baseNota, registro.savedNote));
+  }
+
+  function rascunhoConfirmadoSemEdicao(registro, notaServidor, igual) {
+    return !!(registro && registro.savedRecordId != null && registro.savedNote && notaServidor
+      && String(registro.savedRecordId) === String(notaServidor.id)
+      && registro.syncSubmittedAt && registro.syncSubmittedAt === registro.updatedAt
+      && typeof igual === 'function' && igual(registro.savedNote, notaServidor));
+  }
+
+  function prepararComoNovaCompra(registro) {
+    var copia = clonar(registro || {});
+    ['savedRecordId', 'savedSession', 'savedNote', 'syncSubmittedAt', 'syncPendente', 'baseNota', 'notaServidorAntesDaRevisao']
+      .forEach(function (chave) { delete copia[chave]; });
+    copia.editId = null;
+    copia.operacao = 'nova';
+    copia.temRascunho = true;
+    copia.retomarAoVoltar = true;
+    return copia;
+  }
+
   function tipoItem(item) {
     var vinc = String(item.vinc || item.aplicado && item.aplicado.vinc || '');
     if (vinc.indexOf('ing:') === 0) return 'ing';
@@ -148,6 +176,9 @@
     reconciliarBase: reconciliarBase,
     candidatas: candidatas,
     itensSemAplicacao: itensSemAplicacao,
-    prepararRegistro: prepararRegistro
+    prepararRegistro: prepararRegistro,
+    ehCompraNovaRascunho: ehCompraNovaRascunho,
+    rascunhoConfirmadoSemEdicao: rascunhoConfirmadoSemEdicao,
+    prepararComoNovaCompra: prepararComoNovaCompra
   };
 });
