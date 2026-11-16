@@ -11216,8 +11216,9 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var notaConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(id):null;
       if(!notaConfirmada)return false;
       var notaIgual=!!(registro.savedNote&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
+      var envioConfirmadoSemEdicao=!!(window.RecuperacaoCompra&&window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(registro,notaConfirmada,window.notaCompraIgual));
       if(ehCompraNovaRascunho(registro)){
-        if(notaIgual&&registro.syncSubmittedAt&&registro.syncSubmittedAt===registro.updatedAt){
+        if(envioConfirmadoSemEdicao){
           removerRascunhoConfirmado(k);
           if(k===chaveRascunhoAtivo)sujo=false;
           return true;
@@ -11228,7 +11229,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         if(k===chaveRascunhoAtivo){idRascunho=null;modoRascunhoCompra='nova';baseNotaAtiva=null;window.editandoDespesaId=null;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=null}
         return true;
       }
-      if(notaIgual&&registro.syncSubmittedAt===registro.updatedAt){
+      if(envioConfirmadoSemEdicao){
         removerRascunhoConfirmado(k);
         if(k===chaveRascunhoAtivo)sujo=false;
         return true;
@@ -11270,7 +11271,8 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var notaConfirmada=registro&&registro.savedRecordId&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(registro.savedRecordId):null;
       var compraConfirmada=!!(registro&&registro.savedNote&&notaConfirmada&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
       if(registro&&ehCompraNovaRascunho(registro)&&notaConfirmada){
-        if(compraConfirmada&&registro.updatedAt===updatedAt&&registro.syncSubmittedAt===updatedAt){
+        var envioConfirmadoSemEdicao=window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(registro,notaConfirmada,window.notaCompraIgual);
+        if(envioConfirmadoSemEdicao&&registro.updatedAt===updatedAt){
            removerRascunhoConfirmado(k);
           if(k===chave(lojaRascunho,idRascunho))sujo=false;
         }else{

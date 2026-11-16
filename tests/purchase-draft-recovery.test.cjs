@@ -3,7 +3,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro } = require('../purchase-draft-recovery.js');
+const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro, rascunhoConfirmadoSemEdicao } = require('../purchase-draft-recovery.js');
 
 function congelar(valor) {
   if (valor && typeof valor === 'object') {
@@ -37,6 +37,29 @@ const notaSalva = {
   id: 'nota-a', tipoRegistro: 'compra', nf: '123', fornecedor: 'Açaí Distribuidora',
   data: '2026-11-15', itens: [{ nome: 'Suco goiaba', qtd: 12, valor: 3.24 }],
 };
+
+test('compra salva encerra seu rascunho mesmo se o servidor normalizar campos da nota', () => {
+  const registro = {
+    savedRecordId: notaSalva.id,
+    savedNote: structuredClone(notaSalva),
+    syncSubmittedAt: 'versao-enviada',
+    updatedAt: 'versao-enviada',
+  };
+  const notaServidor = { ...structuredClone(notaSalva), categoriaNome: 'Categoria normalizada' };
+
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaServidor, () => false), true);
+});
+
+test('rascunho alterado depois do envio não é confundido com a nota já salva', () => {
+  const registro = {
+    savedRecordId: notaSalva.id,
+    savedNote: structuredClone(notaSalva),
+    syncSubmittedAt: 'versao-enviada',
+    updatedAt: 'versao-mais-nova',
+  };
+
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaSalva, igual), false);
+});
 
 test('confirmação da própria gravação avança a base antiga preservando o rascunho mais recente', () => {
   const registro = congelar({

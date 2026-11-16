@@ -65,10 +65,17 @@
   }
 
   function rascunhoConfirmadoSemEdicao(registro, notaServidor, igual) {
-    return !!(registro && registro.savedRecordId != null && registro.savedNote && notaServidor
-      && String(registro.savedRecordId) === String(notaServidor.id)
-      && registro.syncSubmittedAt && registro.syncSubmittedAt === registro.updatedAt
-      && typeof igual === 'function' && igual(registro.savedNote, notaServidor));
+    if (!registro || registro.savedRecordId == null || !registro.savedNote || !notaServidor) return false;
+    var id = String(notaServidor.id);
+    var ehNotaCompra = function (nota) {
+      return !!(nota && nota.tipoRegistro !== 'despesa' && Array.isArray(nota.itens) && nota.itens.length);
+    };
+    // O token da revisão prova que nenhuma edição posterior substituiu o envio.
+    // A comparação do objeto inteiro pode falhar por normalizações inofensivas do servidor.
+    return ehNotaCompra(registro.savedNote) && ehNotaCompra(notaServidor)
+      && String(registro.savedRecordId) === id
+      && String(registro.savedNote.id) === id
+      && !!registro.syncSubmittedAt && registro.syncSubmittedAt === registro.updatedAt;
   }
 
   function prepararComoNovaCompra(registro) {
