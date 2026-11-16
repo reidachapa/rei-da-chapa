@@ -70,12 +70,115 @@
     var ehNotaCompra = function (nota) {
       return !!(nota && nota.tipoRegistro !== 'despesa' && Array.isArray(nota.itens) && nota.itens.length);
     };
-    // O token da revisão prova que nenhuma edição posterior substituiu o envio.
-    // A comparação do objeto inteiro pode falhar por normalizações inofensivas do servidor.
-    return ehNotaCompra(registro.savedNote) && ehNotaCompra(notaServidor)
-      && String(registro.savedRecordId) === id
-      && String(registro.savedNote.id) === id
-      && !!registro.syncSubmittedAt && registro.syncSubmittedAt === registro.updatedAt;
+    if (!ehNotaCompra(registro.savedNote) || !ehNotaCompra(notaServidor)
+      || String(registro.savedRecordId) !== id
+      || String(registro.savedNote.id) !== id
+      || !registro.syncSubmittedAt || registro.syncSubmittedAt !== registro.updatedAt) return false;
+    // Only the full purchase comparison may confirm an already-linked draft.
+    // The invoice signature intentionally omits fields, so it is insufficient here.
+    return typeof igual === 'function' && !!igual(registro.savedNote, notaServidor);
+  }
+
+  function valorMoedaRascunho(valor) {
+    if (typeof valor === 'number') return Number.isFinite(valor) ? valor : null;
+    var texto = String(valor == null ? '' : valor).trim().replace(/[^\d,.-]/g, '');
+    if (!texto) return 0;
+    if (texto.indexOf(',') >= 0) texto = texto.replace(/\./g, '').replace(',', '.');
+    else if (/^-?\d{1,3}(\.\d{3})+$/.test(texto)) texto = texto.replace(/\./g, '');
+    var numero = Number(texto);
+    return Number.isFinite(numero) ? numero : null;
+  }
+
+  function rascunhoCorrespondeACompraSalva(registro, notas, assinatura) {
+    if (!registro || !Array.isArray(notas) || typeof assinatura !== 'function'
+      || registro.savedRecordId != null || registro.editId != null || registro.operacao === 'editar'
+      || registro.operacao && registro.operacao !== 'nova') return false;
+    var campos = registro.campos || {};
+    var nf = String(campos.despNF || '').trim();
+    var fornecedor = String(campos.despFornecedor || '').trim();
+    var data = String(campos.despData || '').trim();
+    if (!nf || !fornecedor || !data || !Array.isArray(registro.itens) || !registro.itens.length) return false;
+    var desconto = valorMoedaRascunho(campos.despDesconto);
+    if (desconto == null) return false;
+    var candidata = {
+      tipoRegistro: 'compra', data: data, nf: nf, fornecedor: fornecedor,
+      descontoOriginal: desconto,
+      descontoTipo: registro.descontoTipo === 'percent' ? 'percent' : 'valor',
+      itens: registro.itens
+    };
+    var chave = assinatura(candidata);
+    if (!chave) return false;
+    function texto(valor) {
+      // A legacy draft is removed only on exact business text; normalize spacing
+      // and Unicode composition, but preserve case and accents to avoid false matches.
+      return String(valor == null ? '' : valor).trim().replace(/\s+/g, ' ').normalize('NFC');
+    }
+    function mesmoNumero(a, b) {
+      var x = valorMoedaRascunho(a), y = valorMoedaRascunho(b);
+      return x != null && y != null && Math.abs(x - y) <= 1e-8;
+    }
+    function extrasItem(item) {
+      item = item || {};
+      var tipoItem = tipoItemRascunho(item);
+      return JSON.stringify({
+        nome: texto(item.nome),
+        nomeBase: texto(item.nomeBase || item.nome),
+        marca: texto(item.marca),
+        tipoItem: tipoItem,
+        unidade: texto(item.unid || 'un'),
+        categoria: texto(item.categoria || (tipoItem === 'prod' ? 'Produtos' : tipoItem === 'ing' ? 'outro' : '')),
+        categoriaNome: texto(item.categoriaNome || item.categoria),
+        precoVenda: valorMoedaRascunho(item.pv),
+        lucroPct: valorMoedaRascunho(item.lucroPct),
+        modoPreco: texto(item.modoPreco),
+        modoCompra: texto(item.modoCompra),
+        rendimento: valorMoedaRascunho(item.rend),
+        unidadeEstoque: texto(item.unidadeEstoque),
+        descontoOriginal: valorMoedaRascunho(item.descontoOriginal !== undefined ? item.descontoOriginal : item.desconto),
+        descontoTipo: texto(item.descontoTipo || 'valor'),
+        controlaEstoque: item.controlaEstoque,
+        rendimentoInformado: item.rendimentoInformado
+      });
+    }
+    function tipoItemRascunho(item) {
+      var vinc = String(item.vinc || item.aplicado && item.aplicado.vinc || '');
+      if (vinc.indexOf('ing:') === 0) return 'ing';
+      if (vinc.indexOf('pao:') === 0) return 'pao';
+      if (vinc.indexOf('prod:') === 0) return 'prod';
+      return item.tipoItem === 'ing' || item.tipoItem === 'pao' ? item.tipoItem : 'prod';
+    }
+    function camposDoRascunhoIguais(nota) {
+      if (!nota || !Array.isArray(nota.itens) || nota.itens.length !== registro.itens.length) return false;
+      var subcategoria = String(campos.despSubcategoria || '').trim();
+      var descontoNota = valorMoedaRascunho(nota.descontoOriginal !== undefined ? nota.descontoOriginal : nota.desconto);
+      var subtotal = registro.itens.reduce(function (total, item) {
+        var bruto = Math.max(0, (valorMoedaRascunho(item && item.qtd) || 0) * (valorMoedaRascunho(item && item.valor) || 0));
+        var itemDesconto = Math.max(0, valorMoedaRascunho(item && (item.descontoOriginal !== undefined ? item.descontoOriginal : item.desconto)) || 0);
+        if (item && item.descontoTipo === 'percent') itemDesconto = bruto * Math.min(100, itemDesconto) / 100;
+        return total + Math.max(0, bruto - Math.min(bruto, itemDesconto));
+      }, 0);
+      var descontoEfetivo = registro.descontoTipo === 'percent' ? subtotal * Math.min(100, desconto) / 100 : desconto;
+      var totalCalculado = Math.max(0, subtotal - Math.min(subtotal, descontoEfetivo));
+      var categoriaNome = campos.despCategoriaNome || campos.despCategoria;
+      if (texto(nota.nf) !== texto(nf)
+        || texto(nota.fornecedor) !== texto(fornecedor)
+        || texto(nota.data) !== texto(data)
+        || texto(nota.categoria) !== texto(campos.despCategoria)
+        || texto(nota.categoriaNome || nota.categoria) !== texto(categoriaNome)
+        || texto(nota.subcategoria) !== texto(subcategoria)
+        || texto(nota.descricao) !== texto(subcategoria || 'Compra')
+        || texto(nota.status) !== texto(campos.despStatus)
+        || texto(nota.obs) !== texto(campos.despObs)
+        || texto(nota.descontoTipo || 'valor') !== texto(registro.descontoTipo || 'valor')
+        || !mesmoNumero(descontoNota, desconto)
+        || !mesmoNumero(nota.valor, totalCalculado)) return false;
+      var extrasRascunho = registro.itens.map(extrasItem).sort();
+      var extrasNota = nota.itens.map(extrasItem).sort();
+      return extrasRascunho.every(function (valor, indice) { return valor === extrasNota[indice]; });
+    }
+    return notas.some(function (nota) {
+      return !!nota && assinatura(nota) === chave && camposDoRascunhoIguais(nota);
+    });
   }
 
   function prepararComoNovaCompra(registro) {
@@ -179,6 +282,18 @@
     return copia;
   }
 
+  async function excluirRascunhoServidorSeIgual(cliente, id, envelope) {
+    if (!cliente || typeof cliente.from !== 'function' || !id || !envelope) throw new Error('Não foi possível verificar o rascunho antes de removê-lo.');
+    var resposta = await cliente.from('estado')
+      .delete()
+      .eq('id', id)
+      .filter('dados', 'eq', JSON.stringify(envelope))
+      .select('id')
+      .maybeSingle();
+    if (resposta.error) throw resposta.error;
+    return !!(resposta.data && String(resposta.data.id) === String(id));
+  }
+
   return {
     reconciliarBase: reconciliarBase,
     candidatas: candidatas,
@@ -186,6 +301,8 @@
     prepararRegistro: prepararRegistro,
     ehCompraNovaRascunho: ehCompraNovaRascunho,
     rascunhoConfirmadoSemEdicao: rascunhoConfirmadoSemEdicao,
+    rascunhoCorrespondeACompraSalva: rascunhoCorrespondeACompraSalva,
+    excluirRascunhoServidorSeIgual: excluirRascunhoServidorSeIgual,
     prepararComoNovaCompra: prepararComoNovaCompra
   };
 });

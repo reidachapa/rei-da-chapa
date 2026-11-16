@@ -3,7 +3,8 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro, rascunhoConfirmadoSemEdicao } = require('../purchase-draft-recovery.js');
+const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro, rascunhoConfirmadoSemEdicao, rascunhoCorrespondeACompraSalva, excluirRascunhoServidorSeIgual } = require('../purchase-draft-recovery.js');
+const ComprasDuplicadas = require('../purchase-duplicates.js');
 
 function congelar(valor) {
   if (valor && typeof valor === 'object') {
@@ -35,19 +36,26 @@ const item = {
 };
 const notaSalva = {
   id: 'nota-a', tipoRegistro: 'compra', nf: '123', fornecedor: 'Açaí Distribuidora',
-  data: '2026-11-15', itens: [{ nome: 'Suco goiaba', qtd: 12, valor: 3.24 }],
+  data: '2026-11-15', categoria: 'insumos', categoriaNome: 'Insumos / Compras',
+  descricao: 'Compra', subcategoria: '', status: 'pago', obs: '',
+  desconto: 0, descontoOriginal: 0, descontoTipo: 'valor', valor: 38.88,
+  itens: [{ nome: 'Suco goiaba', qtd: 12, valor: 3.24, unid: 'un', categoria: 'Produtos' }],
 };
 
-test('compra salva encerra seu rascunho mesmo se o servidor normalizar campos da nota', () => {
+test('compra nova salva encerra o rascunho após normalização sem ignorar diferenças da compra', () => {
   const registro = {
+    operacao: 'nova',
     savedRecordId: notaSalva.id,
     savedNote: structuredClone(notaSalva),
     syncSubmittedAt: 'versao-enviada',
     updatedAt: 'versao-enviada',
   };
-  const notaServidor = { ...structuredClone(notaSalva), categoriaNome: 'Categoria normalizada' };
+  const notaServidor = { ...structuredClone(notaSalva), criadoEm: 'data confirmada pelo servidor' };
 
-  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaServidor, () => false), true);
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaServidor, igual), true);
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaServidor, () => false), false);
+  notaServidor.itens[0].valor = 99;
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaServidor, igual), false);
 });
 
 test('rascunho alterado depois do envio não é confundido com a nota já salva', () => {
@@ -58,7 +66,27 @@ test('rascunho alterado depois do envio não é confundido com a nota já salva'
     updatedAt: 'versao-mais-nova',
   };
 
-  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaSalva, igual), false);
+  assert.equal(rascunhoConfirmadoSemEdicao(registro, notaSalva, igual, ComprasDuplicadas.assinatura), false);
+});
+
+test('rascunho antigo sem vínculo só é reconhecido como compra já salva quando a nota inteira coincide', () => {
+  const registro = {
+    operacao: 'nova', editId: null, descontoTipo: 'valor',
+    campos: { despData: notaSalva.data, despFornecedor: notaSalva.fornecedor, despNF: notaSalva.nf, despDesconto: '0,00', despCategoria: 'insumos', despCategoriaNome: notaSalva.categoriaNome, despSubcategoria: '', despStatus: 'pago', despObs: '' },
+    itens: [{ ...notaSalva.itens[0], qtd: 12, valor: 3.24, unid: 'un' }],
+  };
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [notaSalva], ComprasDuplicadas.assinatura), true);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, itens: [{ ...notaSalva.itens[0], valor: 3.25 }] }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, categoria: 'outro' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, categoriaNome: 'Categoria diferente' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, itens: [{ ...notaSalva.itens[0], categoria: 'Outra categoria' }] }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, obs: 'Observação ainda não salva' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, obs: 'Não pôde retirar' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva({ ...registro, campos: { ...registro.campos, despObs: 'Não pode retirar' } }, [{ ...notaSalva, obs: 'Não pôde retirar' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, subcategoria: 'Marca diferente', descricao: 'Marca diferente' }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, itens: [{ ...notaSalva.itens[0], pv: 7.5 }] }], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva({ ...registro, campos: { ...registro.campos, despFornecedor: '' } }, [notaSalva], ComprasDuplicadas.assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva({ ...registro, operacao: 'editar', editId: notaSalva.id }, [notaSalva], ComprasDuplicadas.assinatura), false);
 });
 
 test('confirmação da própria gravação avança a base antiga preservando o rascunho mais recente', () => {
@@ -342,4 +370,37 @@ test('módulo UMD também funciona no navegador sem CommonJS', () => {
   assert.equal(resultado.baseNota, null);
   assert.equal(resultado.campos.despNF, '123');
   assert.equal(resultado.temRascunho, true);
+});
+
+test('seletor financeiro reabre a lista sem texto antigo e Enter vazio não escolhe uma categoria', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  assert(html.includes("function abrirListaCompleta(){input.value='';ativo=-1;desenhar()}"));
+  assert(html.includes("input.addEventListener('focus',abrirListaCompleta)"));
+  assert(html.includes("input.addEventListener('pointerdown',function(){if(document.activeElement===input&&input.value)abrirListaCompleta()})"));
+  assert(html.includes("if(!String(input.value||'').trim()&&ativo<0)return;"));
+});
+
+test('exclusão remota de rascunho usa comparação exata e só confirma quando retorna a linha apagada', async () => {
+  const envelope = { tipo: 'rei-da-chapa-rascunho-compra', versao: 1, registro: { updatedAt: 'rev-1', fornecedor: 'Açaí' } };
+  const chamadas = [];
+  function clienteComResposta(resposta) {
+    const query = {
+      delete() { chamadas.push(['delete']); return this; },
+      eq(coluna, valor) { chamadas.push(['eq', coluna, valor]); return this; },
+      filter(coluna, operador, valor) { chamadas.push(['filter', coluna, operador, valor]); return this; },
+      select(colunas) { chamadas.push(['select', colunas]); return this; },
+      maybeSingle() { return Promise.resolve(resposta); },
+    };
+    return { from(tabela) { chamadas.push(['from', tabela]); return query; } };
+  }
+
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: { id: 'draft-1' }, error: null }), 'draft-1', envelope), true);
+  assert.deepEqual(chamadas, [
+    ['from', 'estado'], ['delete'], ['eq', 'id', 'draft-1'],
+    ['filter', 'dados', 'eq', JSON.stringify(envelope)], ['select', 'id'],
+  ]);
+
+  chamadas.length = 0;
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: null, error: null }), 'draft-1', envelope), false);
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: { id: 'other-id' }, error: null }), 'draft-1', envelope), false);
 });
