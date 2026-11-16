@@ -17,7 +17,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#0a0a0c">
-<!-- APP_VERSION: 1.0.48 -->
+<!-- APP_VERSION: 1.0.49 -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -1040,7 +1040,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
     </button>
-    <span id="appVersion" title="Versão do aplicativo">v1.0.48</span>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.49</span>
   </div>
 </header>  
 <main>
@@ -10468,6 +10468,7 @@ setTimeout(function(){var form=document.getElementById('formProduto');if(form&&!
       var resultado=await baixarDoServidor();
       if(!resultado||!resultado.ok){var erroConexao=new Error(resultado&&resultado.etapa==='leitura'?'Falha ao ler o registro estado no Supabase.':resultado&&resultado.etapa==='estado'?'O registro principal não contém uma loja válida.':'Os dados chegaram, mas houve uma falha ao preparar o estado do app.');erroConexao.etapaInicializacao=resultado&&resultado.etapa||etapaConexao;erroConexao.causa=resultado&&resultado.error;throw erroConexao}
       window.__authPermitido=true;role='atendente';conexaoAtiva=true;
+      if(typeof window.__carregarRascunhosCompra==='function')window.__carregarRascunhosCompra().then(function(r){if(!r.ok)console.warn('Rascunhos deste aparelho indisponíveis no Supabase:',r.error)}).catch(function(e){console.warn('Falha ao consultar rascunhos deste aparelho:',e)});
       var seletor=document.getElementById('roleSelect');if(seletor)seletor.value='atendente';
       if(gate)gate.style.display='none';if(window.finalizarSplash)window.finalizarSplash(true);
       try{aplicarRole()}catch(e){resultado.falhas.push('perfil inicial');console.error('Falha ao aplicar o perfil inicial após carregar os dados:',e)}
@@ -10598,6 +10599,9 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   if (!modal || typeof window.abrirModalDespesa !== 'function') return;
 
   var prefixo = 'rei_chapa_rascunho_compra_v1:';
+  var prefixoServidor = 'rascunho_compra_v1:';
+  var chaveIdDispositivo = 'rei_chapa_id_dispositivo_v1';
+  var idDispositivo = obterIdDispositivo();
   var camposIds = ['despData', 'despNF', 'despCategoria', 'despSubcategoria', 'despFornecedor', 'despStatus', 'despDesconto', 'despObs'];
   var abrirOriginal = window.abrirModalDespesa;
   var lojaRascunho = 'padrao';
@@ -10608,6 +10612,197 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var sujo = false;
   var sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   var pendentes = new Map();
+  var temporizadoresRemotos = new Map();
+  var gravacoesRemotas = new Map();
+  var versoesConfirmadas = new Map();
+  var rascunhosCarregados = false;
+  var promessaCarregarRascunhos = null;
+  var avisouFalhaRascunho = false;
+  var statusRascunho = null;
+
+  function criarUuidSeguro() {
+    if (!window.crypto) throw new Error('Este navegador não oferece geração segura de identificador.');
+    if (typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    if (typeof window.crypto.getRandomValues !== 'function') throw new Error('Este navegador não oferece geração segura de identificador.');
+    var bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 15) | 64;
+    bytes[8] = (bytes[8] & 63) | 128;
+    var hex = Array.from(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+  }
+  function obterIdDispositivo() {
+    try {
+      var salvo = window.localStorage.getItem(chaveIdDispositivo);
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(salvo || ''))) return salvo;
+      var novo = criarUuidSeguro();
+      window.localStorage.setItem(chaveIdDispositivo, novo);
+      if (window.localStorage.getItem(chaveIdDispositivo) !== novo) throw new Error('O navegador não confirmou o identificador do aparelho.');
+      return novo;
+    } catch (erro) {
+      console.warn('Não consegui guardar o ID deste aparelho; rascunhos não serão persistidos sem ele:', erro);
+      return null;
+    }
+  }
+  function idServidorRascunho(k) { return prefixoServidor + idDispositivo + ':' + encodeURIComponent(String(k)); }
+  function lojaDaChaveRascunho(k) {
+    var parte = String(k || '').slice(prefixo.length).split(':')[0];
+    try { return decodeURIComponent(parte || 'padrao'); } catch (e) { return 'padrao'; }
+  }
+  function desenharStatusRascunho(tipo, texto) {
+    if (!statusRascunho) {
+      statusRascunho = document.createElement('div');
+      statusRascunho.id = 'statusRascunhoCompra';
+      statusRascunho.setAttribute('role', 'status');
+      statusRascunho.style.cssText = 'display:none;margin:-5px 0 10px;padding:7px 9px;border:1px solid #3a3a3f;border-radius:8px;background:#171719;font-size:10px;line-height:1.4';
+      var titulo = document.getElementById('despesaTitulo');
+      if (titulo && titulo.parentNode) titulo.parentNode.insertBefore(statusRascunho, titulo.nextSibling);
+    }
+    if (!statusRascunho) return;
+    statusRascunho.textContent = texto || '';
+    statusRascunho.style.display = texto ? 'block' : 'none';
+    statusRascunho.style.color = tipo === 'erro' ? '#ff8a8a' : tipo === 'ok' ? '#55cf86' : '#e6c15b';
+    statusRascunho.style.borderColor = tipo === 'erro' ? '#9b4848' : tipo === 'ok' ? '#32724c' : '#695424';
+  }
+  function falharPersistenciaRascunho(erro, k, versao) {
+    console.warn('Não consegui salvar o rascunho no Supabase:', erro);
+    var atual = lerChave(k);
+    if (k === chaveRascunhoAtivo && atual && atual.rascunhoAtualizadoEm === versao) {
+      desenharStatusRascunho('erro', '⚠️ Rascunho não confirmado no Supabase. Confira a conexão antes de sair.');
+      if (!avisouFalhaRascunho && typeof window.toast === 'function') window.toast('⚠️ O rascunho não foi confirmado no Supabase. Mantenha esta tela aberta e confira a conexão.');
+      avisouFalhaRascunho = true;
+    }
+  }
+  function persistirRascunhoServidor(k, registro) {
+    if (!idDispositivo) return Promise.reject(new Error('Não foi possível guardar o identificador deste aparelho.'));
+    if (!window.__authPermitido || !supa || typeof supa.from !== 'function') return Promise.reject(new Error('Supabase indisponível.'));
+    var envelope = { tipo: 'rei-da-chapa-rascunho-compra', versao: 1, dispositivo: idDispositivo, chave: k, loja: lojaDaChaveRascunho(k), registro: clonar(registro) };
+    var linha = { id: idServidorRascunho(k), dados: envelope, atualizado_em: new Date().toISOString() };
+    var anterior = gravacoesRemotas.get(k) || Promise.resolve();
+    var tarefa = anterior.catch(function () {}).then(async function () {
+      var resposta = await supa.from('estado').upsert(linha, { onConflict: 'id' }).select('id,atualizado_em').maybeSingle();
+      if (resposta.error) throw resposta.error;
+      if (!resposta.data || resposta.data.id !== linha.id) throw new Error('O Supabase não confirmou o rascunho deste aparelho.');
+      versoesConfirmadas.set(k, registro.rascunhoAtualizadoEm);
+      var atual = lerChave(k);
+      if (k === chaveRascunhoAtivo && atual && atual.rascunhoAtualizadoEm === registro.rascunhoAtualizadoEm) {
+        avisouFalhaRascunho = false;
+        desenharStatusRascunho('ok', '✅ Rascunho salvo no Supabase neste aparelho.');
+      }
+      return resposta.data;
+    });
+    gravacoesRemotas.set(k, tarefa);
+    tarefa.finally(function () { if (gravacoesRemotas.get(k) === tarefa) gravacoesRemotas.delete(k); }).catch(function () {});
+    return tarefa;
+  }
+  function enfileirarExclusaoRascunho(k) {
+    var anterior = gravacoesRemotas.get(k) || Promise.resolve();
+    var tarefa = anterior.catch(function () {}).then(async function () {
+      if (!idDispositivo || !window.__authPermitido || !supa) throw new Error('Não consegui confirmar a limpeza do rascunho no Supabase.');
+      var id = idServidorRascunho(k);
+      var resposta = await supa.from('estado').delete().eq('id', id);
+      if (resposta.error) throw resposta.error;
+      versoesConfirmadas.delete(k);
+      return true;
+    });
+    gravacoesRemotas.set(k, tarefa);
+    tarefa.finally(function () { if (gravacoesRemotas.get(k) === tarefa) gravacoesRemotas.delete(k); }).catch(function () {});
+    return tarefa;
+  }
+  function agendarPersistenciaRascunho(k, registro, imediato) {
+    var timerAnterior = temporizadoresRemotos.get(k);
+    if (timerAnterior) window.clearTimeout(timerAnterior);
+    registro.rascunhoAtualizadoEm = Date.now();
+    try { window.__appMemoryStorage.setItem(k, JSON.stringify(registro)); } catch (e) {}
+    if (!idDispositivo) {
+      desenharStatusRascunho('erro', '⚠️ ID do aparelho indisponível. O rascunho não foi salvo no servidor.');
+      return;
+    }
+    if (!window.__authPermitido || !supa) {
+      desenharStatusRascunho('erro', '⚠️ Supabase indisponível. O rascunho não foi confirmado.');
+      return;
+    }
+    desenharStatusRascunho('salvando', '⏳ Salvando rascunho no Supabase…');
+    if (imediato) {
+      persistirRascunhoServidor(k, registro).catch(function (erro) { falharPersistenciaRascunho(erro, k, registro.rascunhoAtualizadoEm); });
+      return;
+    }
+    var timer = window.setTimeout(function () {
+      temporizadoresRemotos.delete(k);
+      persistirRascunhoServidor(k, registro).catch(function (erro) { falharPersistenciaRascunho(erro, k, registro.rascunhoAtualizadoEm); });
+    }, imediato ? 0 : 350);
+    temporizadoresRemotos.set(k, timer);
+  }
+  function excluirRascunhoServidor(k) {
+    var timer = temporizadoresRemotos.get(k);
+    if (timer) window.clearTimeout(timer);
+    temporizadoresRemotos.delete(k);
+    return enfileirarExclusaoRascunho(k);
+  }
+  function removerRascunhoConfirmado(k) {
+    window.__appMemoryStorage.removeItem(k);
+    pendentes.delete(k);
+    excluirRascunhoServidor(k).catch(function (erro) {
+      console.warn('A nota foi confirmada, mas o rascunho remoto não pôde ser removido:', erro);
+    });
+  }
+  async function carregarRascunhosServidor() {
+    if (rascunhosCarregados) return { ok: true };
+    if (!idDispositivo) return { ok: false, error: new Error('Não consegui guardar o ID deste aparelho.') };
+    if (!window.__authPermitido || !supa) return { ok: false, error: new Error('Supabase ainda não está disponível.') };
+    if (promessaCarregarRascunhos) return promessaCarregarRascunhos;
+    promessaCarregarRascunhos = (async function () {
+      try {
+        var inicio = prefixoServidor + idDispositivo + ':';
+        var resposta = await supa.from('estado').select('id,dados').like('id', inicio + '%').order('atualizado_em', { ascending: false });
+        if (resposta.error) return { ok: false, error: resposta.error };
+        var linhasValidas = new Set();
+        (Array.isArray(resposta.data) ? resposta.data : []).forEach(function (linha) {
+          var envelope = linha && linha.dados;
+          if (!envelope || envelope.tipo !== 'rei-da-chapa-rascunho-compra' || envelope.versao !== 1 || envelope.dispositivo !== idDispositivo) return;
+          var k = String(envelope.chave || '');
+          if (linha.id !== idServidorRascunho(k) || k.indexOf(prefixo) !== 0 || envelope.loja !== lojaDaChaveRascunho(k) || !envelope.registro || envelope.registro.versao !== 1 || !temConteudoRascunho(envelope.registro)) return;
+          linhasValidas.add(k);
+          var atual = lerChave(k);
+          var localQuando = atual ? Number(atual.rascunhoAtualizadoEm) || (parseInt(String(atual.updatedAt || '').split('-')[0], 36) || 0) : -1;
+          var remotoQuando = Number(envelope.registro.rascunhoAtualizadoEm) || (parseInt(String(envelope.registro.updatedAt || '').split('-')[0], 36) || 0);
+          if (!atual || remotoQuando >= localQuando) window.__appMemoryStorage.setItem(k, JSON.stringify(envelope.registro));
+          else agendarPersistenciaRascunho(k, atual, true);
+          versoesConfirmadas.set(k, envelope.registro.rascunhoAtualizadoEm);
+        });
+        rascunhosCarregados = true;
+        for (var i = 0; i < window.__appMemoryStorage.length; i++) {
+          var chaveLocal = window.__appMemoryStorage.key(i);
+          if (!chaveLocal || chaveLocal.indexOf(prefixo) !== 0 || linhasValidas.has(chaveLocal)) continue;
+          var registroLocal = lerChave(chaveLocal);
+          if (registroLocal && registroLocal.versao === 1 && temConteudoRascunho(registroLocal)) agendarPersistenciaRascunho(chaveLocal, registroLocal, true);
+        }
+        return { ok: true };
+      } catch (erro) {
+        return { ok: false, error: erro };
+      } finally {
+        promessaCarregarRascunhos = null;
+      }
+    })();
+    return promessaCarregarRascunhos;
+  }
+  window.__carregarRascunhosCompra = carregarRascunhosServidor;
+  function sincronizarRascunhosPendentes() {
+    if (!idDispositivo || !window.__authPermitido || !supa) return;
+    if (!rascunhosCarregados) {
+      carregarRascunhosServidor().then(function (carga) { if (carga.ok) sincronizarRascunhosPendentes(); });
+      return;
+    }
+    for (var i = 0; i < window.__appMemoryStorage.length; i++) {
+      var k = window.__appMemoryStorage.key(i);
+      if (!k || k.indexOf(prefixo) !== 0 || temporizadoresRemotos.has(k) || gravacoesRemotas.has(k)) continue;
+      var registro = lerChave(k);
+      if (!registro || !temConteudoRascunho(registro)) continue;
+      var versaoLocal = registro.rascunhoAtualizadoEm == null ? null : Number(registro.rascunhoAtualizadoEm);
+      var versaoServidor = versoesConfirmadas.has(k) && versoesConfirmadas.get(k) != null ? Number(versoesConfirmadas.get(k)) : null;
+      if (versaoLocal !== versaoServidor) agendarPersistenciaRascunho(k, registro, true);
+    }
+  }
 
   function lojaAtual() {
     try { if (typeof lojaAtivaId !== 'undefined' && lojaAtivaId != null && lojaAtivaId !== '') return String(lojaAtivaId); } catch (e) {}
@@ -10629,7 +10824,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   function temConteudoRascunho(registro) { return !!(registro && (registro.temRascunho === true || (registro.campos && Object.keys(registro.campos).length > 0) || (Array.isArray(registro.itens) && registro.itens.length > 0))); }
   function ehCompraNovaRascunho(registro) { return !!(window.RecuperacaoCompra && window.RecuperacaoCompra.ehCompraNovaRascunho(registro, window.notaCompraIgual)); }
   function desvincularRascunhoSalvoComoNovo(registro) { var novo=window.RecuperacaoCompra.prepararComoNovaCompra(registro);novo.updatedAt=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);return novo }
-  function salvarRascunho() {
+  function salvarRascunho(opcoes) {
     if (!estaAberto()) return;
     try {
       var campos = {};
@@ -10662,6 +10857,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       if (anterior.syncSubmittedAt) registro.syncSubmittedAt = anterior.syncSubmittedAt;
       var k = chaveRascunhoAtivo || chave(lojaRascunho, idRascunho);
       window.__appMemoryStorage.setItem(k, JSON.stringify(registro));
+      agendarPersistenciaRascunho(k, registro, !!(opcoes && opcoes.imediato));
       return true;
     } catch (e) { console.warn('Não consegui manter o rascunho na memória desta tela:', e); return false; }
   }
@@ -10711,7 +10907,8 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       preparado.updatedAt=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
       if(atual)preparado.notaServidorAntesDaRevisao=clonar(atual);
       window.__appMemoryStorage.setItem(novaChave,JSON.stringify(preparado));
-      if(chaveAntes!==novaChave){registro.retomarAoVoltar=false;window.__appMemoryStorage.setItem(chaveAntes,JSON.stringify(registro));}
+      agendarPersistenciaRascunho(novaChave,preparado,true);
+      if(chaveAntes!==novaChave){registro.retomarAoVoltar=false;window.__appMemoryStorage.setItem(chaveAntes,JSON.stringify(registro));agendarPersistenciaRascunho(chaveAntes,registro,true);}
       estadoBaseSincronizado=clonar(info.dados);estadoLocalSujo=false;ultimaAtualizacao=info.versao;
       try{aplicarDadosEstadoAtual(clonar(info.dados))}catch(erroTela){console.warn('Dados conferidos; uma área da tela precisa ser redesenhada:',erroTela)}
       lojaRascunho=info.loja;idRascunho=novoId;chaveRascunhoAtivo=novaChave;baseNotaAtiva=atual?clonar(atual):null;
@@ -10761,7 +10958,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     if (!registro) return;
     registro.retomarAoVoltar = !!ativo;
     if (preservarPosicao === false) {
-      try { window.__appMemoryStorage.setItem(chaveAlvo, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui atualizar o rascunho da compra:', e); }
+      try { window.__appMemoryStorage.setItem(chaveAlvo, JSON.stringify(registro)); agendarPersistenciaRascunho(chaveAlvo, registro, true); } catch (e) { console.warn('Não consegui atualizar o rascunho da compra:', e); }
       return;
     }
     var viewAtiva = document.querySelector('.view.ativo');
@@ -10771,12 +10968,19 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     registro.scrollModal = modal.scrollTop || 0;
     registro.scrollFormulario = caixa ? caixa.scrollTop || 0 : 0;
     registro.scrollListaItens = (modal.querySelector('.lista-itens-compra') || {}).scrollTop || 0;
-    try { window.__appMemoryStorage.setItem(chaveAlvo, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
+    try { window.__appMemoryStorage.setItem(chaveAlvo, JSON.stringify(registro)); agendarPersistenciaRascunho(chaveAlvo, registro, true); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
   }
   function guardarRetomadaAoSair() {
-    if (!estaAberto()) return;
-    salvarRascunho();
+    if (!estaAberto()) return Promise.resolve(true);
+    if (!salvarRascunho({ imediato: true })) return Promise.resolve(false);
     salvarFlagRetomada(true);
+    var k = chaveRascunhoAtivo || chave(lojaRascunho, idRascunho);
+    var tarefa = gravacoesRemotas.get(k);
+    if (!idDispositivo || !window.__authPermitido || !supa || !tarefa) return Promise.resolve(false);
+    return tarefa.then(function () {
+      var registro = lerChave(k);
+      return !!(registro && versoesConfirmadas.has(k) && Number(registro.rascunhoAtualizadoEm) === Number(versoesConfirmadas.get(k)));
+    }).catch(function () { return false; });
   }
   function localizarRascunhoParaRetomar() {
     var prefixoLoja = prefixo + encodeURIComponent(lojaAtual()) + ':';
@@ -10793,8 +10997,14 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     } catch (e) { console.warn('Não consegui localizar o rascunho da compra:', e); }
     return melhor;
   }
-  function retomarRascunhoAposAutorizacao() {
+  async function retomarRascunhoAposAutorizacao() {
     if (!window.__authPermitido || typeof souGerente !== 'function' || !souGerente() || estaAberto()) return;
+    var carga = await carregarRascunhosServidor();
+    if (!carga.ok) {
+      if (typeof window.toast === 'function') window.toast('⚠️ Não consegui consultar os rascunhos do Supabase. Nenhum rascunho foi substituído.');
+      return;
+    }
+    if (!window.__authPermitido || !souGerente() || estaAberto()) return;
     var pendente = localizarRascunhoParaRetomar();
     if (!pendente) return;
     var tela = pendente.registro.telaAtiva;
@@ -10809,12 +11019,11 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         var enviada=pendente.registro.savedRecordId;
         var confirmada=enviada!=null&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(enviada):null;
         if(enviada!=null&&window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(pendente.registro,confirmada,window.notaCompraIgual)){
-          try{window.__appMemoryStorage.removeItem(pendente.chave)}catch(e){}
-          pendentes.delete(pendente.chave);
+          removerRascunhoConfirmado(pendente.chave);
           return;
         }
         pendente.registro=desvincularRascunhoSalvoComoNovo(pendente.registro);
-        try{window.__appMemoryStorage.setItem(pendente.chave,JSON.stringify(pendente.registro))}catch(e){}
+        try{window.__appMemoryStorage.setItem(pendente.chave,JSON.stringify(pendente.registro));agendarPersistenciaRascunho(pendente.chave,pendente.registro,true)}catch(e){}
         pendentes.delete(pendente.chave);
         editId=null;compra=null;compraNova=true;
       }
@@ -10822,12 +11031,11 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         var notaConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(pendente.registro.savedRecordId):null;
         if(notaConfirmada){
           if(window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(pendente.registro,notaConfirmada,window.notaCompraIgual)){
-            try{window.__appMemoryStorage.removeItem(pendente.chave)}catch(e){}
-            pendentes.delete(pendente.chave);
+            removerRascunhoConfirmado(pendente.chave);
             return;
           }
           pendente.registro=desvincularRascunhoSalvoComoNovo(pendente.registro);
-          try{window.__appMemoryStorage.setItem(pendente.chave,JSON.stringify(pendente.registro))}catch(e){}
+          try{window.__appMemoryStorage.setItem(pendente.chave,JSON.stringify(pendente.registro));agendarPersistenciaRascunho(pendente.chave,pendente.registro,true)}catch(e){}
           pendentes.delete(pendente.chave);
         }
       }
@@ -10881,10 +11089,25 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       });
     });
     sujo = true;
-    if (typeof window.toast === 'function') window.toast('📝 Rascunho da compra recuperado enquanto esta tela está aberta.');
+    var confirmadoNoServidor = versoesConfirmadas.has(k) && (registro.rascunhoAtualizadoEm == null ? versoesConfirmadas.get(k) == null : Number(registro.rascunhoAtualizadoEm) === Number(versoesConfirmadas.get(k)));
+    if (confirmadoNoServidor) {
+      desenharStatusRascunho('ok', '✅ Rascunho recuperado do Supabase neste aparelho.');
+      if (typeof window.toast === 'function') window.toast('📝 Rascunho da compra recuperado do Supabase neste aparelho.');
+    } else {
+      desenharStatusRascunho('erro', '⚠️ Este rascunho está apenas nesta sessão e ainda não foi confirmado no Supabase.');
+      if (typeof window.toast === 'function') window.toast('⚠️ Este rascunho ainda não foi confirmado no Supabase; mantenha a tela aberta e confira a conexão.');
+    }
   }
 
   window.abrirModalDespesa = function (despesa) {
+    if (window.__authPermitido && supa && !rascunhosCarregados) {
+      if (typeof window.toast === 'function') window.toast('⏳ Conferindo os rascunhos deste aparelho no Supabase…');
+      carregarRascunhosServidor().then(function (carga) {
+        if (carga.ok) window.abrirModalDespesa(despesa);
+        else if (typeof window.toast === 'function') window.toast('⚠️ Não consegui consultar os rascunhos. Tente novamente; não substituí nenhum.');
+      });
+      return;
+    }
     aberturaRascunho++;
     var loja = lojaAtual();
     var avisoRascunhoComoNova = false;
@@ -10898,14 +11121,13 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         var envioConfirmadoSemEdicao=idEnviado!=null&&window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(rascunhoSalvo,compraConfirmada,window.notaCompraIgual);
         var temVinculoDeEdicao=rascunhoSalvo.editId!=null||rascunhoSalvo.operacao==='editar';
         if(envioConfirmadoSemEdicao){
-          try { window.__appMemoryStorage.removeItem(chaveNova); } catch (e) {}
-          pendentes.delete(chaveNova);
+          removerRascunhoConfirmado(chaveNova);
           avisoNotaJaSalva = true;
         }else if(idEnviado!=null||temVinculoDeEdicao||!ehCompraNovaRascunho(rascunhoSalvo)){
           // A chave de “Nova compra” nunca pode transformar o rascunho em edição.
           // Edições reais são retomadas pela chave explícita da nota no histórico.
           rascunhoSalvo=desvincularRascunhoSalvoComoNovo(rascunhoSalvo);
-          try { window.__appMemoryStorage.setItem(chaveNova, JSON.stringify(rascunhoSalvo)); } catch (e) {}
+          try { window.__appMemoryStorage.setItem(chaveNova, JSON.stringify(rascunhoSalvo)); agendarPersistenciaRascunho(chaveNova, rascunhoSalvo, true); } catch (e) {}
           pendentes.delete(chaveNova);
           avisoRascunhoComoNova=true;
         }
@@ -10922,6 +11144,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     var botaoSalvar = document.getElementById('btnSalvarDespesa');
     if (titulo) titulo.textContent = despesa ? '✏️ Editar nota de compra' : '🛒 Registrar compra';
     if (botaoSalvar) botaoSalvar.textContent = despesa ? '🔄 Atualizar nota' : '💾 Salvar compra';
+    desenharStatusRascunho('', '');
     lojaRascunho = loja;
     idRascunho = despesa ? despesa.id : null;
     chaveRascunhoAtivo = chave(lojaRascunho, idRascunho);
@@ -10931,7 +11154,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     if (despesa) {
       if (registroBase && !registroBase.baseNota && (temConteudoRascunho(registroBase) || registroBase.savedRecordId)) {
         registroBase.baseNota = notaInicial;
-        try { window.__appMemoryStorage.setItem(k, JSON.stringify(registroBase)); } catch (e) {}
+        try { window.__appMemoryStorage.setItem(k, JSON.stringify(registroBase)); agendarPersistenciaRascunho(k, registroBase, true); } catch (e) {}
       }
     }
     var pendente = pendentes.has(k);
@@ -10962,6 +11185,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     registro.syncPendente = true;
     try {
       window.__appMemoryStorage.setItem(k, JSON.stringify(registro));
+      agendarPersistenciaRascunho(k, registro, true);
       pendentes.set(k, registro.updatedAt);
     } catch (e) { console.warn('Não consegui marcar o rascunho sincronizado:', e); }
   };
@@ -10976,27 +11200,25 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var notaIgual=!!(registro.savedNote&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
       if(ehCompraNovaRascunho(registro)){
         if(notaIgual&&registro.syncSubmittedAt&&registro.syncSubmittedAt===registro.updatedAt){
-          try{window.__appMemoryStorage.removeItem(k)}catch(e){}
-          pendentes.delete(k);
+          removerRascunhoConfirmado(k);
           if(k===chaveRascunhoAtivo)sujo=false;
           return true;
         }
         var novo=desvincularRascunhoSalvoComoNovo(registro);
-        try{window.__appMemoryStorage.setItem(k,JSON.stringify(novo))}catch(e){return false}
+        try{window.__appMemoryStorage.setItem(k,JSON.stringify(novo));agendarPersistenciaRascunho(k,novo,true)}catch(e){return false}
         pendentes.delete(k);
         if(k===chaveRascunhoAtivo){idRascunho=null;modoRascunhoCompra='nova';baseNotaAtiva=null;window.editandoDespesaId=null;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=null}
         return true;
       }
       if(notaIgual&&registro.syncSubmittedAt===registro.updatedAt){
-        try{window.__appMemoryStorage.removeItem(k)}catch(e){}
-        pendentes.delete(k);
+        removerRascunhoConfirmado(k);
         if(k===chaveRascunhoAtivo)sujo=false;
         return true;
       }
       if(notaIgual){
         registro.baseNota=clonar(notaConfirmada);
         registro.editId=String(id);
-        try{window.__appMemoryStorage.setItem(k,JSON.stringify(registro))}catch(e){}
+        try{window.__appMemoryStorage.setItem(k,JSON.stringify(registro));agendarPersistenciaRascunho(k,registro,true)}catch(e){}
         pendentes.delete(k);
         return true;
       }
@@ -11010,7 +11232,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     if(registro&&salvoId&&window.RecuperacaoCompra&&typeof window.notaCompraIgual==='function'){
       var confirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(salvoId):null;
       var reconciliado=window.RecuperacaoCompra.reconciliarBase(registro,obterCompraLocal(salvoId),confirmada,window.notaCompraIgual);
-      if(reconciliado.atualizou){registro=reconciliado.registro;baseNotaAtiva=clonar(registro.baseNota);try{window.__appMemoryStorage.setItem(k,JSON.stringify(registro))}catch(e){console.warn('Não consegui guardar a referência reconciliada da compra:',e)}}
+      if(reconciliado.atualizou){registro=reconciliado.registro;baseNotaAtiva=clonar(registro.baseNota);try{window.__appMemoryStorage.setItem(k,JSON.stringify(registro));agendarPersistenciaRascunho(k,registro,true)}catch(e){console.warn('Não consegui guardar a referência reconciliada da compra:',e)}}
     }
     return registro && registro.baseNota ? clonar(registro.baseNota) : (baseNotaAtiva ? clonar(baseNotaAtiva) : null);
   };
@@ -11031,22 +11253,22 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var compraConfirmada=!!(registro&&registro.savedNote&&notaConfirmada&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
       if(registro&&ehCompraNovaRascunho(registro)&&notaConfirmada){
         if(compraConfirmada&&registro.updatedAt===updatedAt&&registro.syncSubmittedAt===updatedAt){
-          try{window.__appMemoryStorage.removeItem(k)}catch(e){}
+           removerRascunhoConfirmado(k);
           if(k===chave(lojaRascunho,idRascunho))sujo=false;
         }else{
           var comoNova=desvincularRascunhoSalvoComoNovo(registro);
-          try{window.__appMemoryStorage.setItem(k,JSON.stringify(comoNova))}catch(e){}
+           try{window.__appMemoryStorage.setItem(k,JSON.stringify(comoNova));agendarPersistenciaRascunho(k,comoNova,true)}catch(e){}
           if(k===chaveRascunhoAtivo){idRascunho=null;modoRascunhoCompra='nova';baseNotaAtiva=null;window.editandoDespesaId=null;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=null}
         }
         return;
       }
       if (registro && registro.updatedAt === updatedAt && compraConfirmada) {
-        try { window.__appMemoryStorage.removeItem(k); } catch (e) {}
+         removerRascunhoConfirmado(k);
         if (k === chave(lojaRascunho, idRascunho)) sujo = false;
       } else if (registro && compraConfirmada) {
         registro.baseNota = clonar(registro.savedNote);
         registro.editId = registro.savedRecordId || registro.editId;
-        try { window.__appMemoryStorage.setItem(k, JSON.stringify(registro)); } catch (e) {}
+         try { window.__appMemoryStorage.setItem(k, JSON.stringify(registro)); agendarPersistenciaRascunho(k, registro, true); } catch (e) {}
         restantes.set(k,updatedAt);
       } else if (registro) {
         restantes.set(k,updatedAt);
@@ -11080,7 +11302,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     registro.scrollModal = modal.scrollTop || 0;
     registro.scrollFormulario = caixa ? caixa.scrollTop || 0 : 0;
     registro.scrollListaItens = lista ? lista.scrollTop || 0 : 0;
-    try { window.__appMemoryStorage.setItem(k, JSON.stringify(registro)); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
+    try { window.__appMemoryStorage.setItem(k, JSON.stringify(registro)); agendarPersistenciaRascunho(k, registro, false); } catch (e) { console.warn('Não consegui guardar a posição do rascunho:', e); }
   }
   var quadroScroll = 0;
   function agendarSalvamentoPosicao() {
@@ -11107,7 +11329,8 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   window.__prepararRascunhoCompraParaSaida = guardarRetomadaAoSair;
   window.addEventListener('reiChapaGerenteAutorizado', retomarRascunhoAposAutorizacao);
   window.addEventListener('pagehide', guardarRetomadaAoSair);
-  document.addEventListener('visibilitychange', function () { if (document.hidden) guardarRetomadaAoSair(); });
+  window.addEventListener('online', sincronizarRascunhosPendentes);
+  document.addEventListener('visibilitychange', function () { if (document.hidden) guardarRetomadaAoSair(); else sincronizarRascunhosPendentes(); });
 
   var modalAtualizacao = document.getElementById('modalConfirmarAtualizacao');
   var btnContinuarLancando = document.getElementById('btnContinuarLancando');
@@ -11224,7 +11447,10 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   }
   async function confirmarAtualizacao() {
     if (atualizacaoEmCurso) return;
-    guardarRetomadaAoSair();
+    if (!await guardarRetomadaAoSair()) {
+      if (statusAtualizacao) { statusAtualizacao.textContent = 'Não consegui confirmar o rascunho no Supabase. A tela continua aberta; confira a conexão e tente atualizar novamente.'; statusAtualizacao.style.display = 'block'; }
+      return;
+    }
     if (!salvarContextoDaTela()) {
       if (statusAtualizacao) { statusAtualizacao.textContent = 'Não consegui guardar a tela atual. Feche esta mensagem e tente de novo.'; statusAtualizacao.style.display = 'block'; }
       return;
