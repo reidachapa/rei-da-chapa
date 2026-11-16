@@ -6435,19 +6435,23 @@ window.salvarVendaManual = function() {
   }
 
   function subBruto(it){return (it.qtd||0)*(it.valor||0);}
-  function descEfet(it){var s=subBruto(it);var d=it.desconto||0;
-    return it.descontoTipo==='percent'?s*d/100:d;}
+  function descEfet(it){
+    var s=Math.max(0,subBruto(it)),d=Math.max(0,Number(it.desconto)||0);
+    var desconto=it.descontoTipo==='percent'?s*Math.min(100,d)/100:d;
+    return Math.min(s,desconto);
+  }
   function subFinal(it){var v=subBruto(it)-descEfet(it);return v>0?v:0;}
   function convTipo(it,novo){
     if(it.descontoTipo===novo)return;
-    var s=subBruto(it);
-    if(s>0&&it.desconto>0){
+    var s=Math.max(0,subBruto(it)),descontoEmReais=descEfet(it);
+    if(s>0&&descontoEmReais>0){
       it.desconto=novo==='percent'
-        ?Math.round((it.desconto/s*100)*100)/100
-        :Math.round((s*it.desconto/100)*100)/100;
+        ?descontoEmReais/s*100
+        :Math.round(descontoEmReais*100)/100;
     }
     it.descontoTipo=novo;
   }
+  window.convTipoDescontoCompra=convTipo;
   function catValor(it,cats){
     if(!it.categoria)return'';
     if(cats.some(function(c){return c.v===it.categoria;}))return it.categoria;
@@ -9916,7 +9920,7 @@ window.salvarVendaManual = function() {
       var unidadesCompra=['un','kg','g','L','ml','pé','fatia','porção','pacote','caixa'];
       if(it.unid && !unidadesCompra.some(function(u){return u.toLocaleLowerCase('pt-BR')===String(it.unid).toLocaleLowerCase('pt-BR');})) unidadesCompra.unshift(String(it.unid));
       var unidOpts='<option value="">Unidade…</option>'+unidadesCompra.map(function(u){return '<option value="'+esc(u)+'">'+esc(u)+'</option>';}).join('');
-      var dStr = it.desconto > 0 ? String(it.desconto).replace('.',',') : '';
+      var dStr = it.desconto > 0 ? (isPct ? Number(it.desconto).toFixed(15).replace(/0+$/,'').replace(/\.$/,'').replace('.',',') : String(it.desconto).replace('.',',')) : '';
       var brutoItem = (Number(it.qtd)||0)*(Number(it.valor)||0);
       var descItem = isPct ? brutoItem*Math.min(100,Number(it.desconto)||0)/100 : (Number(it.desconto)||0);
       var sub = Math.max(0, brutoItem-Math.min(brutoItem,descItem));
@@ -10307,7 +10311,7 @@ setTimeout(function(){var form=document.getElementById('formProduto');if(form&&!
         if(typeof window.renderDespItens==='function')window.renderDespItens();return;
       }
       if(b.classList.contains('tipo-desc')){
-        e.preventDefault();e.stopImmediatePropagation();if(typeof convTipo==='function'&&arr[idx])convTipo(arr[idx],b.dataset.tipo);
+        e.preventDefault();e.stopImmediatePropagation();if(typeof window.convTipoDescontoCompra==='function'&&arr[idx])window.convTipoDescontoCompra(arr[idx],b.dataset.tipo);
         if(typeof window.renderDespItens==='function')window.renderDespItens();return;
       }
       if(b.classList.contains('btn-controla')){
