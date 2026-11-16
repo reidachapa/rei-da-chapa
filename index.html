@@ -1027,7 +1027,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <button type="button" id="btnAtualizarApp" title="Atualizar aplicativo" aria-label="Atualizar aplicativo">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"></path><path d="M3 4v6h6"></path><path d="M4 13a8 8 0 0 0 14.8 4L21 14"></path><path d="M21 20v-6h-6"></path></svg>
     </button>
-    <span id="appVersion" title="Versão do aplicativo">v1.0.45</span>
+    <span id="appVersion" title="Versão do aplicativo">v1.0.46</span>
   </div>
 </header>  
 <main>
@@ -1624,6 +1624,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="dre-periods.js"></script>
 <script src="purchase-draft-recovery.js"></script>
 <script src="purchase-duplicates.js"></script>
+<script src="backup-shared.js"></script>
 <script>const SUPABASE_URL = 'https://etzbidgbyntiidtsarln.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emJpZGdieW50aWlkdHNhcmxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3Mzc0ODEsImV4cCI6MjEwNjMxMzQ4MX0.HlDpYLJQymY3ELHciWDGbIKHEuztT78SVlByXZrdaC0';
 
@@ -3001,15 +3002,17 @@ function abrirContagemIngrediente(ing){
   });
   atualizar();el('contagemSaldo').focus();
 }
- function medidaIngredienteDoFormulario(){var atual=ingredientes.find(function(x){return x.id===editandoIngId})||{};return Object.assign({},atual,{unidade:$('#ingUnidade').value.trim(),modoCompra:$('#ingModoCompra').value,rendimento:lerQuantidade($('#ingRendimento').value),semEstoque:tipoIngForm==='sem',consumoMedia:document.getElementById('ingConsumoMedia').checked})}
+ function medidaIngredienteDoFormulario(){var atual=ingredientes.find(function(x){return x.id===editandoIngId})||{},sem=tipoIngForm==='sem';return Object.assign({},atual,{unidade:$('#ingUnidade').value.trim(),modoCompra:$('#ingModoCompra').value,rendimento:lerQuantidade($('#ingRendimento').value),semEstoque:sem,consumoMedia:sem&&document.getElementById('ingConsumoMedia').checked})}
+ function saldoIngredienteParaFormulario(qtd,medida,tipo){if(qtd===null||qtd===undefined||qtd==='')return'';var n=Number(qtd);if(!Number.isFinite(n))return'';var convertido;if(tipo==='sem'){var sem=Object.assign({},medida,{semEstoque:true});convertido=window.EstoqueIngredientes.converter(n,window.EstoqueIngredientes.unidadeFisicaInterna(sem),window.EstoqueIngredientes.unidadeExibicao(sem))}else convertido=qtdEstoqueParaMedida(n,Object.assign({},medida,{semEstoque:false,consumoMedia:false}));return Number.isFinite(convertido)?String(convertido):''}
+ function saldoIngredienteDoFormulario(valor,tipo,medida){if(String(valor).trim()==='')return null;var qtd=lerQuantidade(valor);var resultado=tipo==='sem'?window.EstoqueIngredientes.paraEstoque(qtd,window.EstoqueIngredientes.unidadeExibicao(Object.assign({},medida,{semEstoque:true})),Object.assign({},medida,{semEstoque:true})):medidaParaQtdEstoque(qtd,medida);return Number.isFinite(resultado)?Math.max(0,resultado):null}
  function atualizarCamposEstoqueIng(){var controlado=tipoIngForm==='com',podeEditar=souGerente(),medida=medidaIngredienteDoFormulario(),existente=ingredientes.find(function(x){return String(x.id)===String(editandoIngId||'')}),unidade=controlado?unidadeIngredienteEstoqueLabel(medida):window.EstoqueIngredientes.unidadeExibicao(medida),mediaAutomatica=!controlado&&window.EstoqueIngredientes.usaMediaPorContagem(Object.assign({},medida,{consumoMedia:false}));$('#campoEstoqueIng').style.display=controlado?'flex':'none';$('#campoMinEstoqueIng').style.display=controlado?'flex':'none';$('#campoSaldoEstimadoIng').style.display=controlado?'none':'flex';$('#campoConsumoMediaIng').style.display=controlado?'none':'block';$('#ingQtd').disabled=!controlado||!podeEditar;$('#ingMin').disabled=!controlado||!podeEditar;$('#ingEstoqueEstimado').disabled=controlado||!podeEditar;$('#ingEstoqueEstimado').readOnly=!!(existente&&existente.semEstoque);$('#btnConferirSaldoIng').style.display=!controlado&&existente&&existente.semEstoque?'block':'none';$('#ingConsumoMedia').disabled=mediaAutomatica||!podeEditar;if(mediaAutomatica)$('#ingConsumoMedia').checked=true;$('#labelEstoqueIng').textContent='Estoque ('+unidade+')';$('#labelSaldoEstimadoIng').textContent=(existente&&existente.semEstoque?'Saldo atual':'Quantidade inicial opcional')+' ('+unidade+')'}
- $$('#opcoesTipoIng .opcao-tipo').forEach(b=>b.addEventListener('click',()=>{if(!souGerente())return;tipoIngForm=b.dataset.tipo;$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x===b));atualizarCamposEstoqueIng()}));
+ $$('#opcoesTipoIng .opcao-tipo').forEach(b=>b.addEventListener('click',()=>{if(!souGerente())return;var proximo=b.dataset.tipo==='sem'?'sem':'com';if(proximo===tipoIngForm){$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x===b));atualizarCamposEstoqueIng();return}var medida=medidaIngredienteDoFormulario(),campoAtual=tipoIngForm==='sem'?$('#ingEstoqueEstimado'):$('#ingQtd'),campoDestino=proximo==='sem'?$('#ingEstoqueEstimado'):$('#ingQtd'),saldoInterno=saldoIngredienteDoFormulario(campoAtual.value,tipoIngForm,medida);if(saldoInterno===null&&editandoIngId){var original=ingredientes.find(function(x){return String(x.id)===String(editandoIngId)}),saldoOriginal=original&&(original.semEstoque?original.estoqueEstimado:original.estoque);if(saldoOriginal!==null&&saldoOriginal!==undefined&&saldoOriginal!==''&&Number.isFinite(Number(saldoOriginal)))saldoInterno=Math.max(0,Number(saldoOriginal))}var valorDestino=saldoInterno===null?'':saldoIngredienteParaFormulario(saldoInterno,medida,proximo);if(saldoInterno!==null&&valorDestino==='')return toast('Não consegui converter esse saldo entre as unidades. Confira a unidade do ingrediente antes de trocar o controle.');tipoIngForm=proximo;campoDestino.value=valorDestino;$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x===b));atualizarCamposEstoqueIng()}));
  ['ingUnidade','ingModoCompra','ingRendimento'].forEach(function(id){document.getElementById(id).addEventListener('input',atualizarCamposEstoqueIng)});
  $('#ingIcone').addEventListener('keydown',function(e){if(e.key==='Enter')e.preventDefault()});
  $('#btnConferirSaldoIng').addEventListener('click',function(){var ing=ingredientes.find(function(x){return String(x.id)===String(editandoIngId||'')});if(ing)abrirContagemIngrediente(ing)});
  var salvandoIngrediente=false,novoIngredienteRascunhoId=null;
  function travarFormularioIngrediente(ocupado){salvandoIngrediente=ocupado;document.querySelectorAll('#formIngrediente input, #formIngrediente select, #formIngrediente button').forEach(function(c){c.disabled=ocupado||!souGerente()});var botao=document.getElementById('btnSalvarIngrediente')||$('#formIngrediente').querySelector('button[type="submit"]');if(botao)botao.textContent=ocupado?'Confirmando no servidor…':'Salvar';if(!ocupado)atualizarCamposEstoqueIng()}
- $('#formIngrediente').addEventListener('submit',async e=>{e.preventDefault();if(salvandoIngrediente)return;if(!souGerente())return toast('🔒 Só o gerente cadastra ingredientes');const nomeBase=$('#ingNome').value.trim(),marca=$('#ingMarca').value.trim();if(!nomeBase)return toast('⚠️ Informe o nome base');const nome=nomeBase,idDestino=editandoIngId||novoIngredienteRascunhoId||uid();const existente=ingredientes.find(x=>normalizarNomeCadastro(x.nomeBase||x.nome)===normalizarNomeCadastro(nomeBase)&&String(x.id)!==String(idDestino));if(existente)return toast('Já existe "'+existente.nome+'". Use Editar para atualizar esse cadastro.');const atual=ingredientes.find(x=>String(x.id)===String(idDestino));if(editandoIngId&&!atual)return toast('Este ingrediente não está mais no cadastro. Confira a lista antes de continuar.');const modoCompra=$('#ingModoCompra').value,rendimento=parseFloat($('#ingRendimento').value)||0;if(atual&&atual.modoCompra==='flexivel'&&Number(atual.rendimento)>0&&modoCompra==='flexivel'&&rendimento===0)return toast('Esse ingrediente já tem rendimento salvo. Informe o valor para preservar as quantidades da receita.');const semEstoque=tipoIngForm==='sem';const medida=medidaIngredienteDoFormulario();const saldoDigitado=$('#ingEstoqueEstimado').value.trim();const saldoEstimado=atual&&atual.semEstoque&&semEstoque?(atual.estoqueEstimado===undefined?null:atual.estoqueEstimado):saldoDigitado===''?null:Math.max(0,window.EstoqueIngredientes.paraEstoque(lerQuantidade(saldoDigitado),window.EstoqueIngredientes.unidadeExibicao(medida),medida));const icone=$('#ingIcone').value.trim()||CATEGORIA_EMOJI[$('#ingCategoria').value]||'🍴';const dados={nome,nomeBase,marca,icone,categoria:$('#ingCategoria').value,semEstoque,consumoMedia:semEstoque&&document.getElementById("ingConsumoMedia").checked,inicioContagemKg:atual&&atual.inicioContagemKg!==null&&atual.inicioContagemKg!==undefined?atual.inicioContagemKg:(semEstoque&&document.getElementById("ingConsumoMedia").checked?saldoEstimado:null),comprasDesdeContagem:Number(atual&&atual.comprasDesdeContagem)||0,perdasDesdeContagem:Number(atual&&atual.perdasDesdeContagem)||0,pesoVendidoDesdeContagem:Number(atual&&atual.pesoVendidoDesdeContagem)||0,pesoHistorico:Number(atual&&atual.pesoHistorico)||0,kgHistorico:Number(atual&&atual.kgHistorico)||0,fatorConsumoMedia:Number(atual&&atual.fatorConsumoMedia)||0,precoExtra:lerMoeda($('#ingPrecoExtra').value)||0,custo:lerMoeda($('#ingCusto').value)||0,estoque:semEstoque?0:medidaParaQtdEstoque(parseFloat($('#ingQtd').value)||0,medida),minEstoque:semEstoque?0:medidaParaQtdEstoque($('#ingMin').value.trim()===''?5:lerQuantidade($('#ingMin').value),medida),estoqueEstimado:saldoEstimado,modoCompra:modoCompra||undefined,rendimento:rendimento,unidade:$('#ingUnidade').value.trim(),imagem:imagemIngTemp};
+ $('#formIngrediente').addEventListener('submit',async e=>{e.preventDefault();if(salvandoIngrediente)return;if(!souGerente())return toast('🔒 Só o gerente cadastra ingredientes');const nomeBase=$('#ingNome').value.trim(),marca=$('#ingMarca').value.trim();if(!nomeBase)return toast('⚠️ Informe o nome base');const nome=nomeBase,idDestino=editandoIngId||novoIngredienteRascunhoId||uid();const existente=ingredientes.find(x=>normalizarNomeCadastro(x.nomeBase||x.nome)===normalizarNomeCadastro(nomeBase)&&String(x.id)!==String(idDestino));if(existente)return toast('Já existe "'+existente.nome+'". Use Editar para atualizar esse cadastro.');const atual=ingredientes.find(x=>String(x.id)===String(idDestino));if(editandoIngId&&!atual)return toast('Este ingrediente não está mais no cadastro. Confira a lista antes de continuar.');const modoCompra=$('#ingModoCompra').value,rendimento=parseFloat($('#ingRendimento').value)||0;if(atual&&atual.modoCompra==='flexivel'&&Number(atual.rendimento)>0&&modoCompra==='flexivel'&&rendimento===0)return toast('Esse ingrediente já tem rendimento salvo. Informe o valor para preservar as quantidades da receita.');const semEstoque=tipoIngForm==='sem',saldoControle=$('#ingQtd').value.trim(),saldoDigitado=$('#ingEstoqueEstimado').value.trim();if(atual&&!semEstoque&&saldoControle==='')return toast('Informe o saldo atual antes de salvar. Digite 0 se o ingrediente acabou.');if(atual&&semEstoque&&!atual.semEstoque&&saldoDigitado==='')return toast('Informe a quantidade atual antes de salvar sem controle.');const medida=medidaIngredienteDoFormulario();const saldoEstimado=atual&&atual.semEstoque&&semEstoque?(atual.estoqueEstimado===undefined?null:atual.estoqueEstimado):saldoDigitado===''?null:Math.max(0,window.EstoqueIngredientes.paraEstoque(lerQuantidade(saldoDigitado),window.EstoqueIngredientes.unidadeExibicao(Object.assign({},medida,{semEstoque:true})),Object.assign({},medida,{semEstoque:true})));const icone=$('#ingIcone').value.trim()||CATEGORIA_EMOJI[$('#ingCategoria').value]||'🍴';const dados={nome,nomeBase,marca,icone,categoria:$('#ingCategoria').value,semEstoque,consumoMedia:semEstoque&&document.getElementById("ingConsumoMedia").checked,inicioContagemKg:atual&&atual.inicioContagemKg!==null&&atual.inicioContagemKg!==undefined?atual.inicioContagemKg:(semEstoque&&document.getElementById("ingConsumoMedia").checked?saldoEstimado:null),comprasDesdeContagem:Number(atual&&atual.comprasDesdeContagem)||0,perdasDesdeContagem:Number(atual&&atual.perdasDesdeContagem)||0,pesoVendidoDesdeContagem:Number(atual&&atual.pesoVendidoDesdeContagem)||0,pesoHistorico:Number(atual&&atual.pesoHistorico)||0,kgHistorico:Number(atual&&atual.kgHistorico)||0,fatorConsumoMedia:Number(atual&&atual.fatorConsumoMedia)||0,precoExtra:lerMoeda($('#ingPrecoExtra').value)||0,custo:lerMoeda($('#ingCusto').value)||0,estoque:semEstoque?0:medidaParaQtdEstoque(lerQuantidade($('#ingQtd').value),medida),minEstoque:semEstoque?0:medidaParaQtdEstoque($('#ingMin').value.trim()===''?5:lerQuantidade($('#ingMin').value),medida),estoqueEstimado:saldoEstimado,modoCompra:modoCompra||undefined,rendimento:rendimento,unidade:$('#ingUnidade').value.trim(),imagem:imagemIngTemp};
    const anterior=atual?JSON.parse(JSON.stringify(atual)):null,lojaEnviada=typeof lojaAtivaId==='undefined'?null:lojaAtivaId;
    if(atual)Object.assign(atual,dados);else{novoIngredienteRascunhoId=idDestino;ingredientes.push({id:idDestino,...dados})}
    const enviado=JSON.stringify(ingredientes.find(function(x){return String(x.id)===String(idDestino)}));
@@ -3027,7 +3030,7 @@ function abrirContagemIngrediente(ing){
    }finally{travarFormularioIngrediente(false)}
    if(typeof lojaAtivaId==='undefined'||lojaAtivaId===lojaEnviada)resetarFormIng();renderIngredientes();renderGridIngredientesProduto();renderVendas();toast(anterior?'✏️ Ingrediente atualizado no servidor':'✅ Ingrediente cadastrado no servidor');
  });
- function iniciarEdicaoIng(ing){if(salvandoIngrediente)return;editandoIngId=ing.id;$('#formIngTitulo').textContent='✏️ Editando ingrediente';$('#ingNome').value=ing.nomeBase||ing.nome;$('#ingMarca').value=ing.marca||'';$('#ingIcone').value=ing.icone||'';imagemIngTemp=ing.imagem||'';$('#ingInpArquivo').value='';atualizarPreviewIng();$('#ingCategoria').value=ing.categoria||'outro';$('#ingPrecoExtra').value=(ing.precoExtra||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});$('#ingCusto').value=(ing.custo||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});$('#ingQtd').value=String(qtdEstoqueParaMedida(ing.estoque||0,ing));$('#ingMin').value=String(qtdEstoqueParaMedida(ing.minEstoque===null||ing.minEstoque===undefined?5:ing.minEstoque,ing));$('#ingEstoqueEstimado').value=ing.estoqueEstimado===null||ing.estoqueEstimado===undefined?'':String(ing.semEstoque?window.EstoqueIngredientes.converter(ing.estoqueEstimado,window.EstoqueIngredientes.unidadeFisicaInterna(ing),window.EstoqueIngredientes.unidadeExibicao(ing)):qtdEstoqueParaMedida(ing.estoqueEstimado,ing));$('#ingModoCompra').value=ing.modoCompra||'';$('#ingRendimento').value=ing.rendimento||'';$('#ingUnidade').value=ing.unidade||'';tipoIngForm=ing.semEstoque?'sem':'com';$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x.dataset.tipo===tipoIngForm));atualizarCamposEstoqueIng();$('#btnCancelarIng').style.display='block';$('#formIngrediente').scrollIntoView({behavior:'smooth',block:'nearest'})}
+ function iniciarEdicaoIng(ing){if(salvandoIngrediente)return;editandoIngId=ing.id;$('#formIngTitulo').textContent='✏️ Editando ingrediente';$('#ingNome').value=ing.nomeBase||ing.nome;$('#ingMarca').value=ing.marca||'';$('#ingIcone').value=ing.icone||'';imagemIngTemp=ing.imagem||'';$('#ingInpArquivo').value='';atualizarPreviewIng();$('#ingCategoria').value=ing.categoria||'outro';$('#ingPrecoExtra').value=(ing.precoExtra||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});$('#ingCusto').value=(ing.custo||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});$('#ingModoCompra').value=ing.modoCompra||'';$('#ingRendimento').value=ing.rendimento||'';$('#ingUnidade').value=ing.unidade||'';document.getElementById('ingConsumoMedia').checked=!!ing.consumoMedia;tipoIngForm=ing.semEstoque?'sem':'com';var saldoAtivo=ing.semEstoque?(ing.estoqueEstimado===null||ing.estoqueEstimado===undefined||ing.estoqueEstimado===''?null:Number(ing.estoqueEstimado)):Number.isFinite(Number(ing.estoque))?Number(ing.estoque):0;var medida=medidaIngredienteDoFormulario();$('#ingQtd').value=saldoIngredienteParaFormulario(saldoAtivo,medida,'com');$('#ingEstoqueEstimado').value=saldoIngredienteParaFormulario(saldoAtivo,medida,'sem');$('#ingMin').value=String(qtdEstoqueParaMedida(ing.minEstoque===null||ing.minEstoque===undefined?5:ing.minEstoque,Object.assign({},medida,{semEstoque:false,consumoMedia:false})));$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x.dataset.tipo===tipoIngForm));atualizarPreviewIng();atualizarCamposEstoqueIng();$('#btnCancelarIng').style.display='block';$('#formIngrediente').scrollIntoView({behavior:'smooth',block:'nearest'})}
  var iniciarEdicaoIngBase=iniciarEdicaoIng;iniciarEdicaoIng=function(ing){if(salvandoIngrediente)return;iniciarEdicaoIngBase(ing);document.getElementById('ingConsumoMedia').checked=!!ing.consumoMedia;atualizarCamposEstoqueIng()};
  function resetarFormIng(){if(salvandoIngrediente)return;novoIngredienteRascunhoId=null;editandoIngId=null;tipoIngForm='com';$('#formIngTitulo').textContent='📦 Estoque de ingredientes';$('#formIngrediente').reset();imagemIngTemp='';$('#ingInpArquivo').value='';atualizarPreviewIng();$$('#opcoesTipoIng .opcao-tipo').forEach(x=>x.classList.toggle('sel',x.dataset.tipo==='com'));atualizarCamposEstoqueIng();$('#btnCancelarIng').style.display='none'}
  atualizarCamposEstoqueIng();
@@ -3571,7 +3574,7 @@ async function salvarCompraDaNota(e){
   var estadoAntes=null;
   var revisaoCompraEnviada=null;
   var compraConfirmadaNoServidor=false;
-  var backupCompraCriado=false;
+    var backupCompraCriado=false,backupCompraLocal=false;
   try{
     var precosCompra=window.PrecosCompra.calcular({itens:itens,produtos:produtos,notaAnterior:anterior,descontoNota:lerMoeda((document.getElementById('despDesconto')||{}).value)||0,descontoNotaTipo:window._descontoNotaTipo||'valor'});
     estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
@@ -3672,7 +3675,8 @@ async function salvarCompraDaNota(e){
     if(resultadoSync&&resultadoSync.persisted)compraConfirmadaNoServidor=true;
     if(!resultadoSync||!resultadoSync.ok)throw resultadoSync&&resultadoSync.error||new Error('A compra não foi confirmada no servidor. O rascunho foi mantido neste aparelho.');
     compraConfirmadaNoServidor=true;
-    try{if(window.BackupSys)backupCompraCriado=!!(await window.BackupSys.salvar('auto',{origem:'compra',notaId:dados.id,notaNF:dados.nf}));}catch(erroBackupCompra){console.warn('Compra salva, mas o backup local falhou:',erroBackupCompra)}
+    if(typeof window.__finalizarRascunhoCompraSalvo==='function')window.__finalizarRascunhoCompraSalvo(dados.id);
+    try{if(window.BackupSys){var backupCompra=await window.BackupSys.salvar('auto',{origem:'compra',notaId:dados.id,notaNF:dados.nf});backupCompraCriado=!!(backupCompra&&backupCompra.compartilhado);backupCompraLocal=!!(backupCompra&&backupCompra.local&&!backupCompra.compartilhado)}}catch(erroBackupCompra){console.warn('Compra salva, mas não consegui confirmar o backup compartilhado:',erroBackupCompra)}
     if(typeof refrescarEstoqueUI==='function') refrescarEstoqueUI();
     if(typeof renderCompras==='function') renderCompras();
     if(typeof renderDRE==='function') renderDRE();
@@ -3683,7 +3687,7 @@ async function salvarCompraDaNota(e){
     if(dados.subcategoria)addSugestao('subcategoria',dados.subcategoria);
     itens.forEach(function(it){if(it.nome)addSugestao('produto',it.nome);});
     popularTodasSugestoes();
-    toast(backupCompraCriado?'Compra salva, estoque atualizado e backup criado neste aparelho':'Compra salva e estoque atualizado; não consegui criar o backup neste aparelho. Faça um backup manual.');
+    toast(backupCompraCriado?'Compra salva, estoque atualizado e backup compartilhado pelo Supabase.':backupCompraLocal?'Compra salva e estoque atualizado. O backup ficou só neste aparelho; não foi possível enviar ao Supabase.':'Compra salva e estoque atualizado, mas não consegui criar o backup compartilhado.');
   }catch(err){
     console.error('Falha ao salvar compra:',err);
     var semAlteracoesPosteriores=revisaoCompraEnviada===null||revisaoLocal===revisaoCompraEnviada;
@@ -4975,26 +4979,88 @@ const BackupSys = {
     const ok=await this.iniciando;this.iniciando=null;return ok;
   },
   baixarDados(dados,nome){try{const blob=new Blob([JSON.stringify(dados,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=nome;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);return true}catch(e){console.warn('Backup: não foi possível baixar arquivo',e);return false}},
+  clienteSupabase(){try{return typeof supa!=='undefined'&&supa&&window.__authPermitido?supa:null}catch(e){return null}},
+  async salvarLocal(reg){
+    if(!(await this.init())||!this.db)return false;
+    return new Promise((resolve,reject)=>{try{const tx=this.db.transaction('backups','readwrite'),store=tx.objectStore('backups');store.put(reg);if(reg.tipo==='auto'&&reg.origem==='compra'){let contagem=0;const faixa=IDBKeyRange.bound(['auto','compra',''],['auto','compra','\uffff']),req=store.index('porOrigemData').openKeyCursor(faixa,'prev');req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(++contagem>this.LIMITE_BACKUPS_COMPRA)store.delete(cursor.primaryKey);cursor.continue()}}tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||new Error('Falha na gravação local'));tx.onabort=()=>reject(tx.error||new Error('Gravação local cancelada'))}catch(e){reject(e)}})
+  },
   async salvar(tipo,metadados){
     tipo=tipo||'manual';if(tipo!=='auto'&&!souGerente())return null;
     const agora=new Date(),json=JSON.stringify(criarDadosBackup(tipo)),dados=JSON.parse(json);
     const origem=metadados&&metadados.origem==='compra'?'compra':null;
     const totalNotasCompra=dados.despesas.filter(n=>n&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)&&n.itens.length>0).length;
-    const reg={id:'backup_'+agora.getTime()+'_'+Math.random().toString(36).slice(2,7),data:agora.toISOString(),dataFmt:agora.toLocaleString('pt-BR'),tipo:tipo,origem:origem,notaId:origem&&metadados.notaId?String(metadados.notaId):'',notaNF:origem&&metadados.notaNF?String(metadados.notaNF):'',tamanho:json.length,totalPedidos:dados.pedidos.length+dados.historico.length,totalNotasCompra:totalNotasCompra,totalProdutos:dados.produtos.length,totalRegistros:dados.produtos.length+dados.ingredientes.length+dados.paes.length+dados.despesas.length+dados.historico.length+dados.pedidos.length+dados.clientes.length+dados.perdas.length,dados:dados};
-    try{if(await this.init()&&this.db){await new Promise((resolve,reject)=>{const tx=this.db.transaction('backups','readwrite'),store=tx.objectStore('backups');store.put(reg);if(tipo==='auto'&&origem==='compra'){let contagem=0;const faixa=IDBKeyRange.bound(['auto','compra',''],['auto','compra','\uffff']),req=store.index('porOrigemData').openKeyCursor(faixa,'prev');req.onsuccess=()=>{const cursor=req.result;if(!cursor)return;if(++contagem>this.LIMITE_BACKUPS_COMPRA)store.delete(cursor.primaryKey);cursor.continue()}}tx.oncomplete=()=>resolve(true);tx.onerror=()=>reject(tx.error||new Error('Falha na gravação'));tx.onabort=()=>reject(tx.error||new Error('Gravação cancelada'))});return reg}}catch(e){console.warn('Backup: falha ao guardar no app',e)}
-    if(tipo!=='auto'&&this.baixarDados(dados,'backup-rei-da-chapa-'+agora.toISOString().slice(0,10)+'.json'))return Object.assign({},reg,{fallback:true});
-    return null;
+    const classeId=tipo==='auto'?(origem?'auto_compra':'auto_semanal'):'manual';
+    const reg={id:'backup_'+classeId+'_'+agora.getTime()+'_'+Math.random().toString(36).slice(2,7),data:agora.toISOString(),dataFmt:agora.toLocaleString('pt-BR'),tipo:tipo,origem:origem,notaId:origem&&metadados.notaId?String(metadados.notaId):'',notaNF:origem&&metadados.notaNF?String(metadados.notaNF):'',tamanho:json.length,totalPedidos:dados.pedidos.length+dados.historico.length,totalNotasCompra:totalNotasCompra,totalProdutos:dados.produtos.length,totalRegistros:dados.produtos.length+dados.ingredientes.length+dados.paes.length+dados.despesas.length+dados.historico.length+dados.pedidos.length+dados.clientes.length+dados.perdas.length,dados:dados};
+    let compartilhado=false,local=false;
+    const cliente=this.clienteSupabase();
+    if(cliente&&window.BackupCompartilhado){
+      try{const resposta=await window.BackupCompartilhado.salvar(cliente,reg);compartilhado=!!(resposta&&resposta.ok);if(!compartilhado)console.warn('Backup: o Supabase não confirmou a cópia compartilhada',resposta&&resposta.error);else if(origem==='compra'){const limite=await window.BackupCompartilhado.limitarCompras(cliente,this.LIMITE_BACKUPS_COMPRA);if(limite&&!limite.ok)console.warn('Backup: não consegui limpar cópias antigas de compras',limite.error)}}catch(e){console.warn('Backup: falha no Supabase',e)}
+    }
+    const paraSalvar=Object.assign({},reg,{compartilhado:compartilhado});
+    try{local=await this.salvarLocal(paraSalvar)}catch(e){console.warn('Backup: falha ao guardar neste aparelho',e)}
+    if(!compartilhado&&!local&&tipo!=='auto'&&this.baixarDados(dados,'backup-rei-da-chapa-'+agora.toISOString().slice(0,10)+'.json'))return Object.assign({},reg,{fallback:true,compartilhado:false,local:false});
+    return compartilhado||local?Object.assign({},reg,{compartilhado:compartilhado,local:local}):null;
   },
-  async listar(){if(!(await this.init())||!this.db)return[];return new Promise(resolve=>{try{const req=this.db.transaction('backups','readonly').objectStore('backups').getAll();req.onsuccess=()=>resolve((req.result||[]).sort((a,b)=>b.data.localeCompare(a.data)));req.onerror=()=>resolve([])}catch(e){resolve([])}})},
-  async get(id){if(!(await this.init())||!this.db)return null;return new Promise(resolve=>{try{const req=this.db.transaction('backups','readonly').objectStore('backups').get(id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>resolve(null)}catch(e){resolve(null)}})},
-  async excluir(id){if(!souGerente()||!(await this.init())||!this.db)return false;return new Promise(resolve=>{try{const tx=this.db.transaction('backups','readwrite');tx.objectStore('backups').delete(id);tx.oncomplete=()=>resolve(true);tx.onerror=()=>resolve(false);tx.onabort=()=>resolve(false)}catch(e){resolve(false)}})},
+  async listar(){
+    let locais=[];
+    if(await this.init()&&this.db)locais=await new Promise(resolve=>{try{const req=this.db.transaction('backups','readonly').objectStore('backups').getAll();req.onsuccess=()=>resolve(req.result||[]);req.onerror=()=>resolve([])}catch(e){resolve([])}});
+    let remotos=[];
+    const cliente=this.clienteSupabase();
+    if(cliente&&window.BackupCompartilhado){try{remotos=await window.BackupCompartilhado.listar(cliente,1000)}catch(e){console.warn('Backup: não consegui listar as cópias do Supabase',e)}}
+    const porId=new Map(locais.map(b=>[b.id,Object.assign({compartilhado:false},b)]));
+    remotos.forEach(b=>{const local=porId.get(b.id);porId.set(b.id,Object.assign({},local||{},b,{dados:local&&local.dados||undefined,compartilhado:true}))});
+    return Array.from(porId.values()).sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  },
+  async getLocal(id){if(!(await this.init())||!this.db)return null;return new Promise(resolve=>{try{const req=this.db.transaction('backups','readonly').objectStore('backups').get(id);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>resolve(null)}catch(e){resolve(null)}})},
+  async get(id){const cliente=this.clienteSupabase();if(cliente&&window.BackupCompartilhado){try{const remoto=await window.BackupCompartilhado.buscar(cliente,id);if(remoto)return remoto}catch(e){console.warn('Backup: falha ao abrir cópia do Supabase',e)}}return this.getLocal(id)},
+  async excluir(id){
+    if(!souGerente())return false;
+    const local=await this.getLocal(id),cliente=this.clienteSupabase();
+    if(window.BackupCompartilhado&&window.BackupCompartilhado.ehIdBackup(id)){
+      if(cliente){try{const resposta=await window.BackupCompartilhado.excluir(cliente,id);if(!resposta||!resposta.ok)return false}catch(e){return false}}
+      else if(local&&local.compartilhado)return false;
+    }
+    if(!(await this.init())||!this.db)return !!(cliente&&window.BackupCompartilhado&&window.BackupCompartilhado.ehIdBackup(id));
+    return new Promise(resolve=>{try{const tx=this.db.transaction('backups','readwrite');tx.objectStore('backups').delete(id);tx.oncomplete=()=>resolve(true);tx.onerror=()=>resolve(false);tx.onabort=()=>resolve(false)}catch(e){resolve(false)}});
+  },
   async baixar(id){if(!souGerente()){toast('🔒 Só o gerente');return null}const b=await this.get(id);if(!b){toast('❌ Backup não encontrado');return}const nome='backup-rei-da-chapa-'+b.data.slice(0,10)+'.json';if(this.baixarDados(b.dados,nome))toast('📥 Backup baixado: '+nome);else toast('❌ Erro ao baixar')},
   async compartilhar(id){if(!souGerente()){toast('🔒 Só o gerente');return null}const b=await this.get(id);if(!b){toast('❌ Backup não encontrado');return}try{const nome='backup-rei-da-chapa-'+b.data.slice(0,10)+'.json',file=new File([JSON.stringify(b.dados,null,2)],nome,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Backup Rei da Chapa',text:'Backup de '+b.dataFmt});toast('📤 Compartilhado!')}else await this.baixar(id)}catch(e){if(e.name!=='AbortError')await this.baixar(id)}},
-  async verificarAutoBackup(){try{const ultimo=localStorage.getItem('ultimo_backup_auto'),agora=Date.now(),intervalo=this.DIAS_AUTO_BACKUP*24*60*60*1000;if(!ultimo||(agora-parseInt(ultimo,10))>intervalo){const reg=await this.salvar('auto');if(reg){localStorage.setItem('ultimo_backup_auto',agora.toString());console.log('📦 Auto-backup criado:',reg.dataFmt);return reg}}}catch(e){console.warn('Erro auto-backup:',e)}return null},
+  async verificarAutoBackup(){try{const lista=await this.listar(),ultimo=lista.filter(b=>b.compartilhado&&b.tipo==='auto'&&!b.origem).map(b=>Date.parse(b.data)||0).sort((a,b)=>b-a)[0]||0,agora=Date.now(),intervalo=this.DIAS_AUTO_BACKUP*24*60*60*1000;if(!ultimo||agora-ultimo>intervalo){const reg=await this.salvar('auto');if(reg&&reg.compartilhado){console.log('📦 Backup semanal compartilhado:',reg.dataFmt);return reg}return reg||null}}catch(e){console.warn('Erro ao verificar backup automático:',e)}return null},
   formatarTamanho(bytes){if(bytes<1024)return bytes+' B';if(bytes<1024*1024)return(bytes/1024).toFixed(1)+' KB';return(bytes/1024/1024).toFixed(2)+' MB'}
 };
-async function renderListaBackupsArquivados(){const cont=document.getElementById('listaBackupsArquivados');if(!cont)return;cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:8px">Carregando...</p>';const lista=await BackupSys.listar();if(!lista.length){cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:12px">Nenhum backup guardado ainda.<br>Toque em <b>📸 Fazer backup agora</b> acima.</p>';return}cont.innerHTML='';lista.forEach(b=>{const card=document.createElement('div');card.style.cssText='background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid #3a3a3f;border-radius:10px;padding:10px;margin-bottom:6px';const autoCompra=b.tipo==='auto'&&b.origem==='compra',badgeTexto=autoCompra?'AUTO · COMPRA':b.tipo==='auto'?'AUTO · SEMANAL':'MANUAL',badgeStyle=b.tipo==='auto'?'background:rgba(77,157,229,.15);color:#4d9de5':'background:rgba(212,162,60,.15);color:#f0c862',notas=Number.isFinite(Number(b.totalNotasCompra))?Number(b.totalNotasCompra):((b.dados&&b.dados.despesas)||[]).filter(n=>n&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)&&n.itens.length>0).length,produtos=Number.isFinite(Number(b.totalProdutos))?Number(b.totalProdutos):((b.dados&&b.dados.produtos)||[]).length,detalhe=notas+' notas · '+produtos+' produtos · '+BackupSys.formatarTamanho(b.tamanho||0),nf=autoCompra&&b.notaNF?'<div style="font-size:10px;color:#96908a;margin-top:2px">NF '+esc(b.notaNF)+'</div>':'';card.innerHTML=`<div style="margin-bottom:6px"><div style="font-size:12px;font-weight:800;color:#f0ece8">${esc(b.dataFmt||'')}<span style="${badgeStyle};font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:6px">${badgeTexto}</span></div><div style="font-size:10px;color:#96908a;margin-top:2px">${detalhe}</div>${nf}</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn-mini azul" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="baixar" data-id="${esc(b.id)}">📥 Baixar</button><button type="button" class="btn-mini roxo" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="compartilhar" data-id="${esc(b.id)}">📤 Enviar</button><button type="button" class="btn-mini vermelho" style="flex:0 0 auto;min-width:40px;padding:5px 8px;font-size:10px" data-acao="excluir" data-id="${esc(b.id)}">🗑️</button></div>`;cont.appendChild(card)});cont.querySelectorAll('button[data-acao]').forEach(btn=>{btn.addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');const acao=btn.dataset.acao,id=btn.dataset.id;if(acao==='baixar')await BackupSys.baixar(id);else if(acao==='compartilhar')await BackupSys.compartilhar(id);else if(acao==='excluir'){const confirmou=await confirmarExcluirBackup();if(!confirmou)return;const excluido=await BackupSys.excluir(id);if(!excluido){toast('❌ Não foi possível excluir o backup');return}toast('🗑️ Backup excluído');await renderListaBackupsArquivados()}})})}
-function injetarListaNoModalBackup(){const modal=document.getElementById('modalBackup');if(!modal)return;if(modal.querySelector('#listaBackupsArquivados'))return;const box=modal.querySelector('.modal-box');if(!box)return;const secao=document.createElement('div');secao.innerHTML=`<div style="border-top:1px solid #3a3a3f;margin:4px 0 12px;padding-top:12px"><div style="font-size:12px;font-weight:800;color:#f0c862;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">📦 Backups guardados no app</div><div style="background:rgba(63,185,114,.08);border-left:3px solid #3fb972;padding:8px 10px;border-radius:6px;font-size:11px;color:#3fb972;margin-bottom:10px;line-height:1.4">✅ Cópias de segurança. <b>Não apagam nada do app.</b></div><div style="font-size:11px;color:#96908a;margin:0 0 10px">Cópia automática a cada compra confirmada e semanalmente ao abrir o app. Os arquivos ficam guardados neste aparelho.</div><button type="button" id="btnFazerBackupAgora" style="width:100%;background:linear-gradient(180deg,#4d9de5,#2871b8);color:#fff;border:0;border-radius:10px;padding:11px;font-weight:800;font-family:inherit;font-size:12px;cursor:pointer;text-transform:uppercase;margin-bottom:10px">📸 Fazer backup agora</button><div id="listaBackupsArquivados" style="max-height:280px;overflow-y:auto"></div></div>`;const acoes=box.querySelector('.modal-acoes');if(acoes)box.insertBefore(secao,acoes);else box.appendChild(secao);document.getElementById('btnFazerBackupAgora').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');toast('⏳ Criando backup...');const reg=await BackupSys.salvar('manual');if(reg&&reg.fallback){toast('⚠️ O app não conseguiu guardar no banco interno; baixei o backup JSON.')}else if(reg){toast('✅ Backup criado: '+reg.dataFmt);renderListaBackupsArquivados()}else{toast('❌ Não foi possível salvar nem baixar o backup')}})}
+async function renderListaBackupsArquivados(){
+  const cont=document.getElementById('listaBackupsArquivados');if(!cont)return;
+  cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:8px">Carregando...</p>';
+  const lista=await BackupSys.listar();
+  if(!lista.length){cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:12px">Nenhum backup guardado ainda.<br>Toque em <b>📸 Fazer backup agora</b> acima.</p>';return}
+  cont.innerHTML='';
+  lista.forEach(function(b){
+    const card=document.createElement('div');
+    card.style.cssText='background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid #3a3a3f;border-radius:10px;padding:10px;margin-bottom:6px';
+    const autoCompra=b.tipo==='auto'&&b.origem==='compra';
+    const badgeTexto=autoCompra?'AUTO · COMPRA':b.tipo==='auto'?'AUTO · SEMANAL':'MANUAL';
+    const badgeStyle=b.tipo==='auto'?'background:rgba(77,157,229,.15);color:#4d9de5':'background:rgba(212,162,60,.15);color:#f0c862';
+    const notas=Number.isFinite(Number(b.totalNotasCompra))?Number(b.totalNotasCompra):((b.dados&&b.dados.despesas)||[]).filter(function(n){return n&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)&&n.itens.length>0}).length;
+    const produtos=Number.isFinite(Number(b.totalProdutos))?Number(b.totalProdutos):((b.dados&&b.dados.produtos)||[]).length;
+    const detalhe=Number.isFinite(Number(b.totalNotasCompra))||b.dados?notas+' notas · '+produtos+' produtos · '+BackupSys.formatarTamanho(b.tamanho||0):'Cópia de segurança do app';
+    const nf=autoCompra&&b.notaNF?'<div style="font-size:10px;color:#96908a;margin-top:2px">NF '+esc(b.notaNF)+'</div>':'';
+    const estadoBackup=b.compartilhado?'<span style="background:rgba(63,185,114,.13);color:#3fb972;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:5px">☁️ EM TODOS OS APARELHOS</span>':'<span style="background:rgba(240,200,98,.12);color:#f0c862;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:5px">📱 SÓ NESTE APARELHO</span>';
+    card.innerHTML='<div style="margin-bottom:6px"><div style="font-size:12px;font-weight:800;color:#f0ece8">'+esc(b.dataFmt||'')+'<span style="'+badgeStyle+';font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:6px">'+badgeTexto+'</span>'+estadoBackup+'</div><div style="font-size:10px;color:#96908a;margin-top:4px">'+detalhe+'</div>'+nf+'</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn-mini azul" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="baixar" data-id="'+esc(b.id)+'">📥 Baixar</button><button type="button" class="btn-mini roxo" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="compartilhar" data-id="'+esc(b.id)+'">📤 Enviar</button><button type="button" class="btn-mini vermelho" style="flex:0 0 auto;min-width:40px;padding:5px 8px;font-size:10px" data-acao="excluir" data-id="'+esc(b.id)+'">🗑️</button></div>';
+    cont.appendChild(card);
+  });
+  cont.querySelectorAll('button[data-acao]').forEach(function(btn){btn.addEventListener('click',async function(){
+    if(!souGerente())return toast('🔒 Só o gerente');
+    const acao=btn.dataset.acao,id=btn.dataset.id;
+    if(acao==='baixar')await BackupSys.baixar(id);
+    else if(acao==='compartilhar')await BackupSys.compartilhar(id);
+    else if(acao==='excluir'){
+      const confirmou=await confirmarExcluirBackup();if(!confirmou)return;
+      const excluido=await BackupSys.excluir(id);if(!excluido){toast('❌ Não foi possível confirmar a exclusão no Supabase');return}
+      toast('🗑️ Backup excluído');await renderListaBackupsArquivados();
+    }
+  })});
+}
+function injetarListaNoModalBackup(){const modal=document.getElementById('modalBackup');if(!modal)return;if(modal.querySelector('#listaBackupsArquivados'))return;const box=modal.querySelector('.modal-box');if(!box)return;const secao=document.createElement('div');secao.innerHTML=`<div style="border-top:1px solid #3a3a3f;margin:4px 0 12px;padding-top:12px"><div style="font-size:12px;font-weight:800;color:#f0c862;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">📦 Backups compartilhados</div><div style="background:rgba(63,185,114,.08);border-left:3px solid #3fb972;padding:8px 10px;border-radius:6px;font-size:11px;color:#3fb972;margin-bottom:10px;line-height:1.4">✅ Cópias de segurança. <b>Não apagam nada do app.</b></div><div style="font-size:11px;color:#96908a;margin:0 0 10px">Cada compra confirmada e o backup semanal ficam no Supabase e aparecem nos aparelhos conectados. Se a internet falhar, o app avisa quando a cópia ficou só neste aparelho.</div><button type="button" id="btnFazerBackupAgora" style="width:100%;background:linear-gradient(180deg,#4d9de5,#2871b8);color:#fff;border:0;border-radius:10px;padding:11px;font-weight:800;font-family:inherit;font-size:12px;cursor:pointer;text-transform:uppercase;margin-bottom:10px">📸 Fazer backup agora</button><div id="listaBackupsArquivados" style="max-height:280px;overflow-y:auto"></div></div>`;const acoes=box.querySelector('.modal-acoes');if(acoes)box.insertBefore(secao,acoes);else box.appendChild(secao);document.getElementById('btnFazerBackupAgora').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');toast('⏳ Criando backup...');const reg=await BackupSys.salvar('manual');if(reg&&reg.fallback){toast('⚠️ Não consegui guardar no Supabase nem neste aparelho; baixei o arquivo JSON.')}else if(reg&&reg.compartilhado){toast('✅ Backup compartilhado pelo Supabase: '+reg.dataFmt);renderListaBackupsArquivados()}else if(reg&&reg.local){toast('⚠️ Backup salvo só neste aparelho; o Supabase não confirmou.');renderListaBackupsArquivados()}else{toast('❌ Não foi possível salvar o backup')}})}
 const _obsBackupModal = new MutationObserver(() => {const modal = document.getElementById('modalBackup');if(modal && modal.classList.contains('aberto')){injetarListaNoModalBackup();setTimeout(renderListaBackupsArquivados, 50);}});
 (async () => {await BackupSys.init();setTimeout(() => {const modal = document.getElementById('modalBackup');if(modal) _obsBackupModal.observe(modal, { attributes: true, attributeFilter: ['class'] });}, 1000);})();
 window.BackupSys = BackupSys;
@@ -10564,6 +10630,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var idRascunho = null;
   var chaveRascunhoAtivo = null;
   var baseNotaAtiva = null;
+  var modoRascunhoCompra = 'nova';
   var sujo = false;
   var sessionId = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2);
   var pendentes = new Map();
@@ -10586,6 +10653,8 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   }
   function estaAberto() { return modal.classList.contains('aberto'); }
   function temConteudoRascunho(registro) { return !!(registro && (registro.temRascunho === true || (registro.campos && Object.keys(registro.campos).length > 0) || (Array.isArray(registro.itens) && registro.itens.length > 0))); }
+  function ehCompraNovaRascunho(registro) { return !!(window.RecuperacaoCompra && window.RecuperacaoCompra.ehCompraNovaRascunho(registro, window.notaCompraIgual)); }
+  function desvincularRascunhoSalvoComoNovo(registro) { var novo=window.RecuperacaoCompra.prepararComoNovaCompra(registro);novo.updatedAt=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);return novo }
   function salvarRascunho() {
     if (!estaAberto()) return;
     try {
@@ -10598,6 +10667,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         versao: 1,
         temRascunho: true,
         editId: idRascunho,
+        operacao: modoRascunhoCompra,
         campos: campos,
         descontoTipo: window._descontoNotaTipo || 'valor',
         itens: itensAtuais(),
@@ -10760,10 +10830,37 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       if (!window.__authPermitido || !souGerente() || estaAberto()) return;
       var editId = pendente.registro.editId;
       var compra = editId != null ? obterCompraLocal(editId) : null;
-      if (editId != null && !compra) {
+      var compraNova=ehCompraNovaRascunho(pendente.registro);
+      if(pendente.chave===chave(lojaAtual(),null)&&(pendente.registro.savedRecordId!=null||editId!=null||pendente.registro.operacao==='editar')){
+        var enviada=pendente.registro.savedRecordId;
+        var confirmada=enviada!=null&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(enviada):null;
+        if(enviada!=null&&window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(pendente.registro,confirmada,window.notaCompraIgual)){
+          try{localStorage.removeItem(pendente.chave)}catch(e){}
+          pendentes.delete(pendente.chave);
+          return;
+        }
+        pendente.registro=desvincularRascunhoSalvoComoNovo(pendente.registro);
+        try{localStorage.setItem(pendente.chave,JSON.stringify(pendente.registro))}catch(e){}
+        pendentes.delete(pendente.chave);
+        editId=null;compra=null;compraNova=true;
+      }
+      if(compraNova&&pendente.registro.savedRecordId){
+        var notaConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(pendente.registro.savedRecordId):null;
+        if(notaConfirmada){
+          if(window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(pendente.registro,notaConfirmada,window.notaCompraIgual)){
+            try{localStorage.removeItem(pendente.chave)}catch(e){}
+            pendentes.delete(pendente.chave);
+            return;
+          }
+          pendente.registro=desvincularRascunhoSalvoComoNovo(pendente.registro);
+          try{localStorage.setItem(pendente.chave,JSON.stringify(pendente.registro))}catch(e){}
+          pendentes.delete(pendente.chave);
+        }
+      }
+      if (editId != null && !compra && !compraNova) {
         return abrirRascunhoCompraAusente(pendente.chave,pendente.registro);
       }
-      if (editId == null && pendente.registro.savedRecordId && !obterCompraLocal(pendente.registro.savedRecordId)) {
+      if (editId == null && pendente.registro.savedRecordId && !obterCompraLocal(pendente.registro.savedRecordId) && !compraNova) {
         return abrirRascunhoCompraAusente(pendente.chave,pendente.registro);
       }
       salvarFlagRetomada(false, pendente.chave, false);
@@ -10774,6 +10871,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     aberturaRascunho++;
     var resultado=abrirOriginal.call(window,null);
     if(!estaAberto())return resultado;
+    modoRascunhoCompra='editar';
     lojaRascunho=lojaAtual();idRascunho=registro.editId==null?null:registro.editId;chaveRascunhoAtivo=k;baseNotaAtiva=registro.baseNota?clonar(registro.baseNota):null;
     var idOriginal=registro.savedRecordId||registro.editId;
     window.editandoDespesaId=idOriginal;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=idOriginal;
@@ -10815,38 +10913,44 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   window.abrirModalDespesa = function (despesa) {
     aberturaRascunho++;
     var loja = lojaAtual();
-    var recuperadoComoEdicao = false;
+    var avisoRascunhoComoNova = false;
     var chaveNova = chave(loja, null);
     var avisoNotaJaSalva = false;
     if (!despesa) {
       var rascunhoSalvo = lerChave(chaveNova);
-      if (rascunhoSalvo && rascunhoSalvo.savedRecordId) {
-        var compraSalva = obterCompraLocal(rascunhoSalvo.savedRecordId);
-        if (compraSalva) {
-          var compraConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(rascunhoSalvo.savedRecordId):null;
-          if (rascunhoSalvo.savedNote && compraConfirmada && typeof window.notaCompraIgual === 'function' && window.notaCompraIgual(rascunhoSalvo.savedNote, compraConfirmada) && rascunhoSalvo.syncSubmittedAt === rascunhoSalvo.updatedAt) {
-            try { localStorage.removeItem(chaveNova); } catch (e) {}
-            avisoNotaJaSalva = true;
-          } else {
-            if (!rascunhoSalvo.baseNota) rascunhoSalvo.baseNota = clonar(rascunhoSalvo.savedNote || compraSalva);
-            try { localStorage.setItem(chaveNova, JSON.stringify(rascunhoSalvo)); } catch (e) {}
-            despesa = compraSalva;
-            recuperadoComoEdicao = true;
-          }
-        }else return abrirRascunhoCompraAusente(chaveNova,rascunhoSalvo);
+      if (rascunhoSalvo) {
+        var idEnviado=rascunhoSalvo.savedRecordId;
+        var compraConfirmada=idEnviado!=null&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(idEnviado):null;
+        var envioConfirmadoSemEdicao=idEnviado!=null&&window.RecuperacaoCompra.rascunhoConfirmadoSemEdicao(rascunhoSalvo,compraConfirmada,window.notaCompraIgual);
+        var temVinculoDeEdicao=rascunhoSalvo.editId!=null||rascunhoSalvo.operacao==='editar';
+        if(envioConfirmadoSemEdicao){
+          try { localStorage.removeItem(chaveNova); } catch (e) {}
+          pendentes.delete(chaveNova);
+          avisoNotaJaSalva = true;
+        }else if(idEnviado!=null||temVinculoDeEdicao||!ehCompraNovaRascunho(rascunhoSalvo)){
+          // A chave de “Nova compra” nunca pode transformar o rascunho em edição.
+          // Edições reais são retomadas pela chave explícita da nota no histórico.
+          rascunhoSalvo=desvincularRascunhoSalvoComoNovo(rascunhoSalvo);
+          try { localStorage.setItem(chaveNova, JSON.stringify(rascunhoSalvo)); } catch (e) {}
+          pendentes.delete(chaveNova);
+          avisoRascunhoComoNova=true;
+        }
       }
     }
     var notaInicial = despesa ? clonar(despesa) : null;
     var resultado = abrirOriginal.call(this, despesa || null);
     if (!estaAberto()) return resultado;
+    modoRascunhoCompra=despesa?'editar':'nova';
+    window.editandoDespesaId=despesa?despesa.id:null;
+    if(typeof editandoDespesaId!=='undefined')editandoDespesaId=despesa?despesa.id:null;
     var avisoRevisao=document.getElementById('avisoRevisaoRascunhoCompra');if(avisoRevisao)avisoRevisao.hidden=true;
     var titulo = document.getElementById('despesaTitulo');
     var botaoSalvar = document.getElementById('btnSalvarDespesa');
     if (titulo) titulo.textContent = despesa ? '✏️ Editar nota de compra' : '🛒 Registrar compra';
     if (botaoSalvar) botaoSalvar.textContent = despesa ? '🔄 Atualizar nota' : '💾 Salvar compra';
     lojaRascunho = loja;
-    idRascunho = recuperadoComoEdicao ? null : (despesa ? despesa.id : null);
-    chaveRascunhoAtivo = recuperadoComoEdicao ? chaveNova : chave(lojaRascunho, idRascunho);
+    idRascunho = despesa ? despesa.id : null;
+    chaveRascunhoAtivo = chave(lojaRascunho, idRascunho);
     var k = chaveRascunhoAtivo;
     var registroBase=lerChave(k);
     baseNotaAtiva=despesa?(registroBase&&registroBase.baseNota?clonar(registroBase.baseNota):notaInicial):null;
@@ -10865,7 +10969,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     sujo = false;
     restaurarRascunho(lojaRascunho, idRascunho);
     if (avisoNotaJaSalva && typeof window.toast === 'function') window.toast('✅ Esta nota já foi confirmada no servidor; não lancei outra compra.');
-    if (recuperadoComoEdicao && typeof window.toast === 'function') window.toast('📝 Retomando a compra já salva neste aparelho; ela não será duplicada.');
+    if (avisoRascunhoComoNova && typeof window.toast === 'function') window.toast('📝 Rascunho mantido como nova compra. Ele não vai atualizar uma nota já lançada.');
     return resultado;
   };
 
@@ -10887,6 +10991,45 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       pendentes.set(k, registro.updatedAt);
     } catch (e) { console.warn('Não consegui marcar o rascunho sincronizado:', e); }
   };
+  window.__finalizarRascunhoCompraSalvo = function(id){
+    if(id==null)return false;
+    var chaves=[chaveRascunhoAtivo,chave(lojaRascunho,idRascunho),chave(lojaRascunho,null)].filter(function(k,i,arr){return !!k&&arr.indexOf(k)===i});
+    for(var i=0;i<chaves.length;i++){
+      var k=chaves[i],registro=lerChave(k);
+      if(!registro||String(registro.savedRecordId||'')!==String(id))continue;
+      var notaConfirmada=typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(id):null;
+      if(!notaConfirmada)return false;
+      var notaIgual=!!(registro.savedNote&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
+      if(ehCompraNovaRascunho(registro)){
+        if(notaIgual&&registro.syncSubmittedAt&&registro.syncSubmittedAt===registro.updatedAt){
+          try{localStorage.removeItem(k)}catch(e){}
+          pendentes.delete(k);
+          if(k===chaveRascunhoAtivo)sujo=false;
+          return true;
+        }
+        var novo=desvincularRascunhoSalvoComoNovo(registro);
+        try{localStorage.setItem(k,JSON.stringify(novo))}catch(e){return false}
+        pendentes.delete(k);
+        if(k===chaveRascunhoAtivo){idRascunho=null;modoRascunhoCompra='nova';baseNotaAtiva=null;window.editandoDespesaId=null;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=null}
+        return true;
+      }
+      if(notaIgual&&registro.syncSubmittedAt===registro.updatedAt){
+        try{localStorage.removeItem(k)}catch(e){}
+        pendentes.delete(k);
+        if(k===chaveRascunhoAtivo)sujo=false;
+        return true;
+      }
+      if(notaIgual){
+        registro.baseNota=clonar(notaConfirmada);
+        registro.editId=String(id);
+        try{localStorage.setItem(k,JSON.stringify(registro))}catch(e){}
+        pendentes.delete(k);
+        return true;
+      }
+      return false;
+    }
+    return true;
+  };
   window.__obterBaseNotaRascunho = function () {
     var k=chaveRascunhoAtivo || chave(lojaAtual(), idRascunho),registro = lerChave(k);
     var salvoId=registro&&(registro.savedRecordId||(registro.savedNote&&registro.savedNote.id));
@@ -10899,7 +11042,9 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   };
   window.__obterIdRascunhoCompra = function () {
     var registro = lerChave(chaveRascunhoAtivo || chave(lojaAtual(), idRascunho));
-    return registro && registro.savedRecordId ? String(registro.savedRecordId) : null;
+    if(!registro||ehCompraNovaRascunho(registro))return null;
+    var id=registro.editId!=null?registro.editId:registro.savedRecordId;
+    return id!=null?String(id):null;
   };
   window.__compraTemRascunhoAtivo = function () { return estaAberto() && sujo; };
 
@@ -10910,6 +11055,17 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var registro = lerChave(k);
       var notaConfirmada=registro&&registro.savedRecordId&&typeof window.__notaCompraConfirmadaNoServidor==='function'?window.__notaCompraConfirmadaNoServidor(registro.savedRecordId):null;
       var compraConfirmada=!!(registro&&registro.savedNote&&notaConfirmada&&typeof window.notaCompraIgual==='function'&&window.notaCompraIgual(registro.savedNote,notaConfirmada));
+      if(registro&&ehCompraNovaRascunho(registro)&&notaConfirmada){
+        if(compraConfirmada&&registro.updatedAt===updatedAt&&registro.syncSubmittedAt===updatedAt){
+          try{localStorage.removeItem(k)}catch(e){}
+          if(k===chave(lojaRascunho,idRascunho))sujo=false;
+        }else{
+          var comoNova=desvincularRascunhoSalvoComoNovo(registro);
+          try{localStorage.setItem(k,JSON.stringify(comoNova))}catch(e){}
+          if(k===chaveRascunhoAtivo){idRascunho=null;modoRascunhoCompra='nova';baseNotaAtiva=null;window.editandoDespesaId=null;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=null}
+        }
+        return;
+      }
       if (registro && registro.updatedAt === updatedAt && compraConfirmada) {
         try { localStorage.removeItem(k); } catch (e) {}
         if (k === chave(lojaRascunho, idRascunho)) sujo = false;
