@@ -6435,16 +6435,22 @@ window.salvarVendaManual = function() {
   }
 
   function subBruto(it){return (it.qtd||0)*(it.valor||0);}
-  function descEfet(it){var s=subBruto(it);var d=it.desconto||0;
-    return it.descontoTipo==='percent'?s*d/100:d;}
+  function descEfet(it){
+    var s=Math.max(0,subBruto(it)),d=Math.max(0,Number(it.desconto)||0);
+    var desconto=it.descontoTipo==='percent'?s*Math.min(100,d)/100:d;
+    return Math.min(s,desconto);
+  }
   function subFinal(it){var v=subBruto(it)-descEfet(it);return v>0?v:0;}
   function convTipo(it,novo){
     if(it.descontoTipo===novo)return;
-    var s=subBruto(it);
-    if(s>0&&it.desconto>0){
+    var s=Math.max(0,subBruto(it)),d=Math.max(0,Number(it.desconto)||0);
+    if(s>0&&d>0){
+      var descontoEmReais=it.descontoTipo==='percent'
+        ?s*Math.min(100,d)/100
+        :Math.min(s,d);
       it.desconto=novo==='percent'
-        ?Math.round((it.desconto/s*100)*100)/100
-        :Math.round((s*it.desconto/100)*100)/100;
+        ?Math.round((descontoEmReais/s*100)*1000000)/1000000
+        :Math.round(descontoEmReais*100)/100;
     }
     it.descontoTipo=novo;
   }
