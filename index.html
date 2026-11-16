@@ -10072,12 +10072,13 @@ window.salvarVendaManual = function() {
 
   function atualizarPrecoAoEditarCompra(e){
     var campo=e.target;if(!campo||!campo.closest)return;
-    if(campo.id!=='despDesconto')return;
+    if(campo.id!=='despDesconto'&&!campo.closest('#despItensLista'))return;
     if(typeof window.__atualizarPrecosCompra!=='function')return;
+    if(campo.matches&&campo.matches('.ic-pv,.ic-margem'))return;
     window.__atualizarPrecosCompra();
   }
   document.addEventListener('input',atualizarPrecoAoEditarCompra);
-  document.addEventListener('change',function(e){if(e.target&&e.target.id==='despDesconto')atualizarPrecoAoEditarCompra(e);});
+  document.addEventListener('change',atualizarPrecoAoEditarCompra);
   document.addEventListener('click',function(e){if(e.target&&e.target.closest&&e.target.closest('#toggle-nota-desc')&&typeof window.__atualizarPrecosCompra==='function')window.__atualizarPrecosCompra();});
 
   // 4. Salva a compra e aplica os itens ao estoque
