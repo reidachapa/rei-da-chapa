@@ -5,17 +5,16 @@
   const STATION_TABLE = 'fila_impressao_estacoes';
   const LEASE_SECONDS = 60;
   const STATION_KEY = 'rei_chapa_estacao_impressao_v1';
-  const OUTBOX_KEY = 'rei_chapa_fila_impressao_outbox_v1';
   const STATUS = {
     pendente: ['🕒', 'Na fila', '#e5b83f'],
     imprimindo: ['🖨️', 'Imprimindo', '#55a4e8'],
     impresso: ['✅', 'Impresso', '#3fb972'],
     conferir: ['⚠️', 'Conferir papel', '#f0a840']
   };
-  let idEstacao = localStorage.getItem(STATION_KEY);
+  let idEstacao = window.__appMemoryStorage.getItem(STATION_KEY);
   if (!idEstacao) {
     idEstacao = window.crypto && crypto.randomUUID ? crypto.randomUUID() : 'station_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-    localStorage.setItem(STATION_KEY, idEstacao);
+    window.__appMemoryStorage.setItem(STATION_KEY, idEstacao);
   }
   const nomeEstacao = /Android/i.test(navigator.userAgent) ? 'Celular Android' : (navigator.platform || 'Computador');
   let estacaoAtiva = false;
@@ -93,50 +92,6 @@
     return { id: String(pedido.id), numero: pedido.numero, numeroDia: pedido.numeroDia, ticket };
   }
 
-  function chaveOutboxEvento(chaveEvento) { return OUTBOX_KEY + ':' + encodeURIComponent(String(chaveEvento)); }
-  function lerOutbox() {
-    const pendentes = new Map();
-    try {
-      const antigos = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
-      if (Array.isArray(antigos)) antigos.forEach(function (registro, indice) {
-        if (registro && registro.chave_evento) pendentes.set(String(registro.chave_evento), {
-          registro: registro, storageKey: OUTBOX_KEY, criadoLocal: indice
-        });
-      });
-      const chaves = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const chave = localStorage.key(i);
-        if (chave && chave.startsWith(OUTBOX_KEY + ':')) chaves.push(chave);
-      }
-      chaves.forEach(function (chave) {
-        try {
-          const salvo = JSON.parse(localStorage.getItem(chave) || 'null');
-          const registro = salvo && salvo.registro ? salvo.registro : salvo;
-          if (registro && registro.chave_evento) pendentes.set(String(registro.chave_evento), {
-            registro: registro, storageKey: chave, criadoLocal: Number(salvo && salvo.criadoLocal) || 0
-          });
-        } catch (_) {}
-      });
-    } catch (_) {}
-    return Array.from(pendentes.values()).sort((a, b) => a.criadoLocal - b.criadoLocal);
-  }
-  function gravarOutboxItem(registro) {
-    const chave = chaveOutboxEvento(registro.chave_evento);
-    if (!localStorage.getItem(chave)) localStorage.setItem(chave, JSON.stringify({ registro: registro, criadoLocal: Date.now() }));
-  }
-  function removerOutboxItem(item) {
-    if (item.storageKey !== OUTBOX_KEY) {
-      localStorage.removeItem(item.storageKey);
-      return;
-    }
-    try {
-      const antigos = JSON.parse(localStorage.getItem(OUTBOX_KEY) || '[]');
-      const restantes = Array.isArray(antigos) ? antigos.filter(registro => String(registro.chave_evento) !== String(item.registro.chave_evento)) : [];
-      if (restantes.length) localStorage.setItem(OUTBOX_KEY, JSON.stringify(restantes));
-      else localStorage.removeItem(OUTBOX_KEY);
-    } catch (error) { console.warn('Não consegui limpar o envio antigo da fila:', error); }
-  }
-
   async function enfileirar(tipo, pedido, chaveEvento, lojaId) {
     if (!clienteSupabaseDisponivel()) throw new Error('O app ainda não confirmou a conexão com o servidor. A ficha não foi enviada à fila.');
     const store = String(lojaId || lojaAtualFila());
@@ -145,14 +100,11 @@
       loja_id: store, chave_evento: String(chaveEvento), pedido_id: snapshot.id,
       tipo: tipo, payload: snapshot, status: 'pendente'
     };
-    gravarOutboxItem(registro);
-    const sincronizacao = await tentarOutbox(store);
-    const aindaPendente = lerOutbox().some(item => item.registro.chave_evento === registro.chave_evento);
-    return {
-      repetido: sincronizacao.repetidos.has(registro.chave_evento),
-      id: sincronizacao.ids.get(registro.chave_evento) || null,
-      guardadoLocal: aindaPendente
-    };
+    const { data, error } = await supa.from(TABLE).insert(registro).select('id').maybeSingle();
+    if (error && error.code === '23505') return { repetido: true, id: null };
+    if (error) throw error;
+    if (!data || !data.id) throw new Error('O Supabase não confirmou a entrada da ficha na fila.');
+    return { repetido: false, id: data.id };
   }
 
   async function enfileirarAposSalvar(tipo, pedido, chaveEvento, promiseSave, lojaId) {
@@ -160,50 +112,17 @@
     try { resultado = await Promise.resolve(promiseSave); }
     catch (error) { toastFila('⚠️ Não consegui confirmar o pedido no servidor; não enviei a ficha para impressão.'); return; }
     if (!resultado || !resultado.ok) {
-      toastFila('⚠️ O pedido ainda não foi confirmado no servidor; a ficha não entrou na fila. Mantenha o app aberto e tente sincronizar.');
+      toastFila('⚠️ O pedido não foi confirmado no Supabase; a ficha não entrou na fila. Confira a conexão antes de tentar novamente.');
       return;
     }
     try {
       const info = await enfileirar(tipo, pedido, chaveEvento, lojaId);
-      toastFila(info.repetido ? '🖨️ Esta ficha já está na fila.' : info.guardadoLocal
-        ? '⚠️ Ficha guardada neste aparelho e será enviada à fila na ordem quando a conexão voltar.'
-        : '🖨️ Ficha adicionada à fila compartilhada.');
+      toastFila(info.repetido ? '🖨️ Esta ficha já está na fila compartilhada.' : '🖨️ Ficha confirmada na fila compartilhada.');
       atualizarPainelFila();
     } catch (error) {
       console.warn('Falha ao enfileirar ficha:', error);
-      toastFila(error && error.guardadoLocal
-        ? '⚠️ Pedido salvo; a ficha ficou guardada neste aparelho e será enviada à fila quando houver conexão.'
-        : '⚠️ Pedido salvo, mas não consegui guardar a ficha para reenvio. Reimprima o pedido quando a conexão voltar.');
+      toastFila('⚠️ Pedido confirmado no Supabase, mas a ficha não entrou na fila. Confira a conexão e toque em imprimir novamente.');
     }
-  }
-
-  let sincronizandoOutbox = false;
-  async function tentarOutbox(lojaIdFiltro) {
-    const sincronizacao = { completo: false, repetidos: new Set(), ids: new Map() };
-    if (!clienteSupabaseDisponivel() || !navigator.onLine || sincronizandoOutbox) return sincronizacao;
-    const pendentes = lerOutbox().filter(item => !lojaIdFiltro || String(item.registro.loja_id) === String(lojaIdFiltro));
-    if (!pendentes.length) { sincronizacao.completo = true; return sincronizacao; }
-    sincronizandoOutbox = true;
-    let houveAlteracao = false;
-    let completo = true;
-    const lojasComFalha = new Set();
-    try {
-      for (const item of pendentes) {
-        const lojaItem = String(item.registro.loja_id);
-        if (lojasComFalha.has(lojaItem)) { completo = false; continue; }
-        try {
-          const { data, error } = await supa.from(TABLE).insert(item.registro).select('id').maybeSingle();
-          if (error && error.code !== '23505') { completo = false; lojasComFalha.add(lojaItem); continue; }
-          if (error && error.code === '23505') sincronizacao.repetidos.add(String(item.registro.chave_evento));
-          else if (data && data.id) sincronizacao.ids.set(String(item.registro.chave_evento), data.id);
-          removerOutboxItem(item);
-          houveAlteracao = true;
-        } catch (_) { completo = false; lojasComFalha.add(lojaItem); }
-      }
-      if (houveAlteracao) atualizarPainelFila();
-    } finally { sincronizandoOutbox = false; }
-    sincronizacao.completo = completo && !lerOutbox().some(item => !lojaIdFiltro || String(item.registro.loja_id) === String(lojaIdFiltro));
-    return sincronizacao;
   }
 
   async function rpc(nome, parametros) {
@@ -569,7 +488,6 @@
         }
       } catch (error) { console.warn('Não consegui retomar a estação:', error); }
     }
-    tentarOutbox();
     atualizarPainelFila();
   }
 
@@ -580,7 +498,6 @@
     substituirImpressaoDireta();
     iniciarMonitorFila();
     document.addEventListener('visibilitychange', sincronizarEstacaoAoVoltar);
-    window.addEventListener('online', tentarOutbox);
     window.addEventListener('pagehide', function () {
       if (estacaoAtiva && lojaEstacao) rpc('fila_impressao_liberar_estacao', { p_loja_id: lojaEstacao, p_estacao_id: idEstacao }).catch(() => {});
     });
@@ -592,7 +509,6 @@
         atualizarPainelFila();
       }
     });
-    setInterval(tentarOutbox, 12000);
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar, { once: true });
