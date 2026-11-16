@@ -35,7 +35,7 @@ function memoria({ ingredientes = [], notas = [], itens, editId = null }) {
   campos.btnSalvarDespesa = { disabled: false, textContent: editId ? 'Atualizar nota' : 'Salvar compra' };
   campos.modalDespesa = { classList: { remove() {} } };
   const document = { getElementById(id) { return campos[id] || null; }, querySelector() { return null; } };
-  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, PrecosCompra, EstoqueIngredientes, _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
+  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, PrecosCompra, EstoqueIngredientes, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
   const messages = [];
   const deps = { ingredientes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
   const saveStart = html.indexOf('async function salvarCompraDaNota(');

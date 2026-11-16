@@ -279,13 +279,13 @@ test('salvar atualização preparada mantém o saldo contado e o rótulo histór
   const deps = {
     ingredientes: [{ id: 'molho', nome: 'Maionese', nomeBase: 'Maionese', marca: 'Atual', semEstoque: true, estoque: 0, estoqueEstimado: 0.2, contagemEstoqueId: 'contagem-atual', modoCompra: 'pacote', unidade: 'un' }],
     notas: [structuredClone(anterior)], campos, preparado,
-    PrecosCompra: require('../purchase-pricing.js'), EstoqueIngredientes: require('../ingredient-stock.js'),
+    PrecosCompra: require('../purchase-pricing.js'), EstoqueIngredientes: require('../ingredient-stock.js'), ComprasDuplicadas: require('../purchase-duplicates.js'),
   };
   const inicioSalvar = html.indexOf('async function salvarCompraDaNota(');
   const fimSalvar = html.indexOf('// Um único ponto de gravação', inicioSalvar);
   const app = new Function('deps', `
     var ingredientes=deps.ingredientes,produtos=[],paes=[],despesas=deps.notas,despItensTemp=deps.preparado.itens,editandoDespesaId=deps.preparado.editId;
-    var window={despItensTemp:despItensTemp,editandoDespesaId:editandoDespesaId,PrecosCompra:deps.PrecosCompra,EstoqueIngredientes:deps.EstoqueIngredientes,_descontoNotaTipo:'valor',BackupSys:{async salvar(){return true}}};
+    var window={despItensTemp:despItensTemp,editandoDespesaId:editandoDespesaId,PrecosCompra:deps.PrecosCompra,EstoqueIngredientes:deps.EstoqueIngredientes,ComprasDuplicadas:deps.ComprasDuplicadas,_descontoNotaTipo:'valor',BackupSys:{async salvar(){return true}}};
     var document={getElementById(id){return deps.campos[id]||null},querySelector(){return null}};
     var compraNotaEmAndamento=false,notaCompraEmSincronizacaoId=null,revisaoLocal=0;
     function uid(){return 'teste'} function souGerente(){return true} function toast(){}

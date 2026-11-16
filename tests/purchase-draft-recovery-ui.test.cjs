@@ -84,7 +84,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   const mutations = [];
   let context;
   const window = {
-    __authPermitido: true, notaCompraIgual, RecuperacaoCompra, _descontoNotaTipo: 'valor',
+    __authPermitido: true, notaCompraIgual, RecuperacaoCompra, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor',
     __notaCompraConfirmadaNoServidor(id) {
       return copy(serverNotes.find(note => String(note.id) === String(id)) || null);
     },
