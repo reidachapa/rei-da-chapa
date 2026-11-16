@@ -73,13 +73,15 @@
           .order('atualizado_em', { ascending: false })
           .limit(limite));
       }
-      if (resposta.error || !Array.isArray(resposta.data)) return [];
+      if (resposta.error) throw resposta.error;
+      if (!Array.isArray(resposta.data)) throw new Error('O Supabase não retornou a lista de backups.');
       return resposta.data.filter(function(linha) { return ehIdBackup(linha && linha.id); }).map(metaDaLinha);
     },
     buscar: async function(cliente, id) {
       if (!cliente || !cliente.from || !ehIdBackup(id)) return null;
       var resposta = await resultado(cliente.from('estado').select('*').eq('id', id).maybeSingle());
-      return resposta.error || !resposta.data ? null : desempacotar(resposta.data);
+      if (resposta.error) throw resposta.error;
+      return !resposta.data ? null : desempacotar(resposta.data);
     },
     excluir: async function(cliente, id) {
       if (!cliente || !cliente.from || !ehIdBackup(id)) return { ok: false, error: 'ID de backup inválido.' };
