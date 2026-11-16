@@ -9877,11 +9877,23 @@ window.salvarVendaManual = function() {
     function atualizarPrecosProjetados(){
       if(arr!==window.despItensTemp)return;
       var calculo=projetarPrecos();
+      function marcarCampoCalculado(campo,calculado,descricao){
+        if(!campo)return;
+        campo.readOnly=calculado;
+        campo.setAttribute('aria-readonly',calculado?'true':'false');
+        campo.title=descricao;
+        campo.style.background=calculado?'#202023':'#181819';
+        campo.style.cursor=calculado?'not-allowed':'text';
+      }
       calculo.porIndice.forEach(function(info,i){
         if(!info)return;
         var it=arr[i];
         if(info.preco!==null){it.pv=info.preco;it.lucroPct=info.lucroPct;it.modoPreco=info.modoPreco;}
         var venda=cont.querySelector('.ic-pv[data-idx="'+i+'"]'),margem=cont.querySelector('.ic-margem[data-idx="'+i+'"]'),media=cont.querySelector('.ic-media-info[data-idx="'+i+'"]');
+        var margemCalculada=info.modoPreco==='manual',vendaCalculada=info.modoPreco==='percentual';
+        marcarCampoCalculado(margem,margemCalculada,margemCalculada?'Margem calculada pelo preço de venda e custo médio.':'Informe a margem para calcular o preço de venda.');
+        marcarCampoCalculado(venda,vendaCalculada,vendaCalculada?'Preço de venda calculado pela margem informada.':'Informe o preço para calcular a margem sobre o custo.');
+        if(venda)venda.placeholder=vendaCalculada?'Venda R$ (calculada)':'Venda R$';
         var precoExibido=info.preco;
         if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
