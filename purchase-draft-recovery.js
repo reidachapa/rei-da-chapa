@@ -294,6 +294,22 @@
     return !!(resposta.data && String(resposta.data.id) === String(id));
   }
 
+  async function finalizarRemocaoRascunhoSeIgual(opcoes) {
+    if (!opcoes || typeof opcoes.igual !== 'function' || typeof opcoes.lerLocal !== 'function'
+      || typeof opcoes.excluirServidor !== 'function' || typeof opcoes.removerLocal !== 'function') {
+      throw new Error('Não foi possível confirmar a remoção segura do rascunho.');
+    }
+    if (!opcoes.igual(opcoes.lerLocal(), opcoes.esperado)) return false;
+    if (!await opcoes.excluirServidor()) return false;
+    var atual = opcoes.lerLocal();
+    if (!opcoes.igual(atual, opcoes.esperado)) {
+      if (atual && typeof opcoes.preservarLocalMaisNovo === 'function') await opcoes.preservarLocalMaisNovo(atual);
+      return false;
+    }
+    opcoes.removerLocal();
+    return true;
+  }
+
   return {
     reconciliarBase: reconciliarBase,
     candidatas: candidatas,
@@ -303,6 +319,7 @@
     rascunhoConfirmadoSemEdicao: rascunhoConfirmadoSemEdicao,
     rascunhoCorrespondeACompraSalva: rascunhoCorrespondeACompraSalva,
     excluirRascunhoServidorSeIgual: excluirRascunhoServidorSeIgual,
+    finalizarRemocaoRascunhoSeIgual: finalizarRemocaoRascunhoSeIgual,
     prepararComoNovaCompra: prepararComoNovaCompra
   };
 });

@@ -3,7 +3,7 @@ const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro, rascunhoConfirmadoSemEdicao, rascunhoCorrespondeACompraSalva, excluirRascunhoServidorSeIgual } = require('../purchase-draft-recovery.js');
+const { reconciliarBase, candidatas, itensSemAplicacao, prepararRegistro, rascunhoConfirmadoSemEdicao, rascunhoCorrespondeACompraSalva, excluirRascunhoServidorSeIgual, finalizarRemocaoRascunhoSeIgual } = require('../purchase-draft-recovery.js');
 const ComprasDuplicadas = require('../purchase-duplicates.js');
 
 function congelar(valor) {
@@ -403,4 +403,55 @@ test('exclusão remota de rascunho usa comparação exata e só confirma quando 
   chamadas.length = 0;
   assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: null, error: null }), 'draft-1', envelope), false);
   assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: { id: 'other-id' }, error: null }), 'draft-1', envelope), false);
+});
+
+test('cópia local só é removida após exclusão remota e preserva uma versão local mais nova', async () => {
+  const original = { updatedAt: 'rev-1' };
+  let atual = structuredClone(original);
+  let removocoes = 0;
+  let preservados = 0;
+  const igual = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+  const ausente = await finalizarRemocaoRascunhoSeIgual({
+    esperado: original, igual, lerLocal: () => atual,
+    async excluirServidor() { return false; },
+    removerLocal() { removocoes++; },
+    preservarLocalMaisNovo() { preservados++; },
+  });
+  assert.equal(ausente, false);
+  assert.equal(removocoes, 0, 'linha ausente ou alterada mantém a cópia local');
+
+  const alteradoDuranteDelete = await finalizarRemocaoRascunhoSeIgual({
+    esperado: original, igual, lerLocal: () => atual,
+    async excluirServidor() { atual = { updatedAt: 'rev-2' }; return true; },
+    removerLocal() { removocoes++; },
+    preservarLocalMaisNovo(registro) { preservados++; assert.equal(registro.updatedAt, 'rev-2'); },
+  });
+  assert.equal(alteradoDuranteDelete, false);
+  assert.equal(removocoes, 0, 'edição feita enquanto o Supabase respondia não é apagada');
+  assert.equal(preservados, 1);
+
+  atual = structuredClone(original);
+  const removido = await finalizarRemocaoRascunhoSeIgual({
+    esperado: original, igual, lerLocal: () => atual,
+    async excluirServidor() { return true; },
+    removerLocal() { removocoes++; atual = null; },
+    preservarLocalMaisNovo() { preservados++; },
+  });
+  assert.equal(removido, true);
+  assert.equal(removocoes, 1);
+  assert.equal(preservados, 1);
+});
+
+test('confirmação normal, retomada e sincronização passam pela limpeza condicional do rascunho', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const inicio = html.indexOf('function removerRascunhoConfirmado(k)');
+  const fim = html.indexOf('function enfileirarExclusaoRascunhoSeIgual', inicio);
+  assert(inicio >= 0 && fim > inicio, 'a limpeza comum do rascunho existe');
+  const limpeza = html.slice(inicio, fim);
+  assert.match(limpeza, /removerRascunhoConfirmadoSeIgual\(k,esperado\)/);
+  assert.doesNotMatch(limpeza, /__appMemoryStorage\.removeItem/);
+  const abertura = html.slice(html.indexOf('window.abrirModalDespesa = function (despesa)'), html.indexOf('aberturaRascunho++;', html.indexOf('window.abrirModalDespesa = function (despesa)')));
+  assert.match(abertura, /limpezasConfirmadas\.get\(chaveLimpezaNova\)/);
+  assert.match(abertura, /limpezaNova\.then\(continuarNovaCompra,continuarNovaCompra\)/);
 });

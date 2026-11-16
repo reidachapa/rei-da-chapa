@@ -10634,6 +10634,8 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var temporizadoresRemotos = new Map();
   var gravacoesRemotas = new Map();
   var versoesConfirmadas = new Map();
+  var limpezasConfirmadas = new Map();
+  var aberturaNovaCompraAguardandoLimpeza = false;
   var rascunhosCarregados = false;
   var promessaCarregarRascunhos = null;
   var avisouFalhaRascunho = false;
@@ -10715,20 +10717,6 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     tarefa.finally(function () { if (gravacoesRemotas.get(k) === tarefa) gravacoesRemotas.delete(k); }).catch(function () {});
     return tarefa;
   }
-  function enfileirarExclusaoRascunho(k) {
-    var anterior = gravacoesRemotas.get(k) || Promise.resolve();
-    var tarefa = anterior.catch(function () {}).then(async function () {
-      if (!idDispositivo || !window.__authPermitido || !supa) throw new Error('Não consegui confirmar a limpeza do rascunho no Supabase.');
-      var id = idServidorRascunho(k);
-      var resposta = await supa.from('estado').delete().eq('id', id);
-      if (resposta.error) throw resposta.error;
-      versoesConfirmadas.delete(k);
-      return true;
-    });
-    gravacoesRemotas.set(k, tarefa);
-    tarefa.finally(function () { if (gravacoesRemotas.get(k) === tarefa) gravacoesRemotas.delete(k); }).catch(function () {});
-    return tarefa;
-  }
   function agendarPersistenciaRascunho(k, registro, imediato) {
     var timerAnterior = temporizadoresRemotos.get(k);
     if (timerAnterior) window.clearTimeout(timerAnterior);
@@ -10753,18 +10741,17 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     }, imediato ? 0 : 350);
     temporizadoresRemotos.set(k, timer);
   }
-  function excluirRascunhoServidor(k) {
-    var timer = temporizadoresRemotos.get(k);
-    if (timer) window.clearTimeout(timer);
-    temporizadoresRemotos.delete(k);
-    return enfileirarExclusaoRascunho(k);
-  }
   function removerRascunhoConfirmado(k) {
-    window.__appMemoryStorage.removeItem(k);
-    pendentes.delete(k);
-    excluirRascunhoServidor(k).catch(function (erro) {
-      console.warn('A nota foi confirmada, mas o rascunho remoto não pôde ser removido:', erro);
-    });
+    if(limpezasConfirmadas.has(k))return limpezasConfirmadas.get(k);
+    var registro=lerChave(k);
+    if(!registro)return Promise.resolve(false);
+    var esperado=clonar(registro),tarefa=removerRascunhoConfirmadoSeIgual(k,esperado).then(function(){return true}).catch(function(erro){
+      console.warn('A nota foi confirmada, mas o rascunho foi preservado porque não consegui confirmar sua remoção segura:',erro);
+      if(typeof window.toast==='function')window.toast('✅ A compra foi salva; preservei o rascunho porque não consegui confirmar a limpeza no Supabase. Confira a conexão antes de abrir outra compra.');
+      return false;
+    }).finally(function(){if(limpezasConfirmadas.get(k)===tarefa)limpezasConfirmadas.delete(k)});
+    limpezasConfirmadas.set(k,tarefa);
+    return tarefa;
   }
   function enfileirarExclusaoRascunhoSeIgual(k, registroEsperado) {
     var anterior = gravacoesRemotas.get(k) || Promise.resolve();
@@ -10782,19 +10769,20 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     return tarefa;
   }
   async function removerRascunhoConfirmadoSeIgual(k, registroEsperado) {
-    var atual = lerChave(k);
-    if (!atual || !dadosIguais(atual, registroEsperado)) throw new Error('O rascunho mudou nesta tela. Mantive o conteúdo.');
+    var inicial=lerChave(k);
+    if(!inicial||!dadosIguais(inicial,registroEsperado))throw new Error('O rascunho mudou nesta tela. Mantive o conteúdo.');
     var timer = temporizadoresRemotos.get(k);
     if (timer) window.clearTimeout(timer);
     temporizadoresRemotos.delete(k);
-    await enfileirarExclusaoRascunhoSeIgual(k, registroEsperado);
-    atual = lerChave(k);
-    if (!atual || !dadosIguais(atual, registroEsperado)) {
-      if (atual && temConteudoRascunho(atual)) agendarPersistenciaRascunho(k, atual, true);
-      throw new Error('O rascunho mudou durante a limpeza. Preservei a versão mais recente deste aparelho.');
-    }
-    window.__appMemoryStorage.removeItem(k);
-    pendentes.delete(k);
+    var removido=await window.RecuperacaoCompra.finalizarRemocaoRascunhoSeIgual({
+      esperado:registroEsperado,
+      igual:dadosIguais,
+      lerLocal:function(){return lerChave(k)},
+      excluirServidor:function(){return enfileirarExclusaoRascunhoSeIgual(k,registroEsperado)},
+      removerLocal:function(){window.__appMemoryStorage.removeItem(k);pendentes.delete(k)},
+      preservarLocalMaisNovo:function(atual){if(temConteudoRascunho(atual))agendarPersistenciaRascunho(k,atual,true)}
+    });
+    if(!removido)throw new Error('O rascunho mudou ou a remoção no Supabase não foi confirmada. Mantive o conteúdo.');
     return true;
   }
   async function carregarRascunhosServidor() {
@@ -11179,6 +11167,17 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         else if (typeof window.toast === 'function') window.toast('⚠️ Não consegui consultar os rascunhos. Tente novamente; não substituí nenhum.');
       });
       return;
+    }
+    if(!despesa){
+      var chaveLimpezaNova=chave(lojaAtual(),null),limpezaNova=limpezasConfirmadas.get(chaveLimpezaNova);
+      if(limpezaNova){
+        if(!aberturaNovaCompraAguardandoLimpeza){
+          aberturaNovaCompraAguardandoLimpeza=true;
+          var continuarNovaCompra=function(){aberturaNovaCompraAguardandoLimpeza=false;window.abrirModalDespesa(null)};
+          limpezaNova.then(continuarNovaCompra,continuarNovaCompra);
+        }
+        return;
+      }
     }
     if(!despesa){
       var chavePrevia=chave(lojaAtual(),null),rascunhoPrevio=lerChave(chavePrevia),camposPrevios=rascunhoPrevio&&rascunhoPrevio.campos||{};
