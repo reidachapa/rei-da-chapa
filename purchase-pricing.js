@@ -51,6 +51,32 @@
     var vinculado = tipoVinculo(it && it.vinc);
     return vinculado || (it && (it.tipoItem === 'ing' || it.tipoItem === 'pao') ? it.tipoItem : 'prod');
   }
+  function unidadeMedida(valor) {
+    var unidade = String(valor || '').trim().toLocaleLowerCase('pt-BR').replace(/\./g, '');
+    if (/^(mg|miligramas?)$/.test(unidade)) return 'mg';
+    if (/^(quilo|quilos)$/.test(unidade)) return 'kg';
+    if (/^(gr|grama|gramas)$/.test(unidade)) return 'g';
+    if (/^(ml|mililitros?)$/.test(unidade)) return 'ml';
+    if (/^(lt|litro|litros)$/.test(unidade)) return 'l';
+    return unidade;
+  }
+  function converterQuantidade(qtd, origem, destino) {
+    var n = numero(qtd), a = unidadeMedida(origem), b = unidadeMedida(destino);
+    var massa = { mg: 0.001, g: 1, kg: 1000 }, volume = { ml: 1, l: 1000 };
+    if (a === b) return n;
+    if (a in massa && b in massa) return n * massa[a] / massa[b];
+    if (a in volume && b in volume) return n * volume[a] / volume[b];
+    return n;
+  }
+  function quantidadeEstoqueLegada(item, catalogo, tipo) {
+    var quantidade = numero(item.qtd);
+    if (tipo !== 'ing' || catalogo.modoCompra !== 'flexivel') return quantidade;
+    if (numero(item.rend) > 0) return quantidade * numero(item.rend);
+    var unidadeCompra = item.unid || catalogo.unidade || 'kg';
+    var unidadeEstoque = catalogo.unidadeEstoque || item.unidadeEstoque || unidadeCompra;
+    if (!/^(mg|g|kg|ml|l)$/.test(unidadeMedida(unidadeEstoque))) unidadeEstoque = unidadeCompra;
+    return converterQuantidade(quantidade, unidadeCompra, unidadeEstoque);
+  }
 
   // Reverse the edited note on cloned catalog rows before projecting the new values.
   function reverterNota(nota, porTipoId) {
@@ -60,14 +86,16 @@
     lista.forEach(function (it) {
       if (!it) return;
       var ap = it.aplicado;
+      if (ap && ap.preservadoPorContagem) return;
       if (!ap && !ehCompra) return;
       var vinc = String(ap && ap.vinc || it.vinc || ''), tipo = tipoVinculo(vinc);
       if (!tipo) return;
       var catalogo = porTipoId[tipo].get(vinc.slice(tipo.length + 1));
       if (!catalogo) return;
-      var quantidade = ap ? numero(ap.qtdEst) : numero(it.qtd);
+      var quantidade = ap ? numero(ap.qtdEst) : quantidadeEstoqueLegada(it, catalogo, tipo);
       if (!(quantidade > 0)) return;
-      var semEstoque = tipo === 'ing' && !!(ap && ap.semEstoque);
+      var semEstoque = tipo === 'ing' && !!(ap ? ap.semEstoque : catalogo.semEstoque);
+      if (semEstoque && catalogo.contagemEstoqueId && String(ap && ap.contagemEstoqueId || '') !== String(catalogo.contagemEstoqueId)) return;
       var saldoBruto = semEstoque ? catalogo.estoqueEstimado : catalogo.estoque;
       if (semEstoque && (saldoBruto === null || saldoBruto === undefined || saldoBruto === '')) return;
       var qtdAtual = Number(saldoBruto), custoAtual = numero(catalogo.custo);

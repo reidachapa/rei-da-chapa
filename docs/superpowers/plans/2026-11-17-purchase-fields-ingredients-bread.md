@@ -52,6 +52,6 @@
 
 ## Verification
 
-- Purchase, ingredient, bread, pricing, and draft-save coverage: 92/92 tests passed.
-- Full suite: 278/280 passed. The two failures also reproduce on the unchanged base commit `4ef1527`: the manual-refresh confirmation test and the shared-print snapshot test.
-- `purchase-pricing.js` syntax and all 7 inline JavaScript blocks were checked; `git diff --check` passed.
+- Purchase, ingredient, bread, pricing, and draft-save coverage: 95/95 tests passed.
+- Full suite after the legacy flexible-unit fix: 281/283 passed. The same two failures also reproduce on the unchanged base commit `4ef1527`: the manual-refresh confirmation test and the shared-print snapshot test.
+- `purchase-pricing.js` syntax and all 7 inline JavaScript blocks were checked; `git diff --check` passed. Regression tests reproduced legacy grams being reversed as kilograms, missed long-form unit aliases, and stale pre-count snapshots; all pass after aligning the projection with stock reversal.

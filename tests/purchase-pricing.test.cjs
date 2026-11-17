@@ -66,6 +66,60 @@ test('nota legada sem aplicado reverte desconto por item e rateio da nota', () =
   assert.equal(r.preco, 5.49);
 });
 
+test('edição de nota legada converte gramas para a unidade do estoque do ingrediente', () => {
+  const linhaAntiga = {
+    nome: 'Milho', tipoItem: 'ing', vinc: 'ing:milho', qtd: 2000, unid: 'g', valor: 0.01,
+    modoCompra: 'flexivel', modoPreco: 'percentual', lucroPct: 50,
+  };
+  const catalogo = {
+    id: 'milho', nome: 'Milho', modoCompra: 'flexivel', unidade: 'g', unidadeEstoque: 'kg',
+    estoque: 12, custo: 40 / 12, precoExtra: 0,
+  };
+  const r = calcular({
+    itens: [linhaAntiga], ingredientes: [catalogo],
+    quantidadesEstoquePorIndice: [2],
+    notaAnterior: { tipoRegistro: 'compra', itens: [linhaAntiga] },
+  }).grupos[0];
+
+  assert.equal(r.estoque, 12);
+  perto(r.custoMedio, 40 / 12);
+  assert.equal(r.preco, 5);
+});
+
+test('edição de nota legada reconhece nomes longos de unidades físicas', () => {
+  const casos = [
+    { nome: 'Água', unidade: 'ml', unidadeEstoque: 'l', qtd: 2000, unid: 'mililitros' },
+    { nome: 'Farinha', unidade: 'mg', unidadeEstoque: 'kg', qtd: 2000000, unid: 'miligramas' },
+  ];
+  casos.forEach((caso, indice) => {
+    const vinc = 'ing:medida-' + indice;
+    const linha = { ...caso, tipoItem: 'ing', vinc, valor: 20 / caso.qtd, modoCompra: 'flexivel', modoPreco: 'percentual', lucroPct: 50 };
+    const catalogo = { id: 'medida-' + indice, nome: caso.nome, modoCompra: 'flexivel', unidade: caso.unidade, unidadeEstoque: caso.unidadeEstoque, estoque: 12, custo: 40 / 12 };
+    const resultado = calcular({ itens: [linha], ingredientes: [catalogo], quantidadesEstoquePorIndice: [2], notaAnterior: { tipoRegistro: 'compra', itens: [linha] } }).grupos[0];
+    assert.equal(resultado.estoque, 12);
+    perto(resultado.custoMedio, 40 / 12);
+    assert.equal(resultado.preco, 5);
+  });
+});
+
+test('edição não reverte uma compra flexível anterior à contagem física atual', () => {
+  const anterior = {
+    tipoRegistro: 'compra',
+    itens: [{
+      nome: 'Tomate', tipoItem: 'ing', vinc: 'ing:tomate', qtd: 2, unid: 'kg', valor: 5,
+      modoCompra: 'flexivel',
+      aplicado: { vinc: 'ing:tomate', qtdEst: 2, semEstoque: true, contagemEstoqueId: 'contagem-antiga', custoAntes: 3, custoUnitario: 5 },
+    }],
+  };
+  const catalogo = [{ id: 'tomate', nome: 'Tomate', modoCompra: 'flexivel', unidade: 'kg', unidadeEstoque: 'kg', semEstoque: true, estoqueEstimado: 18, contagemEstoqueId: 'contagem-atual', custo: 3 }];
+  const linhaNova = { nome: 'Tomate', tipoItem: 'ing', vinc: 'ing:tomate', qtd: 1, unid: 'kg', valor: 4, modoCompra: 'flexivel', modoPreco: 'percentual', lucroPct: 50 };
+  const resultado = calcular({ itens: [linhaNova], ingredientes: catalogo, quantidadesEstoquePorIndice: [1], notaAnterior: anterior }).grupos[0];
+
+  assert.equal(resultado.estoque, 19);
+  perto(resultado.custoMedio, 58 / 19);
+  assert.equal(resultado.preco, 4.58);
+});
+
 test('aplicado com custo zero é respeitado na reversão da bonificação', () => {
   const item = { ...gratis, vinc: 'prod:suco', aplicado: { vinc: 'prod:suco', qtdEst: 6, custoAntes: 3.24, custoUnitario: 0 } };
   const r = calcular({ itens: [item], produtos: [{ ...produto, estoque: 12, custo: 1.62 }], notaAnterior: { tipoRegistro: 'compra', itens: [item] } }).grupos[0];
