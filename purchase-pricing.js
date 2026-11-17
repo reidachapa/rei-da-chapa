@@ -18,6 +18,17 @@
   'use strict';
 
   function numero(valor) { return Number(valor) || 0; }
+  function normalizarPercentualDigitado(valor) {
+    var texto = String(valor == null ? '' : valor).replace(/[^\d.,]/g, '').replace(/\./g, ',');
+    var separador = texto.indexOf(',');
+    if (separador >= 0) texto = texto.slice(0, separador + 1) + texto.slice(separador + 1).replace(/,/g, '');
+    return texto;
+  }
+  function lerPercentualNota(valor) {
+    var texto = normalizarPercentualDigitado(valor).replace(',', '.');
+    var n = texto ? Number(texto) : 0;
+    return Number.isFinite(n) ? Math.max(0, n) : 0;
+  }
   function finito(valor) {
     if (valor === null || valor === undefined || valor === '') return null;
     var n = Number(valor);
@@ -32,6 +43,9 @@
     var desconto = Math.max(0, numero(original && it.descontoOriginal !== undefined ? it.descontoOriginal : it.desconto));
     if (it.descontoTipo === 'percent') desconto = total * Math.min(100, desconto) / 100;
     return Math.min(total, desconto);
+  }
+  function somarDescontosItens(itens) {
+    return (Array.isArray(itens) ? itens : []).reduce(function (s, it) { return s + descontoItem(it); }, 0);
   }
   function itemValido(it, incluirSemNome) { return !!(it && (String(it.nome || '').trim() || incluirSemNome) && numero(it.qtd) > 0); }
 
@@ -147,5 +161,11 @@
     return { porIndice: porIndice, grupos: grupos };
   }
 
-  return { calcular: calcular };
+  return {
+    calcular: calcular,
+    calcularDescontoItem: descontoItem,
+    somarDescontosItens: somarDescontosItens,
+    normalizarPercentualDigitado: normalizarPercentualDigitado,
+    lerPercentualNota: lerPercentualNota,
+  };
 });
