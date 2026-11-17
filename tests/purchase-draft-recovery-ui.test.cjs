@@ -85,6 +85,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   let context;
   const window = {
     __authPermitido: true, notaCompraIgual, RecuperacaoCompra, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor',
+    crypto: { randomUUID: () => 'dispositivo-de-teste' },
     __notaCompraConfirmadaNoServidor(id) {
       return copy(serverNotes.find(note => String(note.id) === String(id)) || null);
     },
@@ -156,7 +157,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     renderTudo: render, renderClientes: render, renderPaes: render,
     renderIngredientes: render, renderCompras: render, renderDRE: render,
     atualizarBotaoMotoboy: render, aplicarCorDaLoja: render, mesAtual: () => '2026-11',
-    buscarIngredienteCompra: () => null, toast: window.toast,
+    buscarIngredienteCompra: () => null, lerMoeda: value => Number(String(value || '').replace(',', '.')) || 0, toast: window.toast,
     reverterCompraEstoque: forbiddenMutation('reverter estoque'),
     aplicarCompraEstoque: forbiddenMutation('aplicar estoque'), salvar: forbiddenMutation('gravar compra'),
     souGerente: () => true, MutationObserver: class { observe() {} },
@@ -364,6 +365,34 @@ test('preparar a atualização da nota refeita usa a versão atual e mantém os 
   assert.equal(app.reads.length, 1);
 });
 
+test('atualizar uma nota consulta a versão mais recente pelo mesmo ID e mantém as alterações do rascunho', async () => {
+  const { app } = prepararRascunhoParaRevisao();
+  app.setServer([nota({ valor: 150, obs: 'Alteração feita em outro aparelho' })]);
+  const resultado = await app.window.__prepararRevisaoRascunhoCompra({ idOriginal: 'nota-1', atualizarExistente: true });
+  assert.equal(resultado.nova, false);
+  assert.equal(resultado.editId, 'nota-1');
+  assert.equal(app.editId, 'nota-1');
+  assert.equal(app.base().valor, 150);
+  assert.equal(app.base().obs, 'Alteração feita em outro aparelho');
+  assert.equal(app.readDraft('nota-1').baseNota.valor, 150);
+  assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
+  assert.equal(app.fields.despObs.value, 'Alteração ainda não enviada');
+  assert.equal(app.notes[0].valor, 150, 'a consulta não grava nem duplica a nota');
+  assert.equal(app.reads.length, 1);
+});
+
+test('atualizar uma nota apagada no servidor não converte o rascunho em compra nova', async () => {
+  const { app } = prepararRascunhoParaRevisao();
+  app.setServer([]);
+  await assert.rejects(app.window.__prepararRevisaoRascunhoCompra({ idOriginal: 'nota-1', atualizarExistente: true }), /não existe mais no servidor/);
+  assert.equal(app.readDraft('nota-1').campos.despObs, 'Alteração ainda não enviada');
+  assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
+  assert.equal(app.readDraft(null), null);
+  assert.equal(app.editId, 'nota-1');
+  assert.equal(app.products[0].estoque, 10);
+  assert.equal(app.window.__recuperacaoCompraEmAndamento, false);
+});
+
 test('uma nota refeita com o mesmo fornecedor, número e data impede preparar outra compra nova', async () => {
   const { app } = prepararRascunhoParaRevisao();
   const antes = app.readDraft('nota-1');
@@ -456,19 +485,22 @@ test('trocar de nota enquanto a leitura está pendente não prepara nem limpa ne
   assert.equal(app.products[0].estoque, 10);
 });
 
-test('retomar uma edição cuja nota sumiu reabre os campos e conserva o ID bloqueado até a conferência', async () => {
+test('retomar uma edição cuja nota sumiu reabre os campos sem abrir o painel de revisão', async () => {
   const { app } = prepararRascunhoParaRevisao();
   app.close();
   app.setNotes([]);
+  app.setServer([]);
   app.captureReviewPanel();
   await app.authorize();
   assert.equal(app.modal.classList.contains('aberto'), true);
   assert.equal(app.fields.despObs.value, 'Alteração ainda não enviada');
   assert.equal(app.window.despItensTemp[0].qtd, 11);
   assert.equal(app.editId, 'nota-1');
-  assert.deepEqual(app.reviewRequests, ['nota-1']);
+  assert.equal(app.fields.btnSalvarDespesa.textContent, '🔄 Atualizar nota');
+  assert.deepEqual(app.reviewRequests, []);
   await app.save();
-  assert.deepEqual(app.reviewRequests, ['nota-1', 'nota-1']);
+  assert.deepEqual(app.reviewRequests, []);
+  assert.equal(app.reads.length, 1);
   assert.deepEqual(app.mutations, []);
   assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
   assert.equal(app.readDraft(null), null);
@@ -491,31 +523,56 @@ test('retomar um rascunho antigo de compra nova preserva os campos sem editar ou
   assert.deepEqual(recarregado.readDraft(null).itens, registro.itens);
 });
 
-test('Salvar com a nota original ausente abre a revisão antes de mexer no preço, estoque ou servidor', async () => {
+test('Salvar com a nota original ausente consulta o servidor sem abrir revisão e preserva o rascunho', async () => {
   const { app } = prepararRascunhoParaRevisao();
-  const antes = app.readDraft('nota-1');
   app.setNotes([]);
+  app.setServer([]);
   app.captureReviewPanel();
   await app.save();
-  assert.deepEqual(app.reviewRequests, ['nota-1']);
+  assert.deepEqual(app.reviewRequests, []);
   assert.deepEqual(app.mutations, []);
-  assert.deepEqual(app.reads, []);
-  assert.deepEqual(app.readDraft('nota-1'), antes);
+  assert.equal(app.reads.length, 1);
+  assert.equal(app.readDraft('nota-1').campos.despObs, 'Alteração ainda não enviada');
+  assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
+  assert.equal(app.readDraft(null), null);
   assert.equal(app.editId, 'nota-1');
   assert.equal(app.products[0].estoque, 10);
-  assert.equal(app.window.__recuperacaoCompraEmAndamento, undefined);
+  assert.equal(app.window.__recuperacaoCompraEmAndamento, false);
 });
 
-test('Salvar com a nota atual diferente da base também exige revisão antes de qualquer alteração de estoque', async () => {
+test('falha de conexão ao atualizar não abre revisão nem altera nota ou estoque', async () => {
   const { app } = prepararRascunhoParaRevisao();
-  const antes = app.readDraft('nota-1');
-  app.setNotes([nota({ valor: 150 })]);
+  const notaLocal = app.notes[0];
+  app.setReadError(new Error('Supabase fora do ar'));
   app.captureReviewPanel();
   await app.save();
-  assert.deepEqual(app.reviewRequests, ['nota-1']);
+  assert.deepEqual(app.reviewRequests, []);
+  assert.equal(app.reads.length, 1);
+  assert.deepEqual(app.notes, [notaLocal]);
+  assert.equal(app.editId, 'nota-1');
+  assert.equal(app.fields.btnSalvarDespesa.textContent, '🔄 Atualizar nota');
+  assert.equal(app.readDraft('nota-1').campos.despObs, 'Alteração ainda não enviada');
+  assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
+  assert.equal(app.products[0].estoque, 10);
   assert.deepEqual(app.mutations, []);
-  assert.deepEqual(app.readDraft('nota-1'), antes);
+});
+
+test('Salvar com uma versão diferente atualiza a base automaticamente antes de validar a compra', async () => {
+  const { app } = prepararRascunhoParaRevisao();
+  const alterada = nota({ valor: 150, obs: 'Atualizada em outro aparelho' });
+  app.setServer([alterada]);
+  app.captureReviewPanel();
+  app.window.ComprasDuplicadas.validarEstado = () => { throw new Error('parar após conferir o servidor'); };
+  await app.save();
+  assert.deepEqual(app.reviewRequests, []);
+  assert.equal(app.reads.length, 1);
+  assert.equal(app.base().valor, 150);
+  assert.equal(app.base().obs, 'Atualizada em outro aparelho');
+  assert.equal(app.readDraft('nota-1').baseNota.valor, 150);
+  assert.equal(app.readDraft('nota-1').itens[0].qtd, 11);
+  assert.equal(app.fields.despObs.value, 'Alteração ainda não enviada');
   assert.equal(app.notes[0].valor, 150);
+  assert.deepEqual(app.mutations, []);
 });
 
 for (const [name, change] of [

@@ -3589,8 +3589,24 @@ async function salvarCompraDaNota(e){
    if(rendimentoApagado)return toast('O item "'+rendimentoApagado.nome+'" já tem rendimento salvo. Informe o valor para preservar a ficha e o estoque.');
   var editId=window.editandoDespesaId||editandoDespesaId||(typeof window.__obterIdRascunhoCompra==='function'?window.__obterIdRascunhoCompra():null);
   var anterior=editId?despesas.find(function(d){return String(d.id)===String(editId);}):null;
-  var notaBaseRascunho=typeof window.__obterBaseNotaRascunho==='function'?window.__obterBaseNotaRascunho():null;
-  if(editId&&(!anterior||(notaBaseRascunho&&typeof window.notaCompraIgual==='function'&&!window.notaCompraIgual(notaBaseRascunho,anterior)))){if(typeof window.__mostrarRevisaoRascunhoCompra==='function')window.__mostrarRevisaoRascunhoCompra(editId);return toast(anterior?'⚠️ Essa nota mudou. O rascunho existe apenas nesta tela; toque em “Conferir no servidor” para continuar.':'⚠️ Não encontrei a nota original nos dados atuais. Confira o servidor antes de continuar; os itens permanecem apenas nesta tela.');}
+  if(editId){
+    var botaoAtualizarNota=document.getElementById('btnSalvarDespesa'),textoBotaoAtualizarNota=botaoAtualizarNota?botaoAtualizarNota.textContent:'';
+    if(botaoAtualizarNota){botaoAtualizarNota.disabled=true;botaoAtualizarNota.textContent='⏳ Conferindo nota...'}
+    try{
+      if(typeof window.__prepararRevisaoRascunhoCompra!=='function')throw new Error('Atualize o app e tente novamente.');
+      var notaConciliada=await window.__prepararRevisaoRascunhoCompra({idOriginal:editId,atualizarExistente:true,silencioso:true});
+      if(!notaConciliada||notaConciliada.nova||String(notaConciliada.editId)!==String(editId))throw new Error('Não consegui confirmar a mesma nota no servidor. O rascunho foi mantido.');
+      arr=window.despItensTemp||despItensTemp||[];
+      itens=arr.filter(function(it){return it&&String(it.nome||'').trim()&&(Number(it.qtd)||0)>0;});
+      editId=notaConciliada.editId;
+      anterior=despesas.find(function(d){return String(d.id)===String(editId);})||null;
+      if(!anterior)throw new Error('A nota não foi encontrada no Supabase. O rascunho foi mantido.');
+    }catch(erroConciliacaoNota){
+      return toast('⚠️ Não consegui atualizar a nota. '+(erroConciliacaoNota&&erroConciliacaoNota.message||'Confira a conexão e tente novamente.'));
+    }finally{
+      if(botaoAtualizarNota){botaoAtualizarNota.disabled=false;botaoAtualizarNota.textContent=textoBotaoAtualizarNota||'🔄 Atualizar nota'}
+    }
+  }
   if(!window.ComprasDuplicadas)return toast('Não consegui carregar a conferência de notas repetidas. Atualize o app antes de continuar; os campos atuais existem apenas nesta tela.');
   var campoCompra=function(id){return (document.getElementById(id)||{}).value||''};
   var itensCandidatos=itens.map(function(it){return Object.assign({},it,{descontoOriginal:Number(it.desconto)||0})});
@@ -11021,16 +11037,19 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   function contextoRevisao(){return {abertura:aberturaRascunho,chave:chaveRascunhoAtivo,loja:lojaAtual()}}
   function contextoRevisaoValido(contexto){return contexto.abertura===aberturaRascunho&&contexto.chave===chaveRascunhoAtivo&&contexto.loja===lojaAtual()&&estaAberto()&&window.__authPermitido&&souGerente()}
   window.__prepararRevisaoRascunhoCompra=async function(opcoes){
+    opcoes=opcoes||{};
     if(window.__recuperacaoCompraEmAndamento)throw new Error('Aguarde a conferência em andamento.');
     if(!estaAberto())throw new Error('Abra o rascunho para conferir a nota.');
     var contexto=contextoRevisao();
     window.__recuperacaoCompraEmAndamento=true;
     try{
+      if(opcoes.atualizarExistente&&!salvarRascunho({imediato:true}))throw new Error('Não consegui manter as alterações do rascunho. Tente novamente.');
       var info=await consultarServidorParaRascunho(),alvo=opcoes.notaEsperada||null;
       if(!contextoRevisaoValido(contexto))throw new Error('Você mudou de nota durante a consulta. Confira novamente o rascunho aberto.');
-      var atual=alvo?info.notas.find(function(n){return String(n.id)===String(alvo.id)}):null;
+      var atual=opcoes.atualizarExistente?info.notas.find(function(n){return n&&String(n.id)===String(opcoes.idOriginal)&&n.tipoRegistro!=='despesa'&&Array.isArray(n.itens)}):alvo?info.notas.find(function(n){return n&&String(n.id)===String(alvo.id)}):null;
+      if(opcoes.atualizarExistente&&!atual)throw new Error('A nota não existe mais no servidor. Seu rascunho foi mantido; confira o histórico antes de lançar outra compra.');
       if(alvo&&(!atual||!window.notaCompraIgual(alvo,atual)))throw new Error('Esta nota mudou novamente no servidor. Toque em Conferir no servidor e revise os valores.');
-      if(!alvo){
+      if(!alvo&&!opcoes.atualizarExistente){
         if(info.notas.some(function(n){return String(n.id)===String(opcoes.idOriginal)}))throw new Error('A nota original ainda existe. Confira a nota salva antes de preparar outra.');
         if(window.RecuperacaoCompra.candidatas(info.notas,identidadeRascunho(opcoes.idOriginal)).length)throw new Error('Já existe uma nota com este fornecedor, número e data. Confira a nota existente para não duplicar a compra.');
       }
@@ -11049,7 +11068,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       lojaRascunho=info.loja;idRascunho=novoId;chaveRascunhoAtivo=novaChave;baseNotaAtiva=atual?clonar(atual):null;
       window.editandoDespesaId=novoId;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=novoId;
       pendentes.delete(chaveAntes);pendentes.delete(novaChave);
-      restaurarRascunho(info.loja,novoId);
+      restaurarRascunho(info.loja,novoId,{silencioso:!!opcoes.silencioso});
       var titulo=document.getElementById('despesaTitulo'),salvar=document.getElementById('btnSalvarDespesa');
       if(titulo)titulo.textContent=atual?'✏️ Editar nota de compra':'🛒 Registrar compra';
       if(salvar)salvar.textContent=atual?'🔄 Atualizar nota':'💾 Salvar compra';
@@ -11201,12 +11220,11 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     window.editandoDespesaId=idOriginal;if(typeof editandoDespesaId!=='undefined')editandoDespesaId=idOriginal;
     restaurarRascunho(lojaRascunho,idRascunho);
     var titulo=document.getElementById('despesaTitulo'),salvar=document.getElementById('btnSalvarDespesa');
-    if(titulo)titulo.textContent='📝 Retomar nota de compra';
+    if(titulo)titulo.textContent='✏️ Editar nota de compra';
     if(salvar)salvar.textContent='🔄 Atualizar nota';
-    window.__mostrarRevisaoRascunhoCompra(idOriginal);
     return resultado;
   }
-  function restaurarRascunho(loja, id) {
+  function restaurarRascunho(loja, id, opcoes) {
     var k = chaveRascunhoAtivo || chave(loja, id);
     var registro = lerChave(k);
     if (!registro || registro.versao !== 1 || !temConteudoRascunho(registro)) return;
@@ -11231,13 +11249,15 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       });
     });
     sujo = true;
-    var confirmadoNoServidor = versoesConfirmadas.has(k) && (registro.rascunhoAtualizadoEm == null ? versoesConfirmadas.get(k) == null : Number(registro.rascunhoAtualizadoEm) === Number(versoesConfirmadas.get(k)));
-    if (confirmadoNoServidor) {
-      desenharStatusRascunho('ok', '✅ Rascunho recuperado do Supabase neste aparelho.');
-      if (typeof window.toast === 'function') window.toast('📝 Rascunho da compra recuperado do Supabase neste aparelho.');
-    } else {
-      desenharStatusRascunho('erro', '⚠️ Este rascunho está apenas nesta sessão e ainda não foi confirmado no Supabase.');
-      if (typeof window.toast === 'function') window.toast('⚠️ Este rascunho ainda não foi confirmado no Supabase; mantenha a tela aberta e confira a conexão.');
+    if(!(opcoes&&opcoes.silencioso)){
+      var confirmadoNoServidor = versoesConfirmadas.has(k) && (registro.rascunhoAtualizadoEm == null ? versoesConfirmadas.get(k) == null : Number(registro.rascunhoAtualizadoEm) === Number(versoesConfirmadas.get(k)));
+      if (confirmadoNoServidor) {
+        desenharStatusRascunho('ok', '✅ Rascunho recuperado do Supabase neste aparelho.');
+        if (typeof window.toast === 'function') window.toast('📝 Rascunho da compra recuperado do Supabase neste aparelho.');
+      } else {
+        desenharStatusRascunho('erro', '⚠️ Este rascunho está apenas nesta sessão e ainda não foi confirmado no Supabase.');
+        if (typeof window.toast === 'function') window.toast('⚠️ Este rascunho ainda não foi confirmado no Supabase; mantenha a tela aberta e confira a conexão.');
+      }
     }
   }
 
