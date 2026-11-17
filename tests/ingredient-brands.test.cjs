@@ -30,21 +30,22 @@ test('nome base normalizado encontra o mesmo ingrediente com outra marca', () =>
   assert.equal(buscar({ nome: '  maionese Hellmann’s ', nomeBase: ' MAIONESE ', marca: 'Hellmann’s' }, ingredientes), ingredientes[0]);
 });
 
-function memoria({ ingredientes = [], notas = [], itens, editId = null }) {
+function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], itens, editId = null }) {
   const campos = Object.fromEntries(Object.entries({ despData: '2026-11-14', despCategoria: 'outro', despSubcategoria: '', despFornecedor: 'Fornecedor teste', despNF: '000.123', despStatus: 'pago', despObs: '', despDesconto: '' }).map(([id, value]) => [id, { value }]));
   campos.btnSalvarDespesa = { disabled: false, textContent: editId ? 'Atualizar nota' : 'Salvar compra' };
   campos.modalDespesa = { classList: { remove() {} } };
   const document = { getElementById(id) { return campos[id] || null; }, querySelector() { return null; } };
   const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
   const messages = [];
-  const deps = { ingredientes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
+  const deps = { ingredientes, produtos, paes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
   const saveStart = html.indexOf('async function salvarCompraDaNota(');
   const saveEnd = html.indexOf('// Um único ponto de gravação', saveStart);
   const code = `
-    var ingredientes=deps.ingredientes,produtos=[],paes=[],despesas=deps.notas,despItensTemp=deps.window.despItensTemp,editandoDespesaId=deps.window.editandoDespesaId;
+    var ingredientes=deps.ingredientes,produtos=deps.produtos,paes=deps.paes,despesas=deps.notas,despItensTemp=deps.window.despItensTemp,editandoDespesaId=deps.window.editandoDespesaId;
     var window=deps.window,document=deps.document,toast=deps.toast,compraNotaEmAndamento=false,notaCompraEmSincronizacaoId=null,revisaoLocal=0,sequencia=0;
     function uid(){return 'teste_'+(++sequencia)} function souGerente(){return true}
     function salvar(){return Promise.resolve({ok:true,persisted:true})}
+    function quantidadeEstoqueProjetada(it){return Number(it&&it.qtd)||0}
     function categoriaLabelSelecionada(){return 'Outro'} function addSugestao(){} function popularTodasSugestoes(){}
     function ehNotaCompraSalva(n){return !!(n&&Array.isArray(n.itens)&&n.tipoRegistro!=='despesa')}
     function alert(msg){throw new Error(msg)}
@@ -56,7 +57,7 @@ function memoria({ ingredientes = [], notas = [], itens, editId = null }) {
     ${source('reverterCompraEstoque', 'vincularItemCompra')}
     ${source('aplicarCompraEstoque')}
     ${html.slice(saveStart, saveEnd)}
-    return {salvarCompraDaNota,get ingredientes(){return ingredientes},get notas(){return despesas}};
+    return {salvarCompraDaNota,get ingredientes(){return ingredientes},get produtos(){return produtos},get paes(){return paes},get notas(){return despesas}};
   `;
   return { app: new Function('deps', code)(deps), messages };
 }
@@ -79,6 +80,48 @@ test('novo ingrediente criado pela compra mantém nome base e marca em campos se
   await fixture.app.salvarCompraDaNota();
   const ing = fixture.app.ingredientes[0];
   assert.deepEqual([ing.nome, ing.nomeBase, ing.marca, ing.estoque], ['Milho', 'Milho', 'Bonduelle', 2]);
+});
+
+test('compra salva preço de venda pela margem e categoria no ingrediente existente', async () => {
+  const ing = { ...ingrediente(), estoque: 10, custo: 2, precoExtra: 1 };
+  const fixture = memoria({ ingredientes: [ing], itens: [item({
+    vinc: 'ing:milho', qtd: 2, valor: 5, categoria: 'Molhos',
+    modoPreco: 'percentual', lucroPct: 80, pv: null,
+  })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(ing.custo, 2.5, 'a média considera o saldo anterior e a compra atual');
+  assert.equal(ing.precoExtra, 4.5, 'a margem é aplicada ao custo médio final');
+  assert.equal(ing.categoria, 'Molhos');
+  assert.equal(fixture.app.notas[0].itens[0].pv, 4.5);
+});
+
+test('compra salva preço de venda e categoria no pão cadastrado', async () => {
+  const pao = { id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 2, preco: 3 };
+  const fixture = memoria({ paes: [pao], itens: [{
+    nome: 'Pão Brioche', tipoItem: 'pao', vinc: 'pao:brioche', qtd: 2, valor: 5,
+    categoria: 'Pães especiais', modoPreco: 'percentual', lucroPct: 80, pv: null,
+  }] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(pao.custo, 2.5);
+  assert.equal(pao.preco, 4.5);
+  assert.equal(pao.categoria, 'Pães especiais');
+  assert.equal(fixture.app.notas[0].itens[0].pv, 4.5);
+});
+
+test('compra cria ingrediente com preço e categoria digitados', async () => {
+  const fixture = memoria({ itens: [item({
+    categoria: 'Temperos', modoPreco: 'manual', pv: 6.25,
+  })] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.ingredientes[0].categoria, 'Temperos');
+  assert.equal(fixture.app.ingredientes[0].precoExtra, 6.25);
+});
+
+test('compra cria pão com preço opcional em branco e categoria', async () => {
+  const fixture = memoria({ itens: [{ nome: 'Pão de teste', tipoItem: 'pao', qtd: 2, valor: 3, categoria: 'Pães especiais' }] });
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.paes[0].categoria, 'Pães especiais');
+  assert.equal(fixture.app.paes[0].preco || 0, 0);
 });
 
 test('marca diferente não permite apagar rendimento já usado pelo ingrediente', async () => {

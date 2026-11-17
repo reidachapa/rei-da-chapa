@@ -3629,7 +3629,7 @@ async function salvarCompraDaNota(e){
   var compraConfirmadaNoServidor=false;
     var backupCompraCriado=false;
   try{
-    var precosCompra=window.PrecosCompra.calcular({itens:itens,produtos:produtos,notaAnterior:anterior,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor'});
+    var precosCompra=window.PrecosCompra.calcular({itens:itens,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:itens.map(function(it){var calcularQuantidade=window.__quantidadeEstoqueProjetadaCompra;return typeof calcularQuantidade==='function'?calcularQuantidade(it):Number(it&&it.qtd)||0}),notaAnterior:anterior,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor'});
     estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
     var notaOriginalAntesDeReverter=anterior&&estadoAntes.despesas.find(function(d){return String(d.id)===String(anterior.id)})||null;
     if(anterior) reverterCompraEstoque(anterior.itens,anterior);
@@ -3663,6 +3663,7 @@ async function salvarCompraDaNota(e){
           
         }
         if(tipo==='ing'){
+          if(it.categoria)alvo.obj.categoria=it.categoria;
           var marcaCompra=String(it.marca||'').trim(),marcaOuBaseAlterada=!itemAnterior||String(itemAnterior.marca||'').trim()!==marcaCompra||normalizarNomeCadastro(itemAnterior.nomeBase||itemAnterior.nome)!==normalizarNomeCadastro(it.nomeBase||it.nome);
           if(marcaCompra&&marcaOuBaseAlterada)alvo.obj.marca=marcaCompra;
           if(typeof it.controlaEstoque==='boolean')alvo.obj.semEstoque=!it.controlaEstoque;
@@ -3672,6 +3673,7 @@ async function salvarCompraDaNota(e){
           var modoIng=it.modoCompra||alvo.obj.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');it.modoCompra=modoIng;alvo.obj.modoCompra=modoIng;
           if(modoIng==='flexivel'){var rendIng=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(alvo.obj.rendimento)||0);alvo.obj.rendimento=rendIng;it.rend=rendIng;var unidadePersistida=String(alvo.obj.unidadeEstoque||'').trim(),estAtual=unidadeCanonicaMedida(unidadePersistida||it.unidadeEstoque||'');if(unidadePersistida)it.unidadeEstoque=estAtual;else if(rendIng>0)it.unidadeEstoque=estAtual||'porção';else it.unidadeEstoque=/^(mg|g|kg|ml|l)$/i.test(estAtual)?estAtual:(it.unid||alvo.obj.unidade||'kg');alvo.obj.unidadeEstoque=it.unidadeEstoque;}else it.rend=0;
         }
+        if(tipo==='pao'&&it.categoria)alvo.obj.categoria=it.categoria;
       } else if(tipo==='prod'){
         var categoria=String(it.categoria||'Produtos').trim();it.categoria=categoria;
         var bebida=/(bebida|suco|cerveja|refrigerante|agua)/i.test(normalizarNome(categoria));
@@ -3679,10 +3681,10 @@ async function salvarCompraDaNota(e){
         produtos.push(novo);it.vinc='prod:'+novo.id;it.tipoItem='prod';
       } else if(it.criarNovo!==false){
         if(tipo==='ing'){
-          var modoNovoIng=it.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');it.modoCompra=modoNovoIng;it.rend=modoNovoIng==='flexivel'?(Number(it.rend)||0):0;it.unidadeEstoque=modoNovoIng==='flexivel'?(it.rend>0?(it.unidadeEstoque||'porção'):(it.unid||'kg')):(it.unid||'un');var nomeBaseNovoIng=String(it.nomeBase||it.nome).trim();var novoIng={id:'ing_'+uid(),nome:nomeBaseNovoIng,nomeBase:nomeBaseNovoIng,marca:String(it.marca||'').trim(),icone:'🥬',categoria:'outro',semEstoque:it.controlaEstoque===false,precoExtra:0,custo:Number(it.valor)||0,estoque:0,minEstoque:5,unidade:it.unid||'un',unidadeEstoque:it.unidadeEstoque,modoCompra:modoNovoIng,rendimento:it.rend};
+          var modoNovoIng=it.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');it.modoCompra=modoNovoIng;it.rend=modoNovoIng==='flexivel'?(Number(it.rend)||0):0;it.unidadeEstoque=modoNovoIng==='flexivel'?(it.rend>0?(it.unidadeEstoque||'porção'):(it.unid||'kg')):(it.unid||'un');var nomeBaseNovoIng=String(it.nomeBase||it.nome).trim();var novoIng={id:'ing_'+uid(),nome:nomeBaseNovoIng,nomeBase:nomeBaseNovoIng,marca:String(it.marca||'').trim(),icone:'🥬',categoria:it.categoria||'outro',semEstoque:it.controlaEstoque===false,precoExtra:(it.modoPreco==='manual'||it.modoPreco==='percentual')?Math.max(0,Number(it.pv)||0):0,custo:Number(it.valor)||0,estoque:0,minEstoque:5,unidade:it.unid||'un',unidadeEstoque:it.unidadeEstoque,modoCompra:modoNovoIng,rendimento:it.rend};
           ingredientes.push(novoIng);it.vinc='ing:'+novoIng.id;it.tipoItem='ing';
         } else if(tipo==='pao'){
-          var novoPao={id:'pao_'+uid(),nome:String(it.nome).trim(),estoque:0,minEstoque:5,custo:Number(it.valor)||0,icone:'🥖'};
+          var novoPao={id:'pao_'+uid(),nome:String(it.nome).trim(),estoque:0,minEstoque:5,custo:Number(it.valor)||0,preco:(it.modoPreco==='manual'||it.modoPreco==='percentual')?Math.max(0,Number(it.pv)||0):0,categoria:it.categoria||'Pães',icone:'🥖'};
           paes.push(novoPao);it.vinc='pao:'+novoPao.id;it.tipoItem='pao';
         }
       }
@@ -3713,9 +3715,11 @@ async function salvarCompraDaNota(e){
     precosCompra.grupos.forEach(function(grupo){
       if(grupo.preco===null)return;
       var referencia=itens[grupo.indices[0]],alvo=referencia&&alvoEstoque(referencia.vinc);
-      if(!alvo||alvo.tipo!=='prod')return;
-      alvo.obj.preco=grupo.modoPreco==='percentual'?Math.round((Math.max(0,(Number(alvo.obj.custo)||0)*(1+grupo.lucroPct/100))+Number.EPSILON)*100)/100:grupo.preco;
-      grupo.indices.forEach(function(i){itens[i].pv=alvo.obj.preco;itens[i].modoPreco=grupo.modoPreco;itens[i].lucroPct=grupo.lucroPct;});
+      var tipo=grupo.tipoItem||referencia&&referencia.tipoItem||'prod';
+      if(!alvo||alvo.tipo!==tipo)return;
+      var campoPreco=tipo==='ing'?'precoExtra':'preco';
+      alvo.obj[campoPreco]=grupo.modoPreco==='percentual'?Math.round((Math.max(0,(Number(alvo.obj.custo)||0)*(1+grupo.lucroPct/100))+Number.EPSILON)*100)/100:grupo.preco;
+      grupo.indices.forEach(function(i){itens[i].pv=alvo.obj[campoPreco];itens[i].modoPreco=grupo.modoPreco;itens[i].lucroPct=grupo.lucroPct;});
     });
     var campo=function(id){var el=document.getElementById(id);return el?el.value:'';};function categoriaDaOpcaoDoItem(it){var idx=arr.indexOf(it);var sel=idx>=0?document.querySelector('#despItensLista .ic-cat[data-idx="'+idx+'"]'):null;return sel&&sel.value===String(it.categoria||'')&&sel.options[sel.selectedIndex]?String(sel.options[sel.selectedIndex].textContent||'').trim():String(it.categoria||'').trim()}
      itens.forEach(function(it){var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';delete it._indiceOriginalNota});var categoriaDespesa=campo('despCategoria');var categoriaFinanceiraNome=anterior&&String(anterior.categoria||'')===String(categoriaDespesa||'')&&anterior.categoriaNome?anterior.categoriaNome:categoriaLabelSelecionada(categoriaDespesa);var dados={id:editId||(typeof uid==='function'?'desp_'+uid():'desp_'+Date.now()),tipoRegistro:'compra',descricao:String(campo('despSubcategoria')).trim()||'Compra',categoria:categoriaDespesa,categoriaNome:categoriaFinanceiraNome,subcategoria:String(campo('despSubcategoria')).trim(),fornecedor:String(campo('despFornecedor')).trim(),nf:String(campo('despNF')).trim(),status:campo('despStatus')||'pago',obs:String(campo('despObs')).trim(),desconto:descNota,descontoTipo:window._descontoNotaTipo||'valor',descontoOriginal:descEntrada,itens:itens,valor:Math.max(0,subtotal-descNota),data:data,criadoEm:anterior&&anterior.criadoEm||new Date().toISOString()};
@@ -9915,6 +9919,7 @@ window.salvarVendaManual = function() {
     var unidadeCompra=it.unid||(ing&&ing.unidade)||'kg',unidadeEstoque=(ing&&ing.unidadeEstoque)||it.unidadeEstoque||unidadeCompra;
     return converterQuantidadeUnidade(qtd,unidadeCompra,unidadeEstoque);
   }
+  window.__quantidadeEstoqueProjetadaCompra=quantidadeEstoqueProjetada;
   // 3. RENDER DA NOTA
   window.renderDespItens = function(){
     var cont = document.getElementById('despItensLista');

@@ -6,7 +6,7 @@
 
 **Architecture:** Extend the existing pure purchase-price projection to identify catalog rows by type, then connect the final purchase renderer and save path to the correct catalog fields. Add a bread price field to the existing stock editor/list so the value is visible and editable.
 
-**Tech Stack:** Vanilla JavaScript in `index.html`, pure calculation module in `purchase-pricing.js`, Node test suite exists but this turn's verification is limited to static/syntax checks.
+**Tech Stack:** Vanilla JavaScript in `index.html`, pure calculation module in `purchase-pricing.js`, Node test suite.
 
 **Spec:** `docs/superpowers/specs/2026-11-17-purchase-fields-ingredients-bread-design.md`
 
@@ -49,3 +49,9 @@
 - [x] Display saved Bread price in the stock list when set.
 - [x] Allow viewing/editing the optional price in the bread modal without changing stock or recipe prices.
 - [x] Run syntax checks on changed JavaScript assets and inspect the final diff.
+
+## Verification
+
+- Purchase, ingredient, bread, pricing, and draft-save coverage: 92/92 tests passed.
+- Full suite: 278/280 passed. The two failures also reproduce on the unchanged base commit `4ef1527`: the manual-refresh confirmation test and the shared-print snapshot test.
+- `purchase-pricing.js` syntax and all 7 inline JavaScript blocks were checked; `git diff --check` passed.
