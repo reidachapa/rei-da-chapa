@@ -1671,6 +1671,7 @@ const $$=s=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const moeda=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const moedaSimple=v=>v.toFixed(2).replace('.',',');
+function formatarPrecisaoCompra(valor){var numero=Number(valor);return Number.isFinite(numero)?numero.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4}):'';}
 function normalizarNomeCadastro(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
 function compararTextoCadastro(a,b){return String(a||'').trim().localeCompare(String(b||'').trim(),'pt-BR',{sensitivity:'base',numeric:true})}
 function chaveOrdenacaoCategoriaCadastro(v){var texto=String(v||'').trim(),partes=texto.match(/^(\S+)\s+(.*)$/);return partes&&!/[A-Za-z0-9\u00C0-\u024F]/.test(partes[1])?partes[2]:texto}
@@ -9934,8 +9935,8 @@ window.salvarVendaManual = function() {
         if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         var lucroExibido=info.lucroPct!==null&&Number.isFinite(Number(info.lucroPct))?Number(info.lucroPct):(precoExibido!==null&&precoExibido>0&&info.custoMedio>0?(precoExibido/info.custoMedio-1)*100:null);
-        if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':String(Math.round(lucroExibido*100)/100).replace('.',',');
-        if(media)media.textContent='Custo médio com esta compra: '+moeda(info.custoMedio)+' por unidade';
+        if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':formatarPrecisaoCompra(lucroExibido);
+        if(media)media.textContent='Custo médio com esta compra: R$ '+formatarPrecisaoCompra(info.custoMedio)+' por unidade';
       });
       return calculo;
     }
@@ -9965,7 +9966,7 @@ window.salvarVendaManual = function() {
       var infoPreco=precosProjetados.porIndice[i],precoExibido=infoPreco?infoPreco.preco:null;
       if(infoPreco&&precoExibido===null){var cadastroPreco=produtos.find(function(p){return String(p.id)===infoPreco.produtoId});if(cadastroPreco&&Number.isFinite(Number(cadastroPreco.preco)))precoExibido=Number(cadastroPreco.preco);}
       var pvStr=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-      var lucroStr = it.lucroPct != null && Number.isFinite(Number(it.lucroPct)) ? String(Math.round(Number(it.lucroPct)*100)/100).replace('.',',') : '';
+      var lucroStr = it.lucroPct != null && Number.isFinite(Number(it.lucroPct)) ? formatarPrecisaoCompra(Number(it.lucroPct)) : '';
       var unidadesCompra=['un','kg','g','L','ml','pé','fatia','porção','pacote','caixa'];
       if(it.unid && !unidadesCompra.some(function(u){return u.toLocaleLowerCase('pt-BR')===String(it.unid).toLocaleLowerCase('pt-BR');})) unidadesCompra.unshift(String(it.unid));
       var unidOpts='<option value="">Unidade…</option>'+unidadesCompra.map(function(u){return '<option value="'+esc(u)+'">'+esc(u)+'</option>';}).join('');

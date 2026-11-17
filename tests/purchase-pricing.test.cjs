@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { calcular } = require('../purchase-pricing.js');
+const { calcular, somarDescontosItens } = require('../purchase-pricing.js');
 
 const pago = { nome: 'Suco Goiaba', tipoItem: 'prod', qtd: 6, valor: 3.24, lucroPct: 83 };
 const gratis = { ...pago, desconto: 19.44, descontoTipo: 'valor' };
@@ -198,4 +198,20 @@ test('projeção de edição coincide com reversão e aplicação reais do estoq
   run.aplicarCompraEstoque(novos.map(it => ({ ...it, vinc: 'prod:suco' })));
   assert.equal(real.estoque, prevista.estoque);
   perto(real.custo, prevista.custoMedio);
+});
+
+test('desconto e margem de cada produto usam o custo médio da própria linha', () => {
+  const itens = [
+    { nome: 'Produto A', tipoItem: 'prod', qtd: 5, valor: 100, desconto: 10, descontoTipo: 'percent', lucroPct: 80, modoPreco: 'percentual' },
+    { nome: 'Produto B', tipoItem: 'prod', qtd: 4, valor: 13.33, desconto: 7, descontoTipo: 'percent', lucroPct: 37.5678, modoPreco: 'percentual' },
+  ];
+  const resultado = calcular({ itens, produtos: [] });
+  assert.equal(resultado.grupos.length, 2);
+  perto(resultado.grupos[0].custoMedio, 90);
+  assert.equal(resultado.grupos[0].lucroPct, 80);
+  assert.equal(resultado.grupos[0].preco, 162);
+  perto(resultado.grupos[1].custoMedio, 12.3969);
+  assert.equal(resultado.grupos[1].lucroPct, 37.5678);
+  assert.equal(resultado.grupos[1].preco, 17.05);
+  perto(somarDescontosItens(itens), 53.7324);
 });
