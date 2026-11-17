@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 const RecuperacaoCompra = require('../purchase-draft-recovery.js');
+const PrecosCompra = require('../purchase-pricing.js');
 
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const mergeStart = html.indexOf('function clonarDadosEstado(');
@@ -157,7 +158,9 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     renderTudo: render, renderClientes: render, renderPaes: render,
     renderIngredientes: render, renderCompras: render, renderDRE: render,
     atualizarBotaoMotoboy: render, aplicarCorDaLoja: render, mesAtual: () => '2026-11',
-    buscarIngredienteCompra: () => null, lerMoeda: value => Number(String(value || '').replace(',', '.')) || 0, toast: window.toast,
+    buscarIngredienteCompra: () => null, lerMoeda: value => Number(String(value || '').replace(',', '.')) || 0,
+    lerDescontoNota: (value, tipo) => tipo === 'percent' ? PrecosCompra.lerPercentualNota(value) : Number(String(value || '').replace(',', '.')) || 0,
+    toast: window.toast,
     reverterCompraEstoque: forbiddenMutation('reverter estoque'),
     aplicarCompraEstoque: forbiddenMutation('aplicar estoque'), salvar: forbiddenMutation('gravar compra'),
     souGerente: () => true, MutationObserver: class { observe() {} },

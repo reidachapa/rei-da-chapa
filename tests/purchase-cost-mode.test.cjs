@@ -61,6 +61,7 @@ test('formulário ativo exibe custo unitário de 35 unidades e permite escolher 
     atualizarListaAutocomplete(){}, getCatsParaItem(){return []}, categoriaPDVOculta(){return false},
     produtos:[], ingredientes:[], paes:[], despesas:[], editandoDespesaId:null,
     ...funcoes(), lerMoeda(){return 0},
+    lerDescontoNota(valor,tipo){return tipo==='percent'?precos.lerPercentualNota(valor):0},
     esc:v=>String(v), moeda:v=>String(v), moedaSimple:v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2}),
     normalizarNomeCadastro:v=>String(v||'').toLowerCase(), buscarIngredienteCompra(){return null}};
   vm.runInNewContext(html.slice(inicio,fim)+'\nwindow.renderDespItens();',contexto);

@@ -3,6 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
+const PrecosCompra = require('../purchase-pricing.js');
 
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const modulePath = path.join(__dirname, '../purchase-duplicates.js');
@@ -262,7 +263,9 @@ function preflightLocal(itens) {
     despesas: [copy(existente)], despItensTemp: [], produtos: [], ingredientes: [], paes: [],
     editandoDespesaId: null, compraNotaEmAndamento: false, notaCompraEmSincronizacaoId: null,
     souGerente: () => true, buscarIngredienteCompra: () => null,
-    lerMoeda: value => Number(value) || 0, lojaAtivaId: 'l1', revisaoLocal: 0,
+    lerMoeda: value => Number(value) || 0,
+    lerDescontoNota: (value, tipo) => tipo === 'percent' ? PrecosCompra.lerPercentualNota(value) : Number(value) || 0,
+    lojaAtivaId: 'l1', revisaoLocal: 0,
     toast(msg) { mensagens.push(msg); }, alert(msg) { mensagens.push(msg); }, console: { error() {} },
   });
   vm.runInContext(helpers + '\n' + html.slice(saveStart, saveEnd), context);
