@@ -111,6 +111,11 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     setItem(name, value) { storage.set(name, value); },
     removeItem(name) { storage.delete(name); },
   };
+  // The real browser exposes both storage objects on window. These cases
+  // exercise draft reconciliation after the initial server load, whose
+  // separate behaviour is covered by the server-draft scenarios.
+  window.localStorage = localStorage;
+  window.__appMemoryStorage = localStorage;
   const render = () => {};
   const forbiddenMutation = name => () => { mutations.push(name); throw new Error('A revisão deve ocorrer antes de ' + name); };
   window.PrecosCompra = { calcular: forbiddenMutation('calcular preço') };
@@ -158,7 +163,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   });
   vm.runInContext(applyShopScript + '\n' + applyStateScript, context);
   vm.runInContext(saveScript, context);
-  vm.runInContext(draftScript, context);
+  vm.runInContext(draftScript.replace('var rascunhosCarregados = false;', 'var rascunhosCarregados = true;'), context);
   return {
     window, fields, modal, storage, reads, reviewRequests, mutations,
     open(note) { window.abrirModalDespesa(copy(note)); },
@@ -177,7 +182,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
       context.estadoLocalSujo = context.salvandoRemoto = false;
     },
     captureReviewPanel() { window.__mostrarRevisaoRascunhoCompra = id => { reviewRequests.push(id); }; },
-    authorize() { for (const fn of windowEvents.reiChapaGerenteAutorizado || []) fn(); },
+    async authorize() { await Promise.all((windowEvents.reiChapaGerenteAutorizado || []).map(fn => fn())); },
     save() { return context.salvarCompraDaNota(); },
     button(text) { return findNode(node => node.tagName === 'button' && node.textContent === text); },
     get notes() { return copy(context.despesas); },
@@ -248,7 +253,7 @@ test('recarregar o módulo recupera a gravação própria mesmo sem o acompanham
   assert.equal(recarregado.fields.despObs.value, 'Rascunho deste aparelho');
 });
 
-test('o rascunho de compra nova reconhece sua própria nota confirmada sem criar outra identidade', () => {
+test('o rascunho de compra nova não passa a editar a nota enviada', () => {
   const app = criarAmbiente();
   const salva = nota();
   app.open(null);
@@ -260,7 +265,7 @@ test('o rascunho de compra nova reconhece sua própria nota confirmada sem criar
   app.setConfirmed([salva]);
   app.window.__falharRascunhoCompraSincronizacao();
   assert.equal(app.base()?.id, 'nota-1');
-  assert.equal(app.window.__obterIdRascunhoCompra(), 'nota-1');
+  assert.equal(app.window.__obterIdRascunhoCompra(), null);
   assert.equal(app.readDraft(null).campos.despObs, 'Continuar esta compra');
   assert.equal(app.readDraft('nota-1'), null, 'a recuperação mantém o rascunho ativo da compra nova');
 });
@@ -456,7 +461,7 @@ test('retomar uma edição cuja nota sumiu reabre os campos e conserva o ID bloq
   app.close();
   app.setNotes([]);
   app.captureReviewPanel();
-  app.authorize();
+  await app.authorize();
   assert.equal(app.modal.classList.contains('aberto'), true);
   assert.equal(app.fields.despObs.value, 'Alteração ainda não enviada');
   assert.equal(app.window.despItensTemp[0].qtd, 11);
@@ -469,19 +474,19 @@ test('retomar uma edição cuja nota sumiu reabre os campos e conserva o ID bloq
   assert.equal(app.readDraft(null), null);
 });
 
-test('retomar um rascunho antigo na chave nova com editId já preenchido recupera todos os campos e itens', () => {
+test('retomar um rascunho antigo de compra nova preserva os campos sem editar outra nota', async () => {
   const { app } = prepararRascunhoParaRevisao();
   const registro = app.readDraft('nota-1');
   const storage = new Map([[key(null), JSON.stringify(registro)]]);
   const recarregado = criarAmbiente({ storage });
   recarregado.captureReviewPanel();
-  recarregado.authorize();
+  await recarregado.authorize();
   assert.equal(recarregado.modal.classList.contains('aberto'), true);
   for (const [id, value] of Object.entries(registro.campos)) assert.equal(recarregado.fields[id].value, value);
   assert.deepEqual(copy(recarregado.window.despItensTemp), registro.itens);
-  assert.equal(recarregado.editId, 'nota-1');
-  assert.equal(recarregado.window.__obterIdRascunhoCompra(), 'nota-1');
-  assert.deepEqual(recarregado.reviewRequests, ['nota-1']);
+  assert.equal(recarregado.editId, null);
+  assert.equal(recarregado.window.__obterIdRascunhoCompra(), null);
+  assert.deepEqual(recarregado.reviewRequests, []);
   assert.equal(recarregado.readDraft('nota-1'), null);
   assert.deepEqual(recarregado.readDraft(null).itens, registro.itens);
 });
