@@ -9896,7 +9896,7 @@ window.salvarVendaManual = function() {
         if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         var lucroExibido=info.lucroPct!==null&&Number.isFinite(Number(info.lucroPct))?Number(info.lucroPct):(precoExibido!==null&&precoExibido>0&&info.custoMedio>0?(precoExibido/info.custoMedio-1)*100:null);
-        if(margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':String(Math.round(lucroExibido*100)/100).replace('.',',');
+        if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':String(Math.round(lucroExibido*100)/100).replace('.',',');
         if(media)media.textContent='Custo médio com esta compra: '+moeda(info.custoMedio)+' por unidade';
       });
       return calculo;
@@ -10057,7 +10057,17 @@ window.salvarVendaManual = function() {
     function aplicarMargemDigitada(campo){
       if(arr!==window.despItensTemp)return;
       var idx=Number(campo.dataset.idx),texto=String(campo.value||'').trim().replace(',','.');
-      if(!arr[idx]||!texto||! /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto))return;
+      if(!arr[idx])return;
+      if(!texto){
+        var grupoAnterior=projetarPrecos().porIndice[idx];if(!grupoAnterior)return;
+        grupoAnterior.indices.forEach(function(i){
+          var preco=grupoAnterior.preco;
+          if(preco===null&&arr[i].pv!=null&&Number.isFinite(Number(arr[i].pv)))preco=Number(arr[i].pv);
+          arr[i].lucroPct=null;arr[i].pv=preco;arr[i].modoPreco=preco===null?null:'manual';
+        });
+        window.__atualizarPrecosCompra();return;
+      }
+      if(! /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto))return;
       var margem=Number(texto);if(!Number.isFinite(margem))return;
       var grupo=projetarPrecos().porIndice[idx];if(!grupo)return;
       grupo.indices.forEach(function(i){arr[i].modoPreco='percentual';arr[i].lucroPct=margem;});
@@ -10800,9 +10810,13 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   async function arquivarRascunhoSemBloquearNovaCompra(k, registroEsperado) {
     if(!idDispositivo||!window.__authPermitido||!supa)throw new Error('Supabase indisponível; mantive o rascunho sem alterar.');
     if(!dadosIguais(lerChave(k),registroEsperado))throw new Error('O rascunho mudou neste aparelho. Mantive o conteúdo.');
-    var timer=temporizadoresRemotos.get(k);if(timer){window.clearTimeout(timer);temporizadoresRemotos.delete(k)}
+    // A gravação agendada pode conter a única cópia ainda não confirmada.
+    // Não a cancele para arquivar; mantenha o rascunho e deixe-a terminar.
+    if(temporizadoresRemotos.has(k))return false;
     var gravacaoAnterior=gravacoesRemotas.get(k);if(gravacaoAnterior)await gravacaoAnterior.catch(function(){});
     if(!dadosIguais(lerChave(k),registroEsperado))throw new Error('O rascunho mudou durante a separação. Mantive o conteúdo.');
+    var versaoEsperada=Number(registroEsperado.rascunhoAtualizadoEm);
+    if(!Number.isFinite(versaoEsperada)||versaoEsperada<=0||Number(versoesConfirmadas.get(k))!==versaoEsperada)return false;
     var id=idServidorRascunho(k),consulta=await supa.from('estado').select('id,dados').eq('id',id).maybeSingle();
     if(consulta.error)throw consulta.error;
     var envelope=consulta.data&&consulta.data.dados;
@@ -11138,6 +11152,13 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       }
       if (editId == null && pendente.registro.savedRecordId && !obterCompraLocal(pendente.registro.savedRecordId) && !compraNova) {
         return abrirRascunhoCompraAusente(pendente.chave,pendente.registro);
+      }
+      if (compraNova && editId == null) {
+        // Retomar usa a mesma chave do rascunho, inclusive a chave nova-UUID.
+        // Não desligue a retomada antes de abrir: uma falha deve preservá-la.
+        chaveNovaCompraSeparada = pendente.chave;
+        if (typeof window.abrirModalDespesa === 'function') window.abrirModalDespesa(null);
+        return;
       }
       salvarFlagRetomada(false, pendente.chave, false);
       if (typeof window.abrirModalDespesa === 'function') window.abrirModalDespesa(pendente.chave===chave(lojaAtual(),null)?null:(compra || null));
