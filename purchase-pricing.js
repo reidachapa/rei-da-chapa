@@ -1,15 +1,10 @@
 /*
- * Pure purchase pricing projection. calcular({itens, produtos, notaAnterior,
- * descontoNota, descontoNotaTipo, incluirRascunhosSemNome}) returns {porIndice, grupos}; each product
- * group supplies indices, produtoId, projected custoMedio/estoque, modoPreco,
- * lucroPct and preco. Non-product/incomplete lines map to null in porIndice.
- * Inputs are never changed. Discounts are allocated across all valid note
- * lines; old stock applications are reversed on copies before projection.
- * Explicit pricing modes take precedence over legacy fields. The last explicit
- * choice in a group wins; otherwise lucroPct selects percentage pricing, then
- * pv selects manual pricing. A null price means preserve the catalog price.
- * incluirRascunhosSemNome is opt-in for preview only: unnamed lines stay in
- * separate groups and cannot reuse a catalog product or a stale stock link.
+ * Pure purchase pricing projection. calcular({itens, produtos, ingredientes,
+ * paes, notaAnterior, descontoNota, descontoNotaTipo,
+ * quantidadesEstoquePorIndice, incluirRascunhosSemNome}) returns {porIndice,
+ * grupos}. Product, ingredient and bread catalogs remain isolated by type.
+ * Inputs are never changed. Discounts are allocated across all valid lines;
+ * old stock applications are reversed on copies before projection.
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory();
@@ -48,10 +43,17 @@
     return (Array.isArray(itens) ? itens : []).reduce(function (s, it) { return s + descontoItem(it); }, 0);
   }
   function itemValido(it, incluirSemNome) { return !!(it && (String(it.nome || '').trim() || incluirSemNome) && numero(it.qtd) > 0); }
+  function tipoVinculo(vinc) {
+    var prefixo = String(vinc || '').split(':')[0];
+    return prefixo === 'ing' || prefixo === 'pao' || prefixo === 'prod' ? prefixo : '';
+  }
+  function tipoItem(it) {
+    var vinculado = tipoVinculo(it && it.vinc);
+    return vinculado || (it && (it.tipoItem === 'ing' || it.tipoItem === 'pao') ? it.tipoItem : 'prod');
+  }
 
-  // Keep the product branch equivalent to reverterCompraEstoque, including its
-  // fallback for legacy notes without an aplicado snapshot.
-  function reverterNota(nota, produtosPorId) {
+  // Reverse the edited note on cloned catalog rows before projecting the new values.
+  function reverterNota(nota, porTipoId) {
     var lista = nota && Array.isArray(nota.itens) ? nota.itens : [];
     var ehCompra = !!(nota && nota.tipoRegistro !== 'despesa' && lista.length);
     var subtotal = lista.reduce(function (s, it) { return s + bruto(it) - descontoItem(it, true); }, 0);
@@ -59,16 +61,16 @@
       if (!it) return;
       var ap = it.aplicado;
       if (!ap && !ehCompra) return;
-      var vinc = String(ap && ap.vinc || it.vinc || '');
-      if (vinc.indexOf('prod:') !== 0) return;
-      var produto = produtosPorId.get(vinc.slice(5));
-      if (!produto) return;
+      var vinc = String(ap && ap.vinc || it.vinc || ''), tipo = tipoVinculo(vinc);
+      if (!tipo) return;
+      var catalogo = porTipoId[tipo].get(vinc.slice(tipo.length + 1));
+      if (!catalogo) return;
       var quantidade = ap ? numero(ap.qtdEst) : numero(it.qtd);
       if (!(quantidade > 0)) return;
-      var semEstoque = !!(ap && ap.semEstoque);
-      var saldoBruto = semEstoque ? produto.estoqueEstimado : produto.estoque;
+      var semEstoque = tipo === 'ing' && !!(ap && ap.semEstoque);
+      var saldoBruto = semEstoque ? catalogo.estoqueEstimado : catalogo.estoque;
       if (semEstoque && (saldoBruto === null || saldoBruto === undefined || saldoBruto === '')) return;
-      var qtdAtual = Number(saldoBruto), custoAtual = numero(produto.custo);
+      var qtdAtual = Number(saldoBruto), custoAtual = numero(catalogo.custo);
       var custoUnitario = ap && ap.custoUnitario !== null && ap.custoUnitario !== undefined ? Number(ap.custoUnitario) : NaN;
       if (!Number.isFinite(custoUnitario)) {
         var total = bruto(it), desconto = descontoItem(it, true);
@@ -76,13 +78,13 @@
         custoUnitario = Math.max(0, total - desconto) / quantidade;
       }
       if (semEstoque) {
-        if (ap && ap.saldoAntes == null && Number.isFinite(qtdAtual) && Math.abs(qtdAtual - quantidade) < 0.000001) produto.estoqueEstimado = null;
-        else if (Number.isFinite(qtdAtual)) produto.estoqueEstimado = Math.max(0, qtdAtual - quantidade);
-      } else produto.estoque = numero(produto.estoque) - quantidade;
+        if (ap && ap.saldoAntes == null && Number.isFinite(qtdAtual) && Math.abs(qtdAtual - quantidade) < 0.000001) catalogo.estoqueEstimado = null;
+        else if (Number.isFinite(qtdAtual)) catalogo.estoqueEstimado = Math.max(0, qtdAtual - quantidade);
+      } else catalogo.estoque = numero(catalogo.estoque) - quantidade;
       if (Number.isFinite(custoUnitario) && Number.isFinite(qtdAtual)) {
-        var restante = semEstoque ? Number(produto.estoqueEstimado) : Number(produto.estoque);
-        produto.custo = restante > 0 ? Math.max(0, (qtdAtual * custoAtual - quantidade * custoUnitario) / restante) : ap ? numero(ap.custoAntes) : 0;
-      } else if (ap) produto.custo = ap.custoAntes;
+        var restante = semEstoque ? Number(catalogo.estoqueEstimado) : Number(catalogo.estoque);
+        catalogo.custo = restante > 0 ? Math.max(0, (qtdAtual * custoAtual - quantidade * custoUnitario) / restante) : ap ? numero(ap.custoAntes) : 0;
+      } else if (ap) catalogo.custo = ap.custoAntes;
     });
   }
 
@@ -103,15 +105,22 @@
     entrada = entrada || {};
     var incluirSemNome = entrada.incluirRascunhosSemNome === true;
     var itens = Array.isArray(entrada.itens) ? entrada.itens : [];
-    var catalogo = Array.isArray(entrada.produtos) ? entrada.produtos : [];
-    var produtosPorId = new Map(), produtosPorNome = new Map();
-    catalogo.forEach(function (p) {
-      if (!p || p.id == null) return;
-      var copia = Object.assign({}, p), id = String(p.id), nome = nomeNormalizado(p.nome);
-      produtosPorId.set(id, copia);
-      if (nome && !produtosPorNome.has(nome)) produtosPorNome.set(nome, copia);
+    var catalogos = {
+      prod: Array.isArray(entrada.produtos) ? entrada.produtos : [],
+      ing: Array.isArray(entrada.ingredientes) ? entrada.ingredientes : [],
+      pao: Array.isArray(entrada.paes) ? entrada.paes : [],
+    };
+    var porTipoId = { prod: new Map(), ing: new Map(), pao: new Map() };
+    var porTipoNome = { prod: new Map(), ing: new Map(), pao: new Map() };
+    Object.keys(catalogos).forEach(function (tipo) {
+      catalogos[tipo].forEach(function (item) {
+        if (!item || item.id == null) return;
+        var copia = Object.assign({}, item), id = String(item.id), nome = nomeNormalizado(item.nomeBase || item.nome);
+        porTipoId[tipo].set(id, copia);
+        if (nome && !porTipoNome[tipo].has(nome)) porTipoNome[tipo].set(nome, copia);
+      });
     });
-    reverterNota(entrada.notaAnterior, produtosPorId);
+    reverterNota(entrada.notaAnterior, porTipoId);
     var validos = itens.filter(function (it) { return itemValido(it, incluirSemNome); });
     var subtotal = validos.reduce(function (s, it) { return s + bruto(it) - descontoItem(it); }, 0);
     var descontoNota = numero(entrada.descontoNota);
@@ -121,22 +130,26 @@
 
     itens.forEach(function (it, indice) {
       if (!itemValido(it, incluirSemNome)) return;
-      var nome = nomeNormalizado(it.nome);
-      var vinc = nome ? String(it.vinc || '') : '', vincProduto = vinc.indexOf('prod:') === 0 ? produtosPorId.get(vinc.slice(5)) : null;
-      var tipo = vinc.indexOf('ing:') === 0 ? 'ing' : vinc.indexOf('pao:') === 0 ? 'pao' : it.tipoItem === 'ing' || it.tipoItem === 'pao' ? it.tipoItem : 'prod';
-      if (vincProduto) tipo = 'prod';
-      if (tipo !== 'prod') return;
-      var produto = nome ? vincProduto || produtosPorNome.get(nome) : null;
-      var chave = !nome ? 'rascunho:' + indice : produto ? 'id:' + String(produto.id) : 'nome:' + nome;
+      var nome = nomeNormalizado(it.nomeBase || it.nome), tipo = tipoItem(it), vinc = String(it.vinc || ''), catalogo = null;
+      // A blank/changed name must not keep the previous catalog link alive in
+      // the draft preview. The UI clears it on edits too; this guards stale
+      // drafts and guarantees we only project against a catalog item once a
+      // name is present.
+      if (nome && tipoVinculo(vinc) === tipo) catalogo = porTipoId[tipo].get(vinc.slice(tipo.length + 1)) || null;
+      if (!catalogo && nome) catalogo = porTipoNome[tipo].get(nome) || null;
+      var chave = tipo + ':' + (!nome ? 'rascunho:' + indice : catalogo ? 'id:' + String(catalogo.id) : 'nome:' + nome);
       var grupo = porChave.get(chave);
       if (!grupo) {
-        grupo = { indices: [], produtoId: produto ? String(produto.id) : null, custoMedio: produto ? numero(produto.custo) : 0, estoque: produto ? numero(produto.estoque) : 0, modoPreco: null, lucroPct: null, preco: null };
+        var saldoInicial = catalogo ? (tipo === 'ing' && catalogo.semEstoque ? catalogo.estoqueEstimado : catalogo.estoque) : 0;
+        grupo = { indices: [], tipoItem: tipo, catalogoId: catalogo ? String(catalogo.id) : null, produtoId: tipo === 'prod' && catalogo ? String(catalogo.id) : null, custoMedio: catalogo ? numero(catalogo.custo) : 0, estoque: numero(saldoInicial), modoPreco: null, lucroPct: null, preco: null };
         porChave.set(chave, grupo);
         grupos.push(grupo);
       }
       var base = bruto(it) - descontoItem(it);
       var liquido = Math.max(0, base - (subtotal > 0 ? descontoNota * base / subtotal : 0));
-      var qtd = numero(it.qtd), saldo = grupo.estoque, custo = grupo.custoMedio, novoSaldo = saldo + qtd;
+      var qtd = Array.isArray(entrada.quantidadesEstoquePorIndice) ? numero(entrada.quantidadesEstoquePorIndice[indice]) : (tipo === 'ing' && it.modoCompra === 'flexivel' && numero(it.rend) > 0 ? numero(it.qtd) * numero(it.rend) : numero(it.qtd));
+      if (!(qtd > 0)) return;
+      var saldo = grupo.estoque, custo = grupo.custoMedio, novoSaldo = saldo + qtd;
       grupo.custoMedio = novoSaldo > 0 ? (saldo * custo + liquido) / novoSaldo : liquido / qtd;
       grupo.estoque = novoSaldo;
       grupo.indices.push(indice);

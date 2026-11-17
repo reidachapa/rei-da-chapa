@@ -39,7 +39,7 @@ test('reabrir pães preserva os cadastros existentes e não repõe estoque autom
 });
 
 function abrirPao(id, catalogo) {
-  const campos = Object.fromEntries(['paoTituloModal', 'paoNomeModal', 'paoEstoqueModal', 'paoMinModal', 'paoCustoModal'].map(k => [k, { value: '', textContent: '', focus() {} }]));
+  const campos = Object.fromEntries(['paoTituloModal', 'paoNomeModal', 'paoEstoqueModal', 'paoMinModal', 'paoCustoModal', 'paoPrecoModal'].map(k => [k, { value: '', textContent: '', focus() {} }]));
   campos.modalPao = { dataset: {}, classList: { add() {} }, querySelectorAll() { return []; } };
   const abrir = new Function('document', 'souGerente', 'criarModalPao', 'toast', 'setTimeout', 'paes', `
     var paoEditandoId=null;${source('abrirModalPao', 'fecharModalPao')};return abrirModalPao;
@@ -52,9 +52,13 @@ function abrirPao(id, catalogo) {
 }
 
 test('formulário de novo pão começa com zero e editar conserva o saldo registrado', () => {
-  assert.equal(abrirPao(null, []).paoEstoqueModal.value, '0');
-  const pao = { id: 'real', nome: 'Pão existente', estoque: 17, custo: 2 };
-  assert.equal(abrirPao('real', [pao]).paoEstoqueModal.value, 17);
+  const novo = abrirPao(null, []);
+  assert.equal(novo.paoEstoqueModal.value, '0');
+  assert.equal(novo.paoPrecoModal.value, '', 'preço pode ficar em branco até haver compras de pão');
+  const pao = { id: 'real', nome: 'Pão existente', estoque: 17, custo: 2, preco: 4.5 };
+  const editado = abrirPao('real', [pao]);
+  assert.equal(editado.paoEstoqueModal.value, 17);
+  assert.equal(editado.paoPrecoModal.value, '4,50');
   assert.equal(pao.estoque, 17);
 });
 

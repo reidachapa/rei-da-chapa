@@ -109,11 +109,11 @@ test('vínculos existentes prevalecem sobre nome e vínculo perdido reutiliza no
   assert.equal(r.grupos[0].preco, 2.96);
 });
 
-test('produto não se mistura a ingrediente/pão do mesmo nome e linhas incompletas não entram', () => {
+test('produto, ingrediente e pão ficam em grupos separados; linhas incompletas não entram', () => {
   const r = calcular({ itens: [pago, { ...pago, tipoItem: 'ing' }, { ...pago, tipoItem: 'pao' }, { ...pago, qtd: 0 }, { ...pago, nome: '' }], produtos: [] });
-  assert.equal(r.grupos.length, 1);
-  assert.deepEqual(r.grupos[0].indices, [0]);
-  assert.deepEqual(r.porIndice.slice(1), [null, null, null, null]);
+  assert.equal(r.grupos.length, 3);
+  assert.deepEqual(r.grupos.map(g => [g.tipoItem, g.indices]), [['prod', [0]], ['ing', [1]], ['pao', [2]]]);
+  assert.deepEqual(r.porIndice.slice(3), [null, null]);
 });
 
 test('prévia pode calcular a venda antes do nome sem reutilizar vínculo antigo', () => {

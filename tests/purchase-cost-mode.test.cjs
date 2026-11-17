@@ -59,7 +59,7 @@ test('formulário ativo exibe custo unitário de 35 unidades e permite escolher 
   const window = {despItensTemp:[item], PrecosCompra:precos, atualizarTotaisDesp(){}};
   const contexto = {window, document:{getElementById(id){return id==='despItensLista'?lista:null},addEventListener(){}},
     atualizarListaAutocomplete(){}, getCatsParaItem(){return []}, categoriaPDVOculta(){return false},
-    produtos:[], ingredientes:[], paes:[], despesas:[], editandoDespesaId:null,
+    produtos:[], ingredientes:[], paes:[], despesas:[], editandoDespesaId:null, quantidadeEstoqueProjetada:it=>Number(it&&it.qtd)||0, buscarCatalogoCompra:()=>null,
     ...funcoes(), lerMoeda(){return 0},
     lerDescontoNota(valor,tipo){return tipo==='percent'?precos.lerPercentualNota(valor):0},
     esc:v=>String(v), moeda:v=>String(v), moedaSimple:v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2}),

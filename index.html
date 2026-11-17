@@ -2961,7 +2961,7 @@ $('#btnEnviarWhatsFicha').addEventListener('click',async()=>{
 $('#btnSelecionarTudo').addEventListener('click',()=>{const ta=$('#textareaCopia');ta.focus();ta.select();ta.setSelectionRange(0,99999);toast('✅ Selecionado')});
 $('#btnFecharCopia').addEventListener('click',()=>$('#modalCopiaManual').classList.remove('aberto'));
 
-function renderPaes(){const cont=$('#listaPaes');if(!cont)return;cont.innerHTML='';const bloq=!souGerente();paes.forEach(pao=>{const cls=pao.estoque<=0?'zerado':pao.estoque<=pao.minEstoque?'baixo':'';const row=document.createElement('div');row.className='item-pao';const icone=esc(pao.icone||(pao.id==='brioche'?'🥐':'🥖'));const acoes=bloq?'<span style="font-size:10px;color:var(--muted)">🔒</span>':`<button data-acao="mais" data-id="${esc(pao.id)}" style="background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff">+</button><button data-acao="menos" data-id="${esc(pao.id)}" style="background:linear-gradient(180deg,#e5484d,#a82c30);color:#fff">−</button><button data-acao="editar" data-id="${esc(pao.id)}" style="font-size:11px">✏️</button>`;row.innerHTML=`<div class="pao-icon">${icone}</div><div class="pao-info"><strong>${esc(pao.nome)}</strong><span class="pao-estoque ${cls}">${pao.estoque} un.</span></div><div class="pao-acoes">${acoes}</div>`;cont.appendChild(row)})}
+function renderPaes(){const cont=$('#listaPaes');if(!cont)return;cont.innerHTML='';const bloq=!souGerente();paes.forEach(pao=>{const cls=pao.estoque<=0?'zerado':pao.estoque<=pao.minEstoque?'baixo':'';const row=document.createElement('div');row.className='item-pao';const icone=esc(pao.icone||(pao.id==='brioche'?'🥐':'🥖'));const acoes=bloq?'<span style="font-size:10px;color:var(--muted)">🔒</span>':`<button data-acao="mais" data-id="${esc(pao.id)}" style="background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff">+</button><button data-acao="menos" data-id="${esc(pao.id)}" style="background:linear-gradient(180deg,#e5484d,#a82c30);color:#fff">−</button><button data-acao="editar" data-id="${esc(pao.id)}" style="font-size:11px">✏️</button>`;row.innerHTML=`<div class="pao-icon">${icone}</div><div class="pao-info"><strong>${esc(pao.nome)}</strong><span class="pao-estoque ${cls}">${pao.estoque} un.</span>${Number(pao.preco)>0?'<span class="pao-preco">Venda: R$ '+Number(pao.preco).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':''}</div><div class="pao-acoes">${acoes}</div>`;cont.appendChild(row)})}
 $('#listaPaes').addEventListener('click',e=>{const btn=e.target.closest('button[data-acao]');if(!btn)return;e.stopPropagation();if(!souGerente())return toast('🔒 Só o gerente altera estoque');const{acao,id}=btn.dataset;const pao=paes.find(p=>p.id===id);if(!pao)return;if(acao==='mais')pao.estoque++;else if(acao==='menos'){if(pao.estoque<=0)return;pao.estoque--}else if(acao==='editar'){abrirModalPao(id);return}salvar();renderPaes();renderVendas()});
 
 function dadosSaldoIngrediente(ing){var api=window.EstoqueIngredientes,sem=!!ing.semEstoque,bruto=sem?ing.estoqueEstimado:ing.estoque,tem=bruto!==null&&bruto!==undefined&&bruto!==''&&Number.isFinite(Number(bruto)),unidade=sem?api.unidadeExibicao(ing):unidadeIngredienteEstoqueLabel(ing),qtd=sem?api.converter(Number(bruto)||0,api.unidadeFisicaInterna(ing),unidade):qtdIngredienteParaExibicao(Number(bruto)||0,ing);return{tem:tem,qtd:Number.isFinite(qtd)?qtd:0,unidade:unidade,texto:tem?formatarQtdEstoque(qtd,unidade):'Saldo não informado'}}
@@ -3829,7 +3829,7 @@ window.renderDespItens = function() {
         else if(a.obj.categoria) it.categoria = a.obj.categoria;
       }
       renderDespItens(); 
-    }); 
+    });
   });
   
   cont.querySelectorAll('.ic-unid').forEach(function(inp){ inp.addEventListener('input', function(e){ despItensTemp[e.target.dataset.idx].unid = e.target.value.trim(); }); });
@@ -4769,12 +4769,12 @@ function assinarRealtime(){if(!window.__authPermitido||!supa)return;supa.channel
 
 function garantirPaesMinimos(){if(!Array.isArray(paes) || paes.length === 0){console.log('🥖 Criando pães padrão...');paes = [{id:'brioche', nome:'Pão Brioche', estoque:0, minEstoque:10, custo:1.5, icone:'🥐'},{id:'australia', nome:'Pão Austrália', estoque:0, minEstoque:10, custo:2, icone:'🥖'}];if(typeof salvar === 'function') salvar();if(typeof renderPaes === 'function') renderPaes();if(typeof popularSelectPaes === 'function') popularSelectPaes();if(typeof renderVendas === 'function') renderVendas();}}
 function injetarBotaoNovoPao(){const listaPaes = document.getElementById('listaPaes');if(!listaPaes) return;const sectionTitulo = listaPaes.previousElementSibling;if(!sectionTitulo || !sectionTitulo.classList.contains('section-titulo')) return;if(sectionTitulo.querySelector('#btnNovoPao')) return;sectionTitulo.style.display = 'flex';sectionTitulo.style.justifyContent = 'space-between';sectionTitulo.style.alignItems = 'center';const btn = document.createElement('button');btn.id = 'btnNovoPao';btn.type = 'button';btn.style.cssText = 'background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.3px;margin-left:auto';btn.textContent = '➕ Novo Pão';btn.addEventListener('click', () => abrirModalPao(null));sectionTitulo.appendChild(btn)}
-function criarModalPao(){if(document.getElementById('modalPao')) return;const modal = document.createElement('div');modal.id = 'modalPao';modal.className = 'modal';modal.innerHTML = '<div class="modal-box" style="max-width:480px"><h3 id="paoTituloModal">🥖 Novo Pão</h3><div class="campo"><label>Nome do pão *</label><input id="paoNomeModal" placeholder="Ex: Pão Australiano"></div><div class="campo"><label>Ícone</label><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="emoji-pao" data-emoji="🥐" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥐</button><button type="button" class="emoji-pao" data-emoji="🥖" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥖</button><button type="button" class="emoji-pao" data-emoji="🍞" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🍞</button><button type="button" class="emoji-pao" data-emoji="🥯" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥯</button></div></div><div class="dupla"><div class="campo"><label>Estoque atual *</label><input id="paoEstoqueModal" type="number" min="0" step="1" placeholder="0"></div><div class="campo"><label>Estoque mínimo</label><input id="paoMinModal" type="number" min="0" step="1" placeholder="10"></div></div><div class="campo"><label>Custo unitário (R$)</label><input id="paoCustoModal" type="text" inputmode="numeric" placeholder="1,50"></div><div class="modal-acoes"><button type="button" class="btn-fantasma" id="btnCancelarPao">Cancelar</button><button type="button" class="btn-primario" id="btnSalvarPaoModal">✅ Salvar</button></div></div>';document.body.appendChild(modal);modal.addEventListener('click', e => { if(e.target === modal) fecharModalPao(); });document.getElementById('btnCancelarPao').addEventListener('click', fecharModalPao);document.getElementById('btnSalvarPaoModal').addEventListener('click', salvarPaoModal);modal.querySelectorAll('.emoji-pao').forEach(b => {b.addEventListener('click', () => {modal.querySelectorAll('.emoji-pao').forEach(x => x.style.borderColor = '#3a3a3f');b.style.borderColor = '#d4a23c';modal.dataset.emojiSelecionado = b.dataset.emoji;});});}
+function criarModalPao(){if(document.getElementById('modalPao')) return;const modal = document.createElement('div');modal.id = 'modalPao';modal.className = 'modal';modal.innerHTML = '<div class="modal-box" style="max-width:480px"><h3 id="paoTituloModal">🥖 Novo Pão</h3><div class="campo"><label>Nome do pão *</label><input id="paoNomeModal" placeholder="Ex: Pão Australiano"></div><div class="campo"><label>Ícone</label><div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="emoji-pao" data-emoji="🥐" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥐</button><button type="button" class="emoji-pao" data-emoji="🥖" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥖</button><button type="button" class="emoji-pao" data-emoji="🍞" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🍞</button><button type="button" class="emoji-pao" data-emoji="🥯" style="font-size:28px;padding:8px 14px;background:#1e1e21;border:2px solid #3a3a3f;border-radius:10px;cursor:pointer">🥯</button></div></div><div class="dupla"><div class="campo"><label>Estoque atual *</label><input id="paoEstoqueModal" type="number" min="0" step="1" placeholder="0"></div><div class="campo"><label>Estoque mínimo</label><input id="paoMinModal" type="number" min="0" step="1" placeholder="10"></div></div><div class="dupla"><div class="campo"><label>Custo unitário (R$)</label><input id="paoCustoModal" type="text" inputmode="numeric" placeholder="1,50"></div><div class="campo"><label>Preço de venda (opcional)</label><input id="paoPrecoModal" type="text" inputmode="numeric" placeholder="Deixe em branco"></div></div><div class="modal-acoes"><button type="button" class="btn-fantasma" id="btnCancelarPao">Cancelar</button><button type="button" class="btn-primario" id="btnSalvarPaoModal">✅ Salvar</button></div></div>';document.body.appendChild(modal);modal.addEventListener('click', e => { if(e.target === modal) fecharModalPao(); });document.getElementById('btnCancelarPao').addEventListener('click', fecharModalPao);document.getElementById('btnSalvarPaoModal').addEventListener('click', salvarPaoModal);modal.querySelectorAll('.emoji-pao').forEach(b => {b.addEventListener('click', () => {modal.querySelectorAll('.emoji-pao').forEach(x => x.style.borderColor = '#3a3a3f');b.style.borderColor = '#d4a23c';modal.dataset.emojiSelecionado = b.dataset.emoji;});});}
 let paoEditandoId = null;
-function abrirModalPao(paoId){if(!souGerente()) return toast('🔒 Só o gerente pode gerenciar pães');criarModalPao();paoEditandoId = paoId;const modal = document.getElementById('modalPao');if(paoId){const p = paes.find(x => x.id === paoId);if(!p) return;document.getElementById('paoTituloModal').textContent = '✏️ Editar Pão';document.getElementById('paoNomeModal').value = p.nome;document.getElementById('paoEstoqueModal').value = p.estoque;document.getElementById('paoMinModal').value = p.minEstoque || 10;document.getElementById('paoCustoModal').value = (p.custo||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});modal.dataset.emojiSelecionado = p.icone || '🥖';} else {document.getElementById('paoTituloModal').textContent = '🥖 Novo Pão';document.getElementById('paoNomeModal').value = '';document.getElementById('paoEstoqueModal').value = '0';document.getElementById('paoMinModal').value = '10';document.getElementById('paoCustoModal').value = '';modal.dataset.emojiSelecionado = '🥖';}modal.querySelectorAll('.emoji-pao').forEach(b => {b.style.borderColor = b.dataset.emoji === modal.dataset.emojiSelecionado ? '#d4a23c' : '#3a3a3f';});modal.classList.add('aberto');setTimeout(() => document.getElementById('paoNomeModal').focus(), 100);}
+function abrirModalPao(paoId){if(!souGerente()) return toast('🔒 Só o gerente pode gerenciar pães');criarModalPao();paoEditandoId = paoId;const modal = document.getElementById('modalPao');if(paoId){const p = paes.find(x => x.id === paoId);if(!p) return;document.getElementById('paoTituloModal').textContent = '✏️ Editar Pão';document.getElementById('paoNomeModal').value = p.nome;document.getElementById('paoEstoqueModal').value = p.estoque;document.getElementById('paoMinModal').value = p.minEstoque || 10;document.getElementById('paoCustoModal').value = (p.custo||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});document.getElementById('paoPrecoModal').value = Number(p.preco)>0?Number(p.preco).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';modal.dataset.emojiSelecionado = p.icone || '🥖';} else {document.getElementById('paoTituloModal').textContent = '🥖 Novo Pão';document.getElementById('paoNomeModal').value = '';document.getElementById('paoEstoqueModal').value = '0';document.getElementById('paoMinModal').value = '10';document.getElementById('paoCustoModal').value = '';document.getElementById('paoPrecoModal').value = '';modal.dataset.emojiSelecionado = '🥖';}modal.querySelectorAll('.emoji-pao').forEach(b => {b.style.borderColor = b.dataset.emoji === modal.dataset.emojiSelecionado ? '#d4a23c' : '#3a3a3f';});modal.classList.add('aberto');setTimeout(() => document.getElementById('paoNomeModal').focus(), 100);}
 function fecharModalPao(){const modal = document.getElementById('modalPao');if(modal) modal.classList.remove('aberto');paoEditandoId = null;}
-function salvarPaoModal(){const nome = document.getElementById('paoNomeModal').value.trim();const estoque = parseInt(document.getElementById('paoEstoqueModal').value, 10);const minEstoque = parseInt(document.getElementById('paoMinModal').value, 10) || 0;const custo = lerMoeda(document.getElementById('paoCustoModal').value) || 0;const icone = document.getElementById('modalPao').dataset.emojiSelecionado || '🥖';if(!nome) return toast('⚠️ Informe o nome do pão');if(isNaN(estoque) || estoque < 0) return toast('⚠️ Informe o estoque');if(paoEditandoId){const p = paes.find(x => x.id === paoEditandoId);if(p){ p.nome=nome; p.estoque=estoque; p.minEstoque=minEstoque; p.custo=custo; p.icone=icone; toast('✏️ Pão atualizado'); }} else {paes.push({ id:'pao_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nome, estoque, minEstoque, custo, icone });toast('✅ Pão cadastrado: ' + nome);}salvar(); renderPaes(); popularSelectPaes(); renderVendas(); fecharModalPao();}
-window.renderPaes = function(){const cont = document.getElementById('listaPaes');if(!cont) return;garantirPaesMinimos();cont.innerHTML = '';const bloq = !souGerente();paes.forEach(pao => {const cls = pao.estoque <= 0 ? 'zerado' : pao.estoque <= pao.minEstoque ? 'baixo' : '';const row = document.createElement('div');row.className = 'item-pao';const icone = pao.icone || (pao.id === 'brioche' ? '🥐' : '🥖');const acoes = bloq ? '<span style="font-size:10px;color:var(--muted)">🔒</span>' : '<button data-acao="mais" data-id="'+esc(pao.id)+'" style="background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff">+</button><button data-acao="menos" data-id="'+esc(pao.id)+'" style="background:linear-gradient(180deg,#e5484d,#a82c30);color:#fff">−</button><button data-acao="editar" data-id="'+esc(pao.id)+'" style="font-size:11px">✏️</button>';row.innerHTML = '<div class="pao-icon">'+icone+'</div><div class="pao-info"><strong>'+esc(pao.nome)+'</strong><span class="pao-estoque '+cls+'">'+pao.estoque+' un.</span></div><div class="pao-acoes">'+acoes+'</div>';cont.appendChild(row);});cont.querySelectorAll('button[data-acao]').forEach(btn => {btn.addEventListener('click', (e) => {e.stopPropagation();e.preventDefault();if(!souGerente()) return toast('🔒 Só o gerente altera estoque');const acao = btn.dataset.acao;const pao = paes.find(p => p.id === btn.dataset.id);if(!pao) return;if(acao === 'mais'){ pao.estoque++; }else if(acao === 'menos'){ if(pao.estoque <= 0) return; pao.estoque--; }else if(acao === 'editar'){ abrirModalPao(pao.id); return; }salvar(); renderPaes(); renderVendas();}, true);});};
+function salvarPaoModal(){const nome = document.getElementById('paoNomeModal').value.trim();const estoque = parseInt(document.getElementById('paoEstoqueModal').value, 10);const minEstoque = parseInt(document.getElementById('paoMinModal').value, 10) || 0;const custo = lerMoeda(document.getElementById('paoCustoModal').value) || 0;const preco = lerMoeda(document.getElementById('paoPrecoModal').value) || 0;const icone = document.getElementById('modalPao').dataset.emojiSelecionado || '🥖';if(!nome) return toast('⚠️ Informe o nome do pão');if(isNaN(estoque) || estoque < 0) return toast('⚠️ Informe o estoque');if(paoEditandoId){const p = paes.find(x => x.id === paoEditandoId);if(p){ p.nome=nome; p.estoque=estoque; p.minEstoque=minEstoque; p.custo=custo; p.preco=preco; p.icone=icone; toast('✏️ Pão atualizado'); }} else {paes.push({ id:'pao_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5), nome, estoque, minEstoque, custo, preco, icone });toast('✅ Pão cadastrado: ' + nome);}salvar(); renderPaes(); popularSelectPaes(); renderVendas(); fecharModalPao();}
+window.renderPaes = function(){const cont = document.getElementById('listaPaes');if(!cont) return;garantirPaesMinimos();cont.innerHTML = '';const bloq = !souGerente();paes.forEach(pao => {const cls = pao.estoque <= 0 ? 'zerado' : pao.estoque <= pao.minEstoque ? 'baixo' : '';const row = document.createElement('div');row.className = 'item-pao';const icone = pao.icone || (pao.id === 'brioche' ? '🥐' : '🥖');const acoes = bloq ? '<span style="font-size:10px;color:var(--muted)">🔒</span>' : '<button data-acao="mais" data-id="'+esc(pao.id)+'" style="background:linear-gradient(180deg,#3fb972,#2a9a5c);color:#fff">+</button><button data-acao="menos" data-id="'+esc(pao.id)+'" style="background:linear-gradient(180deg,#e5484d,#a82c30);color:#fff">−</button><button data-acao="editar" data-id="'+esc(pao.id)+'" style="font-size:11px">✏️</button>';row.innerHTML = '<div class="pao-icon">'+icone+'</div><div class="pao-info"><strong>'+esc(pao.nome)+'</strong><span class="pao-estoque '+cls+'">'+pao.estoque+' un.</span>'+(Number(pao.preco)>0?'<span class="pao-preco">Venda: R$ '+Number(pao.preco).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>':'')+'</div><div class="pao-acoes">'+acoes+'</div>';cont.appendChild(row);});cont.querySelectorAll('button[data-acao]').forEach(btn => {btn.addEventListener('click', (e) => {e.stopPropagation();e.preventDefault();if(!souGerente()) return toast('🔒 Só o gerente altera estoque');const acao = btn.dataset.acao;const pao = paes.find(p => p.id === btn.dataset.id);if(!pao) return;if(acao === 'mais'){ pao.estoque++; }else if(acao === 'menos'){ if(pao.estoque <= 0) return; pao.estoque--; }else if(acao === 'editar'){ abrirModalPao(pao.id); return; }salvar(); renderPaes(); renderVendas();}, true);});};
 const _obsPaes = new MutationObserver(() => injetarBotaoNovoPao());
 setTimeout(() => {const lista = document.getElementById('listaPaes');if(lista && lista.parentNode) _obsPaes.observe(lista.parentNode, { childList: true, subtree: true });injetarBotaoNovoPao();}, 500);
 document.querySelectorAll('.tab[data-tab="estoque"]').forEach(tab => {tab.addEventListener('click', () => setTimeout(injetarBotaoNovoPao, 100));});
@@ -5993,7 +5993,7 @@ window.renderDespItens = function() {
         else if(a.obj.categoria) it.categoria = a.obj.categoria;
       }
       renderDespItens(); 
-    }); 
+    });
   });
   
   cont.querySelectorAll('.ic-unid').forEach(function(inp){ inp.addEventListener('input', function(e){ despItensTemp[e.target.dataset.idx].unid = e.target.value.trim(); }); });
@@ -9332,7 +9332,7 @@ window.salvarVendaManual = function() {
         var i = e.target.dataset.idx;
         arr[i].nome = e.target.value; 
         atualizarStatus(i); // Atualiza APENAS a caixinha de status, sem recriar o input
-      }); 
+      });
     });
     
     cont.querySelectorAll('.ic-cat').forEach(function(s){ s.value = arr[s.dataset.idx].categoria || ''; s.addEventListener('change',function(e){ arr[e.target.dataset.idx].categoria = e.target.value; }); });
@@ -9585,9 +9585,7 @@ window.salvarVendaManual = function() {
             '<select class="ic-cat" data-idx="'+i+'" style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOpts+'</select>'+
             '<input type="text" class="ic-pv" data-idx="'+i+'" placeholder="Venda R$" value="'+pvStr+'" inputmode="numeric" style="width:100%;background:#181819;border:1px solid var(--green);border-radius:8px;padding:10px;color:var(--green);font-family:inherit;font-size:13px;font-weight:800;text-align:right;outline:none">'+
           '</div>';
-      }
-
-      return '<div style="background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid var(--iron-5);border-radius:12px;padding:12px;margin-bottom:10px">'+
+      }      return '<div style="background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid var(--iron-5);border-radius:12px;padding:12px;margin-bottom:10px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="font-size:11px;color:var(--gold-2)">ITEM '+(i+1)+'</strong><button type="button" class="ic-del" data-idx="'+i+'" style="background:rgba(229,72,77,.15);color:var(--red);border:1px solid rgba(229,72,77,.3);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:800;font-size:11px">✕</button></div>'+
         '<input type="text" class="ic-nome" data-idx="'+i+'" placeholder="Nome do produto..." value="'+esc(it.nome||'')+'" style="width:100%;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px;margin-bottom:6px;outline:none">'+
         '<div class="status-box" id="status-box-'+i+'"></div>' +
@@ -9652,10 +9650,10 @@ window.salvarVendaManual = function() {
       inp.addEventListener('input', function(e){ 
         arr[e.target.dataset.idx].nome = e.target.value; 
         // Não atualiza o status aqui, para não perder o foco
-      }); 
+      });
       inp.addEventListener('blur', function(e){ 
         atualizarStatus(e.target.dataset.idx); // Só atualiza quando terminar de digitar (sair do campo)
-      }); 
+      });
     });
     
     cont.querySelectorAll('.ic-cat').forEach(function(s){ s.value = arr[s.dataset.idx].categoria || ''; s.addEventListener('change',function(e){ arr[e.target.dataset.idx].categoria = e.target.value; }); });
@@ -9891,11 +9889,38 @@ window.salvarVendaManual = function() {
     return ordenarCategoriasCadastro(cats);
   }
 
+  function getCatsIngredienteCompra() {
+    var lista = Object.keys(CATEGORIA_LABEL || {}).map(function(k){return {v:k,t:(CATEGORIA_EMOJI[k]||'🏷️')+' '+CATEGORIA_LABEL[k]}});
+    try {
+      var extras=JSON.parse(window.__appMemoryStorage.getItem('rei_chapa_cats_ing')||'[]');
+      if(Array.isArray(extras))extras.forEach(function(c){if(c&&c.k&&!lista.some(function(x){return x.v===c.k}))lista.push({v:c.k,t:(c.e||'🏷️')+' '+c.n})});
+    } catch(e) {}
+    return lista.sort(function(a,b){return compararTextoCadastro(a.t,b.t)});
+  }
+
+  function buscarCatalogoCompra(it) {
+    if(!it)return null;
+    var tipo=it.tipoItem||'prod',nome=normalizarNomeCadastro(it.nomeBase||it.nome),vinc=String(it.vinc||''),prefixo=tipo+':';
+    var lista=tipo==='ing'?ingredientes:tipo==='pao'?paes:produtos;
+    if(vinc.indexOf(prefixo)===0){var porId=lista.find(function(x){return String(x.id)===vinc.slice(prefixo.length)});if(porId)return porId;}
+    return lista.find(function(x){return normalizarNomeCadastro(x.nomeBase||x.nome)===nome||normalizarNomeCadastro(x.nome)===nome})||null;
+  }
+
+  function quantidadeEstoqueProjetada(it) {
+    var qtd=Number(it&&it.qtd)||0;if(!it||it.tipoItem!=='ing')return qtd;
+    var ing=buscarCatalogoCompra(it),modo=it.modoCompra||(ing&&ing.modoCompra)||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');
+    if(modo!=='flexivel')return qtd;
+    var rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ing&&ing.rendimento)||0);
+    if(rend>0)return qtd*rend;
+    var unidadeCompra=it.unid||(ing&&ing.unidade)||'kg',unidadeEstoque=(ing&&ing.unidadeEstoque)||it.unidadeEstoque||unidadeCompra;
+    return converterQuantidadeUnidade(qtd,unidadeCompra,unidadeEstoque);
+  }
   // 3. RENDER DA NOTA
   window.renderDespItens = function(){
     var cont = document.getElementById('despItensLista');
     if(!cont) return;
     var arr = window.despItensTemp || [];
+    arr.forEach(function(it){if(!it)return;var tipoVinc=String(it.vinc||'').split(':')[0];if(['prod','ing','pao'].indexOf(tipoVinc)>=0)it.tipoItem=tipoVinc;else if(!it.tipoItem)it.tipoItem='prod';});
     atualizarListaAutocomplete();
     
     if(!arr.length){
@@ -9907,11 +9932,17 @@ window.salvarVendaManual = function() {
 
     var cats = getCatsParaItem();
     var catOpts = '<option value="">— Categoria —</option>' + cats.map(function(c){ return '<option value="'+esc(c.v)+'">'+esc(c.t)+'</option>'; }).join('');
+    function opcoesCategoriaCompra(it,atual){
+      var opcoes=it.tipoItem==='ing'?getCatsIngredienteCompra():it.tipoItem==='pao'?[{v:'Pães',t:'🥖 Pães'}]:cats.slice();
+      if(atual&&!opcoes.some(function(c){return String(c.v)===String(atual)}))opcoes.unshift({v:atual,t:it.tipoItem==='ing'?(CATEGORIA_EMOJI[atual]||'🏷️')+' '+(CATEGORIA_LABEL[atual]||atual):atual});
+      return '<option value="">— Categoria —</option>'+opcoes.map(function(c){return '<option value="'+esc(c.v)+'" '+(String(c.v)===String(atual)?'selected':'')+'>'+esc(c.t)+'</option>'}).join('');
+    }
+    function precoCatalogoDaLinha(info){if(!info||!info.catalogoId)return null;var lista=info.tipoItem==='ing'?ingredientes:info.tipoItem==='pao'?paes:produtos,campo=info.tipoItem==='ing'?'precoExtra':'preco',item=lista.find(function(x){return String(x.id)===String(info.catalogoId)});if(!item)return null;var valor=Number(item[campo]);return Number.isFinite(valor)&&valor>0?valor:null;}
     function infoCustoLinha(it){var qtd=Number(it.qtd)||0,bruto=qtd*(Number(it.valor)||0),desc=Number(it.desconto)||0;if(it.descontoTipo==='percent')desc=bruto*Math.min(100,desc)/100;var liquido=Math.max(0,bruto-Math.min(bruto,desc));var flex=it.tipoItem==='ing'&&(it.modoCompra==='flexivel'||(!it.modoCompra&&/^(kg|g|l|ml)$/i.test(String(it.unid||''))));if(flex){var ing=buscarIngredienteCompra(it),rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ing&&ing.rendimento)||0),unidadeBase=it.unidadeEstoque||(ing&&ing.unidadeEstoque),unidade=rend>0?(unidadeBase||'porção'):(/^(mg|g|kg|ml|l)$/i.test(String(unidadeBase||''))?unidadeBase:it.unid||(ing&&ing.unidade)||'kg'),qtdEst=rend>0?qtd*rend:converterQuantidadeUnidade(qtd,it.unid||(ing&&ing.unidade)||unidade,unidade);if(qtdEst>0){var custoUn=liquido/qtdEst;return 'Estoque: +'+qtdEst.toLocaleString('pt-BR')+' '+unidade+' · custo: '+moeda(custoUn)+'/'+unidade}return 'Deixe o rendimento vazio se não souber; usaremos '+unidade+' por '+unidade+' comprada.'}return it.custoModo==='total'?'🔒 Custo por unidade: R$ '+(qtd>0?liquido/qtd:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4}):'🔒 Total do item: R$ '+bruto.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
 
     function projetarPrecos(){
       var id=window.editandoDespesaId||editandoDespesaId||(typeof window.__obterIdRascunhoCompra==='function'?window.__obterIdRascunhoCompra():null);
-      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor',incluirRascunhosSemNome:true});
+      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:arr.map(quantidadeEstoqueProjetada),notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor',incluirRascunhosSemNome:true});
     }
     function atualizarPrecosProjetados(){
       if(arr!==window.despItensTemp)return;
@@ -9932,7 +9963,7 @@ window.salvarVendaManual = function() {
         marcarCampoCalculado(margem,false,'Informe a margem para calcular a venda; também pode ajustar o preço de venda diretamente.');
         marcarCampoCalculado(venda,false,'Informe o preço de venda; o lucro sobre custo será calculado automaticamente.');
         var precoExibido=info.preco;
-        if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
+        if(precoExibido===null)precoExibido=precoCatalogoDaLinha(info);
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         var lucroExibido=info.lucroPct!==null&&Number.isFinite(Number(info.lucroPct))?Number(info.lucroPct):(precoExibido!==null&&precoExibido>0&&info.custoMedio>0?(precoExibido/info.custoMedio-1)*100:null);
         if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':formatarPrecisaoCompra(lucroExibido);
@@ -9944,8 +9975,6 @@ window.salvarVendaManual = function() {
     window.__definirModoPrecoCompra=function(idx,valor){if(arr!==window.despItensTemp)return;var item=arr[idx];if(!item)return;item.modoPreco='manual';item.pv=valor;var grupo=projetarPrecos().porIndice[idx];if(!grupo)return;grupo.indices.forEach(function(i){arr[i].modoPreco='manual';arr[i].pv=valor;});};
     var precosProjetados=atualizarPrecosProjetados();
     cont.innerHTML = arr.map(function(it, i){
-      var categoriaAntigaOculta=!!(it.categoria&&categoriaPDVOculta(it.categoria));
-      var catOptsLinha=categoriaAntigaOculta?'<option value="">— Categoria —</option><option value="'+esc(it.categoria)+'" selected disabled>'+esc(it.categoriaNome||it.categoria)+' · fora da lista</option>'+cats.map(function(c){return'<option value="'+esc(c.v)+'">'+esc(c.t)+'</option>'}).join(''):catOpts;
       if(!it.tipoItem) it.tipoItem = 'prod';
       if(!it.descontoTipo) it.descontoTipo = 'valor';
       if(it.controlaEstoque === undefined) it.controlaEstoque = true;
@@ -9953,8 +9982,14 @@ window.salvarVendaManual = function() {
 
       prepararCustoItemCompra(it);
 
-       var nomeCompraIng=String(it.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');
-       var ingCompraExistente=ingredientes.find(function(x){return String(x.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR')===nomeCompraIng;});
+      var catalogoItem=buscarCatalogoCompra(it),categoriaAtual=it.categoria||(catalogoItem&&catalogoItem.categoria)||'';
+      if(!it.categoria&&categoriaAtual&&it._indiceOriginalNota===undefined)it.categoria=categoriaAtual;
+      if(!categoriaAtual&&it._indiceOriginalNota===undefined&&it.tipoItem==='ing')categoriaAtual=it.categoria='outro';
+      if(!categoriaAtual&&it._indiceOriginalNota===undefined&&it.tipoItem==='pao')categoriaAtual=it.categoria='Pães';
+      var categoriaAntigaOculta=it.tipoItem==='prod'&&!!(categoriaAtual&&categoriaPDVOculta(categoriaAtual));
+      var catOptsLinha=categoriaAntigaOculta?'<option value="">— Categoria —</option><option value="'+esc(categoriaAtual)+'" selected disabled>'+esc(it.categoriaNome||categoriaAtual)+' · fora da lista</option>'+cats.map(function(c){return'<option value="'+esc(c.v)+'">'+esc(c.t)+'</option>'}).join(''):opcoesCategoriaCompra(it,categoriaAtual);
+
+       var ingCompraExistente=it.tipoItem==='ing'?buscarCatalogoCompra(it):null;
        var modoCompra=it.modoCompra||(ingCompraExistente&&ingCompraExistente.modoCompra)||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');
        var rendimentoLinha=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ingCompraExistente&&ingCompraExistente.rendimento)||0);
        var unidadeEstoqueBase=it.unidadeEstoque||(ingCompraExistente&&ingCompraExistente.unidadeEstoque);var unidadeEstoque=rendimentoLinha>0?(unidadeEstoqueBase||'porção'):(/^(mg|g|kg|ml|l)$/i.test(String(unidadeEstoqueBase||''))?unidadeEstoqueBase:it.unid||(ingCompraExistente&&ingCompraExistente.unidade)||'kg');
@@ -9964,7 +9999,7 @@ window.salvarVendaManual = function() {
       var vStr = custoExibido > 0 ? custoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:it.custoModo==='total'?2:4}) : '';
       var custoInfo = infoCustoLinha(it);
       var infoPreco=precosProjetados.porIndice[i],precoExibido=infoPreco?infoPreco.preco:null;
-      if(infoPreco&&precoExibido===null){var cadastroPreco=produtos.find(function(p){return String(p.id)===infoPreco.produtoId});if(cadastroPreco&&Number.isFinite(Number(cadastroPreco.preco)))precoExibido=Number(cadastroPreco.preco);}
+      if(infoPreco&&precoExibido===null)precoExibido=precoCatalogoDaLinha(infoPreco);
       var pvStr=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
       var lucroStr = it.lucroPct != null && Number.isFinite(Number(it.lucroPct)) ? formatarPrecisaoCompra(Number(it.lucroPct)) : '';
       var unidadesCompra=['un','kg','g','L','ml','pé','fatia','porção','pacote','caixa'];
@@ -9983,29 +10018,28 @@ window.salvarVendaManual = function() {
       var corPao = it.tipoItem === 'pao' ? '#fff' : 'var(--muted)';
 
       var extraHtml = '';
-      
-      // --- NOVO BOTÃO SIM/NÃO PARA INGREDIENTES ---
+      var classeCategoria = it.tipoItem==='ing'?'ic-cat-ing':it.tipoItem==='pao'?'ic-cat-pao':'ic-cat';
+      var rotuloVenda = it.tipoItem==='ing'?'Adicional PDV R$':it.tipoItem==='pao'?'Preço do pão R$':'Venda R$';
+      extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
+        '<select class="'+classeCategoria+'" data-idx="'+i+'" aria-label="Categoria do item" style="min-width:0;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOptsLinha+'</select>'+
+        '<div aria-hidden="true"></div>'+
+        '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Informe a margem para calcular o preço de venda" value="'+lucroStr+'" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none">'+
+        '<input type="text" class="ic-pv" data-idx="'+i+'" placeholder="'+rotuloVenda+'" value="'+pvStr+'" inputmode="numeric" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--green);border-radius:8px;padding:10px;color:var(--green);font-family:inherit;font-size:13px;font-weight:800;text-align:right;outline:none">'+
+        '</div><div class="ic-media-info" data-idx="'+i+'" style="margin-top:5px;font-size:10px;color:var(--muted)"></div>'+
+        (it.tipoItem==='pao'&&precoExibido===null?'<div style="font-size:10px;color:var(--muted);margin-top:3px">O preço do pão fica em branco até você definir.</div>':'');
+
       if(it.tipoItem === 'ing'){
         var bgSim = it.controlaEstoque ? 'linear-gradient(180deg,#3fb972,#2a9a5c)' : 'transparent';
         var corSim = it.controlaEstoque ? '#fff' : 'var(--muted)';
         var bgNao = !it.controlaEstoque ? 'linear-gradient(180deg,#e5484d,#a82c30)' : 'transparent';
         var corNao = !it.controlaEstoque ? '#fff' : 'var(--muted)';
-        
-        extraHtml = '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;background:#181819;padding:6px 10px;border-radius:8px;border:1px solid var(--iron-5)">'+
+        extraHtml += '<div style="display:flex;align-items:center;gap:6px;margin-top:6px;background:#181819;padding:6px 10px;border-radius:8px;border:1px solid var(--iron-5)">'+
           '<span style="font-size:11px;color:var(--muted);font-weight:700;flex:1">Controlar quantidade no estoque?</span>'+
           '<button type="button" class="btn-controla" data-idx="'+i+'" data-val="1" style="padding:6px 12px;border:0;border-radius:6px;background:'+bgSim+';color:'+corSim+';font-weight:800;font-size:11px;cursor:pointer">SIM</button>'+
           '<button type="button" class="btn-controla" data-idx="'+i+'" data-val="0" style="padding:6px 12px;border:0;border-radius:6px;background:'+bgNao+';color:'+corNao+';font-weight:800;font-size:11px;cursor:pointer">NÃO</button>'+
-        '</div>'+'<label style="display:block;margin-top:7px;font-size:11px;color:var(--muted)">Como calcular o custo e a medida<select class="ic-modo-compra" data-idx="'+i+'" style="width:100%;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"><option value="pacote" '+(modoCompra==='pacote'?'selected':'')+'>Por unidade comprada (1 = 1 no estoque)</option><option value="flexivel" '+(modoCompra==='flexivel'?'selected':'')+'>Por rendimento (rendimento opcional; kg/L podem ser lançados sem saber porções)</option></select></label>'+(modoCompra==='flexivel'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><label style="font-size:10px;color:var(--gold-2)">Rendimento opcional por 1 '+esc(it.unid||'kg')+'<input type="number" class="ic-rend" data-idx="'+i+'" value="'+(rendimentoLinha||'')+'" min="0" step="0.001" placeholder="Opcional; ex.: 120" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"></label><label style="font-size:10px;color:var(--gold-2)">Unidade do estoque (sem rendimento, use kg/L)<input type="text" class="ic-unid-estoque" data-idx="'+i+'" value="'+esc(unidadeEstoque)+'" placeholder="fatia/porção" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"></label></div><div style="font-size:10px;color:var(--muted);margin-top:4px">Se não souber o rendimento, deixe em branco: estoque e custo ficam na unidade da compra.</div>':'');
-      } 
-      else if(it.tipoItem === 'prod'){
-        extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
-            '<select class="ic-cat" data-idx="'+i+'" style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOptsLinha+'</select>'+
-            '<div aria-hidden="true"></div>'+
-            '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Informe a margem para calcular a venda; também pode ajustar o preço de venda diretamente" value="'+lucroStr+'" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none">'+
-            '<input type="text" class="ic-pv" data-idx="'+i+'" placeholder="Venda R$" value="'+pvStr+'" inputmode="numeric" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--green);border-radius:8px;padding:10px;color:var(--green);font-family:inherit;font-size:13px;font-weight:800;text-align:right;outline:none">'+
-          '</div><div class="ic-media-info" data-idx="'+i+'" style="margin-top:5px;font-size:10px;color:var(--muted)"></div>';
+        '</div>'+'<label style="display:block;margin-top:7px;font-size:11px;color:var(--muted)">Como calcular o custo e a medida<select class="ic-modo-compra" data-idx="'+i+'" style="width:100%;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"><option value="pacote" '+(modoCompra==='pacote'?'selected':'')+'>Por unidade comprada (1 = 1 no estoque)</option><option value="flexivel" '+(modoCompra==='flexivel'?'selected':'')+'>Por rendimento (rendimento opcional; kg/L podem ser lançados sem saber porções)</option></select></label>'+
+        (modoCompra==='flexivel'?'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><label style="font-size:10px;color:var(--gold-2)">Rendimento opcional por 1 '+esc(it.unid||'kg')+'<input type="number" class="ic-rend" data-idx="'+i+'" value="'+(rendimentoLinha||'')+'" min="0" step="0.001" placeholder="Opcional; ex.: 120" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"></label><label style="font-size:10px;color:var(--gold-2)">Unidade do estoque (sem rendimento, use kg/L)<input type="text" class="ic-unid-estoque" data-idx="'+i+'" value="'+esc(unidadeEstoque)+'" placeholder="fatia/porção" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"></label></div><div style="font-size:10px;color:var(--muted);margin-top:4px">Se não souber o rendimento, deixe em branco: estoque e custo ficam na unidade da compra.</div>':'');
       }
-
       return '<div style="background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid var(--iron-5);border-radius:12px;padding:12px;margin-bottom:10px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="font-size:11px;color:var(--gold-2)">ITEM '+(i+1)+'</strong><button type="button" class="ic-del" data-idx="'+i+'" style="background:rgba(229,72,77,.15);color:var(--red);border:1px solid rgba(229,72,77,.3);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:800;font-size:11px">✕</button></div>'+
         '<input type="text" class="ic-nome" list="'+(it.tipoItem==='ing'?'listaNomesBaseIng':'listaSugestoesCompra')+'" data-idx="'+i+'" placeholder="'+(it.tipoItem==='ing'?'Nome do ingrediente...':'Nome do produto...')+'" value="'+esc(it.tipoItem==='ing'?(it.nomeBase||it.nome||''):(it.nome||''))+'" style="width:100%;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px;margin-bottom:6px;outline:none">'+
@@ -10068,11 +10102,11 @@ window.salvarVendaManual = function() {
     }
 
     // EVENTOS
-    cont.querySelectorAll('.tipo-btn').forEach(function(b){ b.addEventListener('click',function(){ arr[b.dataset.idx].tipoItem = b.dataset.tipo; window.renderDespItens(); }); });
+    cont.querySelectorAll('.tipo-btn').forEach(function(b){ b.addEventListener('click',function(){ var it=arr[b.dataset.idx],novoTipo=b.dataset.tipo;if(it.tipoItem!==novoTipo){it.tipoItem=novoTipo;it.vinc='';it.pv=null;it.lucroPct=null;it.modoPreco=null;it.categoria='';it.categoriaNome='';}window.renderDespItens(); }); });
     
     cont.querySelectorAll('.ic-nome').forEach(function(inp){ 
-      inp.addEventListener('input', function(e){var it=arr[e.target.dataset.idx];if(it.tipoItem==='ing'){it.nomeBase=e.target.value;it.nome=[it.nomeBase,it.marca||''].map(function(x){return String(x).trim()}).filter(Boolean).join(' ')}else it.nome=e.target.value;}); 
-      inp.addEventListener('blur', function(e){var i=e.target.dataset.idx;atualizarStatus(i);sincronizarIngredienteCompraPorNome(arr,i);}); 
+      inp.addEventListener('input', function(e){var it=arr[e.target.dataset.idx],nomeNovo=e.target.value,nomeAntes=it.tipoItem==='ing'?(it.nomeBase||it.nome||''):(it.nome||'');if(normalizarNomeCadastro(nomeAntes)!==normalizarNomeCadastro(nomeNovo)){it.vinc='';it.pv=null;it.lucroPct=null;it.modoPreco=null;it.categoria='';it.categoriaNome='';}if(it.tipoItem==='ing'){it.nomeBase=nomeNovo;it.nome=[it.nomeBase,it.marca||''].map(function(x){return String(x).trim()}).filter(Boolean).join(' ')}else it.nome=nomeNovo;});
+      inp.addEventListener('blur', function(e){var i=e.target.dataset.idx;atualizarStatus(i);sincronizarIngredienteCompraPorNome(arr,i);});
     });
     
     cont.querySelectorAll('.ic-subnome').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i];it.marca=e.target.value;if(it.tipoItem==='ing')it.nome=[it.nomeBase||'',it.marca||''].map(function(x){return String(x).trim()}).filter(Boolean).join(' ')});inp.addEventListener('blur',function(e){var i=e.target.dataset.idx;atualizarStatus(i);if(arr[i]&&arr[i].tipoItem==='ing')sincronizarIngredienteCompraPorNome(arr,i)});});
@@ -10080,7 +10114,7 @@ window.salvarVendaManual = function() {
     cont.querySelectorAll('.ic-modo-compra').forEach(function(s){s.addEventListener('change',function(e){var i=e.target.dataset.idx,it=arr[i];it.modoCompra=e.target.value;var nm=String(it.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR'),ex=ingredientes.find(function(x){return String(x.nome||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR')===nm;});if(ex){if(!it.rendimentoInformado)it.rend=Number(it.rend)>0?Number(it.rend):Number(ex.rendimento)||0;it.unidadeEstoque=it.unidadeEstoque||ex.unidadeEstoque||'';}window.renderDespItens();});});
     cont.querySelectorAll('.ic-rend').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx;arr[i].rend=lerQuantidade(e.target.value);arr[i].rendimentoInformado=true;if(!(arr[i].rend>0)&&!/^(mg|g|kg|ml|l)$/i.test(String(arr[i].unidadeEstoque||''))){arr[i].unidadeEstoque=arr[i].unid||'kg';var u=cont.querySelector('.ic-unid-estoque[data-idx="'+i+'"]');if(u)u.value=arr[i].unidadeEstoque}atualizarInfoCusto(i);});});
     cont.querySelectorAll('.ic-unid-estoque').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx;arr[i].unidadeEstoque=e.target.value.trim()||'porção';atualizarInfoCusto(i);});});
-    cont.querySelectorAll('.ic-cat').forEach(function(s){ s.value = arr[s.dataset.idx].categoria || ''; s.addEventListener('change',function(e){ var i=e.target.dataset.idx,it=arr[i]; it.categoria=e.target.value; it.categoriaNome=''; }); });
+    cont.querySelectorAll('.ic-cat,.ic-cat-ing,.ic-cat-pao').forEach(function(s){ s.value = arr[s.dataset.idx].categoria || ''; s.addEventListener('change',function(e){ var i=e.target.dataset.idx,it=arr[i]; it.categoria=e.target.value; it.categoriaNome=''; }); });
     cont.querySelectorAll('.ic-qtd').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i];it.qtd=lerQuantidade(e.target.value);if(it.custoModo==='total')it.valor=it.qtd>0?(Number(it.totalCusto)||0)/it.qtd:0;else it.totalCusto=it.qtd*(Number(it.valor)||0);atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-valor').forEach(function(inp){inp.addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);var i=e.target.dataset.idx,it=arr[i],valor=lerMoeda(e.target.value),q=Number(it.qtd)||0;if(it.custoModo==='total'){it.totalCusto=valor;it.valor=q>0?valor/q:0;}else{it.valor=valor;it.totalCusto=q*valor;}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-subtotal-manual').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i],desejado=Math.max(0,lerMoeda(e.target.value)),pct=it.descontoTipo==='percent'?Math.max(0,Number(it.desconto)||0):0;if(pct>=100&&desejado>0)return;var bruto=it.descontoTipo==='percent'?desejado/(1-pct/100):desejado+(Number(it.desconto)||0),q=Number(it.qtd)||0;if(q>0){it.valor=bruto/q;it.totalCusto=bruto;var custo=cont.querySelector('.ic-valor[data-idx="'+i+'"]');if(custo)custo.value=(it.custoModo==='total'?bruto:it.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});inp.addEventListener('blur',function(e){var it=arr[e.target.dataset.idx],bruto=(Number(it.qtd)||0)*(Number(it.valor)||0),desc=it.descontoTipo==='percent'?bruto*(Number(it.desconto)||0)/100:(Number(it.desconto)||0);e.target.value=moedaSimple(Math.max(0,bruto-Math.min(bruto,desc)));});});
@@ -10126,7 +10160,7 @@ window.salvarVendaManual = function() {
       b.addEventListener('click', function(){ 
         arr[b.dataset.idx].controlaEstoque = (b.dataset.val === '1'); 
         window.renderDespItens(); 
-      }); 
+      });
     });
     
     cont.querySelectorAll('.ic-del').forEach(function(b){ b.addEventListener('click',function(){ arr.splice(parseInt(b.dataset.idx,10),1); window.renderDespItens(); }); });
@@ -10164,7 +10198,6 @@ window.salvarVendaManual = function() {
         if(!dataEl || !dataEl.value) return window.toast('Informe a data da compra');
         var itensCompra = arr.filter(function(it){ return it.nome && it.nome.trim() && Number(it.qtd) > 0; });
         if(!itensCompra.length) return window.toast('Adicione pelo menos um item com quantidade');
-        function normNome(v){ return normalizarNomeCadastro(v); }
         function descontoEfetivo(it){
           var bruto = Math.max(0, (Number(it.qtd)||0) * (Number(it.valor)||0));
           var desc = Math.max(0, Number(it.desconto)||0);
@@ -10172,27 +10205,18 @@ window.salvarVendaManual = function() {
           return Math.min(bruto,desc);
         }
         itensCompra.forEach(function(it){
-          var nome=normNome(it.nome), tipo=it.tipoItem||'prod', existente=null,baseIng=normNome(it.nomeBase||it.nome);
-          if(tipo==='ing') existente=ingredientes.find(function(x){return normNome(x.nomeBase||x.nome)===baseIng||normNome(x.nome)===nome;});
-          else if(tipo==='pao') existente=paes.find(function(x){return normNome(x.nome)===nome;});
-          else existente=produtos.find(function(x){return normNome(x.nome)===nome;});
-          if(!existente){
-            var ing=ingredientes.find(function(x){return normNome(x.nomeBase||x.nome)===baseIng||normNome(x.nome)===nome;});
-            var pao=paes.find(function(x){return normNome(x.nome)===nome;});
-            var prod=produtos.find(function(x){return normNome(x.nome)===nome;});
-            if(ing){existente=ing;tipo='ing';} else if(pao){existente=pao;tipo='pao';} else if(prod){existente=prod;tipo='prod';}
-          }
+          var vincTipo=String(it.vinc||'').split(':')[0], tipo=['prod','ing','pao'].indexOf(vincTipo)>=0?vincTipo:(it.tipoItem||'prod'), existente=buscarCatalogoCompra(Object.assign({},it,{tipoItem:tipo}));
           if(existente){
             it.vinc=(tipo==='ing'?'ing:':tipo==='pao'?'pao:':'prod:')+existente.id;
             if(tipo==='prod'){if(Number(it.pv)>0)existente.preco=Number(it.pv);if(it.categoria)existente.categoria=it.categoria;}
-            if(tipo==='ing'){existente.nomeBase=it.nomeBase||existente.nomeBase||existente.nome;existente.nome=existente.nomeBase;existente.semEstoque=!it.controlaEstoque;it.modoCompra=it.modoCompra||existente.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');existente.modoCompra=it.modoCompra;if(it.unid)existente.unidade=it.unid;if(it.modoCompra==='flexivel'){it.rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(existente.rendimento)||0);existente.rendimento=it.rend;var unEst=String(it.unidadeEstoque||existente.unidadeEstoque||'').trim();it.unidadeEstoque=it.rend>0?(unEst||'porção'):(/^(mg|g|kg|ml|l)$/i.test(unEst)?unEst:(it.unid||existente.unidade||'kg'));existente.unidadeEstoque=it.unidadeEstoque;}}
+            if(tipo==='ing'){existente.nomeBase=it.nomeBase||existente.nomeBase||existente.nome;existente.nome=existente.nomeBase;if(it.categoria)existente.categoria=it.categoria;if(it.modoPreco==='manual'||it.modoPreco==='percentual')existente.precoExtra=Math.max(0,Number(it.pv)||0);existente.semEstoque=!it.controlaEstoque;it.modoCompra=it.modoCompra||existente.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');existente.modoCompra=it.modoCompra;if(it.unid)existente.unidade=it.unid;if(it.modoCompra==='flexivel'){it.rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(existente.rendimento)||0);existente.rendimento=it.rend;var unEst=String(it.unidadeEstoque||existente.unidadeEstoque||'').trim();it.unidadeEstoque=it.rend>0?(unEst||'porção'):(/^(mg|g|kg|ml|l)$/i.test(unEst)?unEst:(it.unid||existente.unidade||'kg'));existente.unidadeEstoque=it.unidadeEstoque;}} else if(tipo==='pao'){if(it.categoria)existente.categoria=it.categoria;if(it.modoPreco==='manual'||it.modoPreco==='percentual')existente.preco=Math.max(0,Number(it.pv)||0);}
           } else if(tipo==='prod'||it.criarNovo!==false){
             var novoId=typeof uid==='function'?uid():Date.now()+Math.floor(Math.random()*10000);
             if(tipo==='ing'){
-              var modoNovoIng=it.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');it.modoCompra=modoNovoIng;it.rend=modoNovoIng==='flexivel'?(Number(it.rend)||0):0;it.unidadeEstoque=modoNovoIng==='flexivel'?(it.rend>0?(it.unidadeEstoque||'porção'):(it.unid||'kg')):(it.unid||'un');var nomeEstoque=String(it.nomeBase||it.nome).trim();var ni={id:'ing_'+novoId,nome:nomeEstoque,nomeBase:nomeEstoque,marca:'',icone:'🥬',categoria:'outro',semEstoque:!it.controlaEstoque,precoExtra:0,custo:0,estoque:0,minEstoque:5,unidade:it.unid||'un',unidadeEstoque:it.unidadeEstoque,modoCompra:modoNovoIng,rendimento:modoNovoIng==='flexivel'?Number(it.rend)||0:0};
+              var modoNovoIng=it.modoCompra||(/^(kg|g|l|ml)$/i.test(String(it.unid||''))?'flexivel':'pacote');it.modoCompra=modoNovoIng;it.rend=modoNovoIng==='flexivel'?(Number(it.rend)||0):0;it.unidadeEstoque=modoNovoIng==='flexivel'?(it.rend>0?(it.unidadeEstoque||'porção'):(it.unid||'kg')):(it.unid||'un');var nomeEstoque=String(it.nomeBase||it.nome).trim();var ni={id:'ing_'+novoId,nome:nomeEstoque,nomeBase:nomeEstoque,marca:'',icone:'🥬',categoria:it.categoria||'outro',semEstoque:!it.controlaEstoque,precoExtra:(it.modoPreco==='manual'||it.modoPreco==='percentual')?Math.max(0,Number(it.pv)||0):0,custo:0,estoque:0,minEstoque:5,unidade:it.unid||'un',unidadeEstoque:it.unidadeEstoque,modoCompra:modoNovoIng,rendimento:modoNovoIng==='flexivel'?Number(it.rend)||0:0};
               ingredientes.push(ni);it.vinc='ing:'+ni.id;
             } else if(tipo==='pao'){
-              var np={id:'pao_'+novoId,nome:it.nome.trim(),estoque:0,minEstoque:5,custo:0,icone:'🥖'};
+              var np={id:'pao_'+novoId,nome:it.nome.trim(),estoque:0,minEstoque:5,custo:0,preco:(it.modoPreco==='manual'||it.modoPreco==='percentual')?Math.max(0,Number(it.pv)||0):0,categoria:it.categoria||'Pães',icone:'🥖'};
               paes.push(np);it.vinc='pao:'+np.id;
             } else {
               var cat=String(it.categoria||'Sem categoria').trim(), bebida=/bebida/i.test(cat);
@@ -10441,7 +10465,7 @@ setTimeout(function(){var form=document.getElementById('formProduto');if(form&&!
  .pao-icon{grid-area:icon!important;width:32px!important;height:32px!important;font-size:18px!important}
  .pao-info{grid-area:info!important;min-width:0!important}
  .pao-info strong{font-size:11px!important;line-height:1.15}
- .pao-estoque{font-size:11px!important}
+ .pao-estoque{font-size:11px!important}.pao-preco{font-size:10px!important;color:var(--green);font-weight:800}
  .pao-acoes{grid-area:acoes!important;justify-self:end!important;flex-wrap:nowrap!important;gap:4px!important}
  .pao-acoes button{min-height:30px!important;padding:6px 8px!important;font-size:12px!important}
  #btnInstalarPwa{right:8px!important;bottom:calc(72px + env(safe-area-inset-bottom))!important;padding:7px 9px!important;max-width:132px!important;font-size:9px!important}
