@@ -9890,12 +9890,12 @@ window.salvarVendaManual = function() {
         var it=arr[i];
         if(info.preco!==null){it.pv=info.preco;it.lucroPct=info.lucroPct;it.modoPreco=info.modoPreco;}
         var venda=cont.querySelector('.ic-pv[data-idx="'+i+'"]'),margem=cont.querySelector('.ic-margem[data-idx="'+i+'"]'),media=cont.querySelector('.ic-media-info[data-idx="'+i+'"]');
-        marcarCampoCalculado(margem,true,'Margem calculada automaticamente pelo preço de venda e custo médio.');
+        marcarCampoCalculado(margem,false,'Informe a margem para calcular a venda; também pode ajustar o preço de venda diretamente.');
         marcarCampoCalculado(venda,false,'Informe o preço de venda; o lucro sobre custo será calculado automaticamente.');
         var precoExibido=info.preco;
         if(precoExibido===null){var cadastrado=produtos.find(function(p){return String(p.id)===info.produtoId});if(cadastrado&&Number.isFinite(Number(cadastrado.preco)))precoExibido=Number(cadastrado.preco);}
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-        var lucroExibido=precoExibido!==null&&precoExibido>0&&info.custoMedio>0?(precoExibido/info.custoMedio-1)*100:null;
+        var lucroExibido=info.lucroPct!==null&&Number.isFinite(Number(info.lucroPct))?Number(info.lucroPct):(precoExibido!==null&&precoExibido>0&&info.custoMedio>0?(precoExibido/info.custoMedio-1)*100:null);
         if(margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':String(Math.round(lucroExibido*100)/100).replace('.',',');
         if(media)media.textContent='Custo médio com esta compra: '+moeda(info.custoMedio)+' por unidade';
       });
@@ -9966,7 +9966,7 @@ window.salvarVendaManual = function() {
         extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
             '<select class="ic-cat" data-idx="'+i+'" style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOptsLinha+'</select>'+
             '<div aria-hidden="true"></div>'+
-            '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Calculado automaticamente pelo preço de venda e custo médio" value="'+lucroStr+'" readonly aria-readonly="true" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#202023;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none;cursor:not-allowed">'+
+            '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Informe a margem para calcular a venda; também pode ajustar o preço de venda diretamente" value="'+lucroStr+'" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none">'+
             '<input type="text" class="ic-pv" data-idx="'+i+'" placeholder="Venda R$" value="'+pvStr+'" inputmode="numeric" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--green);border-radius:8px;padding:10px;color:var(--green);font-family:inherit;font-size:13px;font-weight:800;text-align:right;outline:none">'+
           '</div><div class="ic-media-info" data-idx="'+i+'" style="margin-top:5px;font-size:10px;color:var(--muted)"></div>';
       }
@@ -10054,6 +10054,19 @@ window.salvarVendaManual = function() {
       window.__definirModoPrecoCompra(idx,lerMoeda(campo.value));
       window.__atualizarPrecosCompra();
     }
+    function aplicarMargemDigitada(campo){
+      if(arr!==window.despItensTemp)return;
+      var idx=Number(campo.dataset.idx),texto=String(campo.value||'').trim().replace(',','.');
+      if(!arr[idx]||!texto||! /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(texto))return;
+      var margem=Number(texto);if(!Number.isFinite(margem))return;
+      var grupo=projetarPrecos().porIndice[idx];if(!grupo)return;
+      grupo.indices.forEach(function(i){arr[i].modoPreco='percentual';arr[i].lucroPct=margem;});
+      window.__atualizarPrecosCompra();
+    }
+    cont.querySelectorAll('.ic-margem').forEach(function(inp){
+      inp.addEventListener('input',function(){aplicarMargemDigitada(inp)});
+      inp.addEventListener('change',function(){aplicarMargemDigitada(inp)});
+    });
     cont.querySelectorAll('.ic-pv').forEach(function(inp){
       inp.addEventListener('input',function(){aplicarPrecoDigitado(inp)});
       inp.addEventListener('change',function(){aplicarPrecoDigitado(inp)});
@@ -10630,6 +10643,9 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var temporizadoresRemotos = new Map();
   var gravacoesRemotas = new Map();
   var versoesConfirmadas = new Map();
+  var chaveNovaCompraSeparada = null;
+  var rascunhosQueNaoDevemBloquearNovaCompra = new Set();
+  var avisoNovaCompraAposFalha = '';
   var limpezasConfirmadas = new Map();
   var aberturaNovaCompraAguardandoLimpeza = false;
   var rascunhosCarregados = false;
@@ -10779,6 +10795,28 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       preservarLocalMaisNovo:function(atual){if(temConteudoRascunho(atual))agendarPersistenciaRascunho(k,atual,true)}
     });
     if(!removido)throw new Error('O rascunho mudou ou a remoção no Supabase não foi confirmada. Mantive o conteúdo.');
+    return true;
+  }
+  async function arquivarRascunhoSemBloquearNovaCompra(k, registroEsperado) {
+    if(!idDispositivo||!window.__authPermitido||!supa)throw new Error('Supabase indisponível; mantive o rascunho sem alterar.');
+    if(!dadosIguais(lerChave(k),registroEsperado))throw new Error('O rascunho mudou neste aparelho. Mantive o conteúdo.');
+    var timer=temporizadoresRemotos.get(k);if(timer){window.clearTimeout(timer);temporizadoresRemotos.delete(k)}
+    var gravacaoAnterior=gravacoesRemotas.get(k);if(gravacaoAnterior)await gravacaoAnterior.catch(function(){});
+    if(!dadosIguais(lerChave(k),registroEsperado))throw new Error('O rascunho mudou durante a separação. Mantive o conteúdo.');
+    var id=idServidorRascunho(k),consulta=await supa.from('estado').select('id,dados').eq('id',id).maybeSingle();
+    if(consulta.error)throw consulta.error;
+    var envelope=consulta.data&&consulta.data.dados;
+    if(!consulta.data||consulta.data.id!==id||!envelope||envelope.tipo!=='rei-da-chapa-rascunho-compra'||envelope.dispositivo!==idDispositivo||envelope.chave!==k||!envelope.registro||!dadosIguais(envelope.registro,registroEsperado))throw new Error('O rascunho mudou no Supabase. Mantive o conteúdo.');
+    var atualizado=clonar(registroEsperado);
+    atualizado.retomarAoVoltar=false;atualizado.ignorarAoCriarNova=true;
+    atualizado.updatedAt=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);atualizado.rascunhoAtualizadoEm=Date.now();
+    var resposta=await supa.from('estado').update({dados:envelopeServidorRascunho(k,atualizado),atualizado_em:new Date().toISOString()})
+      .eq('id',id).eq('dados->registro->>updatedAt',String(registroEsperado.updatedAt||''))
+      .select('id,atualizado_em').maybeSingle();
+    if(resposta.error)throw resposta.error;
+    if(!resposta.data||resposta.data.id!==id)throw new Error('O rascunho mudou durante a separação. Mantive o conteúdo.');
+    if(dadosIguais(lerChave(k),registroEsperado))window.__appMemoryStorage.setItem(k,JSON.stringify(atualizado));
+    versoesConfirmadas.set(k,atualizado.rascunhoAtualizadoEm);
     return true;
   }
   async function carregarRascunhosServidor() {
@@ -11156,7 +11194,29 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   }
 
   window.abrirModalDespesa = function (despesa) {
-    if (window.__authPermitido && supa && !rascunhosCarregados) {
+    if (!despesa) {
+      var chavePadraoNova = chave(lojaAtual(), null);
+      var rascunhoPadrao = lerChave(chavePadraoNova);
+      var precisaSepararNova = !rascunhosCarregados || rascunhosQueNaoDevemBloquearNovaCompra.has(chavePadraoNova) || !!(rascunhoPadrao && temConteudoRascunho(rascunhoPadrao));
+      if (precisaSepararNova && !chaveNovaCompraSeparada) {
+        chaveNovaCompraSeparada = chave(lojaAtual(), 'nova-' + criarUuidSeguro());
+        avisoNovaCompraAposFalha = '📝 Abri uma nova compra separada; os rascunhos anteriores foram preservados.';
+        if (rascunhoPadrao && temConteudoRascunho(rascunhoPadrao)) {
+          rascunhosQueNaoDevemBloquearNovaCompra.add(chavePadraoNova);
+          if (!rascunhoPadrao.ignorarAoCriarNova) arquivarRascunhoSemBloquearNovaCompra(chavePadraoNova, rascunhoPadrao).catch(function (erro) { console.warn('Mantive o rascunho anterior sem bloquear a nova compra:', erro); });
+        }
+        if (!rascunhosCarregados && window.__authPermitido && supa) {
+          carregarRascunhosServidor().then(function (carga) {
+            if (!carga.ok) { console.warn('Não consegui consultar os rascunhos durante a abertura de uma compra nova:', carga.error); return; }
+            var anterior = lerChave(chavePadraoNova);
+            if (!anterior || !temConteudoRascunho(anterior)) return;
+            rascunhosQueNaoDevemBloquearNovaCompra.add(chavePadraoNova);
+            if (!anterior.ignorarAoCriarNova) arquivarRascunhoSemBloquearNovaCompra(chavePadraoNova, anterior).catch(function (erro) { console.warn('Mantive o rascunho anterior sem bloquear a nova compra:', erro); });
+          }).catch(function (erro) { console.warn('Falha ao consultar rascunhos em segundo plano:', erro); });
+        }
+      }
+    }
+    if (despesa && window.__authPermitido && supa && !rascunhosCarregados) {
       if (typeof window.toast === 'function') window.toast('⏳ Conferindo os rascunhos deste aparelho no Supabase…');
       carregarRascunhosServidor().then(function (carga) {
         if (carga.ok) window.abrirModalDespesa(despesa);
@@ -11165,7 +11225,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       return;
     }
     if(!despesa){
-      var chaveLimpezaNova=chave(lojaAtual(),null),limpezaNova=limpezasConfirmadas.get(chaveLimpezaNova);
+      var chaveLimpezaNova=chaveNovaCompraSeparada||chave(lojaAtual(),null),limpezaNova=limpezasConfirmadas.get(chaveLimpezaNova);
       if(limpezaNova){
         if(!aberturaNovaCompraAguardandoLimpeza){
           aberturaNovaCompraAguardandoLimpeza=true;
@@ -11175,7 +11235,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         return;
       }
     }
-    if(!despesa){
+    if(!despesa&&!chaveNovaCompraSeparada){
       var chavePrevia=chave(lojaAtual(),null),rascunhoPrevio=lerChave(chavePrevia),camposPrevios=rascunhoPrevio&&rascunhoPrevio.campos||{};
       var versaoPrevista=Number(rascunhoPrevio&&rascunhoPrevio.rascunhoAtualizadoEm),versaoConfirmada=Number(versoesConfirmadas.get(chavePrevia));
       var versaoEstaConfirmada=!!rascunhoPrevio&&Number.isFinite(versaoPrevista)&&versaoPrevista>0&&versaoPrevista===versaoConfirmada;
@@ -11214,7 +11274,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     aberturaRascunho++;
     var loja = lojaAtual();
     var avisoRascunhoComoNova = false;
-    var chaveNova = chave(loja, null);
+    var chaveNova = chaveNovaCompraSeparada || chave(loja, null);
     var avisoNotaJaSalva = avisoNotaJaSalvaNaProximaAbertura;
     avisoNotaJaSalvaNaProximaAbertura=false;
     if (!despesa) {
@@ -11232,9 +11292,11 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
         }
       }
     }
+    var chaveSeparadaParaAbrir = !despesa ? chaveNovaCompraSeparada : null;
     var notaInicial = despesa ? clonar(despesa) : null;
     var resultado = abrirOriginal.call(this, despesa || null);
     if (!estaAberto()) return resultado;
+    if (!despesa && chaveSeparadaParaAbrir && chaveNovaCompraSeparada === chaveSeparadaParaAbrir) chaveNovaCompraSeparada = null;
     modoRascunhoCompra=despesa?'editar':'nova';
     window.editandoDespesaId=despesa?despesa.id:null;
     if(typeof editandoDespesaId!=='undefined')editandoDespesaId=despesa?despesa.id:null;
@@ -11246,7 +11308,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     desenharStatusRascunho('', '');
     lojaRascunho = loja;
     idRascunho = despesa ? despesa.id : null;
-    chaveRascunhoAtivo = chave(lojaRascunho, idRascunho);
+    chaveRascunhoAtivo = !despesa && chaveSeparadaParaAbrir ? chaveSeparadaParaAbrir : chave(lojaRascunho, idRascunho);
     var k = chaveRascunhoAtivo;
     var registroBase=lerChave(k);
     baseNotaAtiva=despesa?(registroBase&&registroBase.baseNota?clonar(registroBase.baseNota):notaInicial):null;
@@ -11266,6 +11328,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     restaurarRascunho(lojaRascunho, idRascunho);
     if (avisoNotaJaSalva && typeof window.toast === 'function') window.toast('✅ Esta nota já foi confirmada no servidor; não lancei outra compra.');
     if (avisoRascunhoComoNova && typeof window.toast === 'function') window.toast('📝 Rascunho mantido como nova compra. Ele não vai atualizar uma nota já lançada.');
+    if (avisoNovaCompraAposFalha && typeof window.toast === 'function') { window.toast(avisoNovaCompraAposFalha); avisoNovaCompraAposFalha = ''; }
     return resultado;
   };
 
