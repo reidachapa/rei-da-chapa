@@ -4,6 +4,12 @@ const path = require('node:path');
 const test = require('node:test');
 const { calcular, calcularDescontoItem, somarDescontosItens, normalizarPercentualDigitado, lerPercentualNota } = require('../purchase-pricing.js');
 
+function helpersDesconto(html) {
+  const formatacao = html.slice(html.indexOf('function formatarDecimalCompra('), html.indexOf('function normalizarNomeCadastro('));
+  const helpers = html.slice(html.indexOf('function textoDescontoNotaCompra('), html.indexOf('function lerQuantidade('));
+  return formatacao + helpers;
+}
+
 test('desconto percentual da nota preserva 10% e decimal sem formatação de moeda', () => {
   assert.equal(typeof normalizarPercentualDigitado, 'function');
   assert.equal(typeof lerPercentualNota, 'function');
@@ -23,30 +29,36 @@ test('desconto percentual da nota preserva 10% e decimal sem formatação de moe
   assert.equal(resultado.preco, 108);
 });
 
-test('campo da nota não formata desconto percentual como centavos', () => {
+test('campo da nota exibe o desconto percentual com duas casas ao sair do campo e mantém a entrada exata', () => {
   const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
   const inicio = html.indexOf("$('#despDesconto').addEventListener('input', function(e) {");
-  const fim = html.indexOf('\n});', inicio) + 4;
+  const fim = html.indexOf('\nfunction periodoDRE', inicio);
   const formatarInicio = html.indexOf('function formatarMoedaDigitada(');
   const formatarFim = html.indexOf('\n}', formatarInicio) + 2;
   assert(inicio >= 0 && fim > inicio && formatarInicio >= 0 && formatarFim > formatarInicio);
-  let listener;
-  const campo = { value: '10', setSelectionRange() { throw new Error('percentual não deve usar cursor de moeda'); } };
+  const listeners = {};
+  const campo = { value: '10', dataset: {}, setSelectionRange() { throw new Error('percentual não deve usar cursor de moeda'); } };
   const escopo = {
-    $: () => ({ addEventListener(_tipo, fn) { listener = fn; } }),
+    $: () => ({ addEventListener(tipo, fn) { listeners[tipo] = fn; } }),
     window: { _descontoNotaTipo: 'percent', PrecosCompra: require('../purchase-pricing.js') },
     formatarMoedaDigitada: new Function('return (' + html.slice(formatarInicio, formatarFim) + ')')(),
     atualizarTotaisDesp() {},
   };
-  new Function('$', 'window', 'formatarMoedaDigitada', 'atualizarTotaisDesp', html.slice(inicio, fim))(
-    escopo.$, escopo.window, escopo.formatarMoedaDigitada, escopo.atualizarTotaisDesp,
+  const lerCampo = new Function('$', 'window', 'formatarMoedaDigitada', 'atualizarTotaisDesp', 'lerDescontoNota',
+    helpersDesconto(html) + html.slice(inicio, fim) + '\nreturn textoDescontoNotaCompra;')(
+    escopo.$, escopo.window, escopo.formatarMoedaDigitada, escopo.atualizarTotaisDesp, lerPercentualNota,
   );
-  listener({ target: campo });
+  listeners.input({ target: campo });
   assert.equal(campo.value, '10');
-  campo.value = '10.5';
-  listener({ target: campo });
-  assert.equal(campo.value, '10,5');
-  assert.equal(lerPercentualNota(campo.value), 10.5);
+  campo.value = '10.5051';
+  listeners.input({ target: campo });
+  assert.equal(campo.value, '10,5051');
+  listeners.blur({ target: campo });
+  assert.equal(campo.value, '10,51');
+  assert.equal(lerPercentualNota(lerCampo(campo)), 10.5051);
+  campo.value = '1,5';
+  listeners.input({ target: campo });
+  assert.equal(lerPercentualNota(lerCampo(campo)), 1.5);
 });
 
 test('desconto exibido por item nunca supera o bruto da própria linha', () => {
@@ -67,7 +79,7 @@ test('prévia do resumo soma descontos efetivos e aplica margem sobre o custo l�
   const fim = html.indexOf('\n  };', inicio) + 5;
   assert(inicio >= 0 && fim > inicio);
   const campos = {
-    despDesconto: { value: '10,5' },
+    despDesconto: { value: '10,51', dataset: { descontoExato: '10,5051' } },
     despSubtotal: { textContent: '' },
     despTotalDescItens: { textContent: '' },
     despTotalFinal: { textContent: '' },
@@ -85,7 +97,7 @@ test('prévia do resumo soma descontos efetivos e aplica margem sobre o custo l�
     lerDescontoNota: lerPercentualNota,
     moeda: valor => 'R$ ' + Number(valor).toFixed(2),
   };
-  const atualizar = new Function('window', 'document', 'lerDescontoNota', 'moeda', html.slice(inicio, fim) + '\nreturn window.atualizarTotaisDesp;')(
+  const atualizar = new Function('window', 'document', 'lerDescontoNota', 'moeda', helpersDesconto(html) + html.slice(inicio, fim) + '\nreturn window.atualizarTotaisDesp;')(
     escopo.window, escopo.document, escopo.lerDescontoNota, escopo.moeda,
   );
   atualizar();

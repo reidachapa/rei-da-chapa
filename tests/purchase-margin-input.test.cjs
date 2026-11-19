@@ -13,7 +13,7 @@ test('digitar margem decimal preserva a vírgula e recalcula a venda', () => {
   };
   const preco = extrair('    function atualizarPrecosProjetados(){', '    window.__atualizarPrecosCompra=atualizarPrecosProjetados;');
   const margem = extrair('    function aplicarMargemDigitada(campo){', "    cont.querySelectorAll('.ic-margem')");
-  const precisao = extrair('function formatarPrecisaoCompra(', '\nfunction normalizarNomeCadastro');
+  const formatacao = extrair('function formatarDecimalCompra(', '\nfunction normalizarNomeCadastro');
   const campos = {
     margem: { value: '', dataset: { idx: '0' }, style: {}, setAttribute() {} },
     venda: { value: '', style: {}, setAttribute() {} },
@@ -26,10 +26,10 @@ test('digitar margem decimal preserva a vírgula e recalcula a venda', () => {
     return seletor.startsWith('.ic-margem') ? campos.margem : seletor.startsWith('.ic-pv') ? campos.venda : campos.media;
   } };
   const projetarPrecos = () => PrecosCompra.calcular({ itens: arr, produtos: [] });
-  const construir = new Function('arr', 'window', 'document', 'cont', 'produtos', 'moeda', 'projetarPrecos', 'formatarPrecisaoCompra',
+  const construir = new Function('arr', 'window', 'document', 'cont', 'produtos', 'moeda', 'projetarPrecos', 'formatarDecimalCompra',
     preco + '\nwindow.__atualizarPrecosCompra=atualizarPrecosProjetados;\n' + margem + '\nreturn aplicarMargemDigitada;');
-  const formatarPrecisaoCompra = new Function(precisao + '\nreturn formatarPrecisaoCompra;')();
-  const aplicar = construir(arr, window, document, cont, [], n => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), projetarPrecos, formatarPrecisaoCompra);
+  const formatarDecimalCompra = new Function(formatacao + '\nreturn formatarDecimalCompra;')();
+  const aplicar = construir(arr, window, document, cont, [], n => 'R$ ' + formatarDecimalCompra(n), projetarPrecos, formatarDecimalCompra);
   for (const texto of ['1', '1,', '1,5']) {
     campos.margem.value = texto;
     aplicar(campos.margem);
@@ -50,7 +50,8 @@ test('digitar margem decimal preserva a vírgula e recalcula a venda', () => {
   document.activeElement = null;
   Object.assign(arr[0], { qtd: 4, valor: 13.33, desconto: 7, descontoTipo: 'percent', lucroPct: 37.5678, modoPreco: 'percentual', pv: null });
   window.__atualizarPrecosCompra();
-  assert.equal(campos.margem.value, '37,5678');
-  assert.equal(campos.media.textContent, 'Custo médio com esta compra: R$ 12,3969 por unidade');
+  assert.equal(campos.margem.value, '37,57');
+  assert.equal(campos.media.textContent, 'Custo médio com esta compra: R$ 12,40 por unidade');
+  assert.equal(arr[0].lucroPct, 37.5678);
   assert.equal(campos.venda.value, '17,05');
 });

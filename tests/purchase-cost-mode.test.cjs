@@ -64,7 +64,9 @@ test('formulário ativo exibe custo unitário de 35 unidades e permite escolher 
     lerDescontoNota(valor,tipo){return tipo==='percent'?precos.lerPercentualNota(valor):0},
     esc:v=>String(v), moeda:v=>String(v), moedaSimple:v=>v.toLocaleString('pt-BR',{minimumFractionDigits:2}),
     normalizarNomeCadastro:v=>String(v||'').toLowerCase(), buscarIngredienteCompra(){return null}};
-  vm.runInNewContext(html.slice(inicio,fim)+'\nwindow.renderDespItens();',contexto);
+  const formatacao = html.slice(html.indexOf('function formatarDecimalCompra('), html.indexOf('function normalizarNomeCadastro('));
+  const desconto = html.slice(html.indexOf('function textoDescontoNotaCompra('), html.indexOf('function lerQuantidade('));
+  vm.runInNewContext(formatacao+desconto+html.slice(inicio,fim)+'\nwindow.renderDespItens();',contexto);
   assert.match(lista.innerHTML, /data-modo="unitario"/);
   assert.match(lista.innerHTML, /data-modo="total"/);
   assert.match(lista.innerHTML, /placeholder="Custo unitário R\$"[^>]*value="1,75"/);
@@ -78,4 +80,11 @@ test('formulário ativo exibe custo unitário de 35 unidades e permite escolher 
   assert.match(lista.innerHTML, /placeholder="Total do item R\$"[^>]*value="61,25"/);
   clicar('unitario');
   assert.match(lista.innerHTML, /placeholder="Custo unitário R\$"[^>]*value="1,75"/);
+  Object.assign(item, { qtd: 12, valor: 88 / 12, desconto: 12.34567, descontoTipo: 'percent' });
+  window.renderDespItens();
+  assert.match(lista.innerHTML, /placeholder="Custo unitário R\$"[^>]*value="7,33"/);
+  assert.match(lista.innerHTML, /class="ic-desc-item"[^>]*value="12,35"/);
+  assert.equal(item.valor, 88 / 12);
+  assert.equal(item.totalCusto, 88);
+  assert.equal(item.desconto, 12.34567);
 });

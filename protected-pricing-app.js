@@ -86,7 +86,7 @@
     const texto = String(valor || '').trim();
     return /^\d+(?:[,.]\d+)?$/.test(texto) ? Number(texto.replace(',', '.')) : NaN;
   };
-  const preciso = valor => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 8 });
+  const formatarQuantidade = valor => Number(valor).toLocaleString('pt-BR', { maximumFractionDigits: 8 });
 
   function fechar() {
     if (ocupado) return;
@@ -117,12 +117,12 @@
     linha((tipo === 'ing' ? 'Adicional atual' : 'Preço atual') + ' · ' + (Number.isFinite(atual) ? moeda(atual) : '—') + sufixo);
     if (resultado.status === 'ok') {
       const custo = resultado.custoProtegido * (receita ? 1 : medidas.multiplicador);
-      linha('Custo de referência · R$ ' + preciso(custo) + sufixo);
+      linha('Custo de referência · ' + moeda(custo) + sufixo);
       linha(resultado.preco > 0 ? 'Sugestão · ' + moeda(resultado.preco) + sufixo : 'O estoque restante tem custo de compra zero.', true);
       if (resultado.preco > 0 && atual + 0.000001 < resultado.preco) linha('O preço atual está abaixo da sugestão protegida.');
       for (const lote of resultado.lotes) {
-        linha('Lote com ' + preciso(lote.qtd / porUnidade) + ' ' + (medidas.unidadeSaldo || 'un.') +
-          ' restantes · R$ ' + preciso(lote.custo * porUnidade) + ' por ' + (medidas.unidadeSaldo || 'un.'));
+        linha('Lote com ' + formatarQuantidade(lote.qtd / porUnidade) + ' ' + (medidas.unidadeSaldo || 'un.') +
+          ' restantes · ' + moeda(lote.custo * porUnidade) + ' por ' + (medidas.unidadeSaldo || 'un.'));
       }
     } else if (resultado.status === 'semEstoque') linha('A próxima compra vai definir o novo custo de referência.');
     else if (receita) linha('A sugestão usa os custos protegidos do pão e dos ingredientes da receita. Ative e confira cada componente.');
@@ -134,7 +134,7 @@
     el('protecaoContagem').hidden = !precisaConferir;
     el('protecaoCustoCampo').hidden = !(Number(medidas.saldo) > 0);
     el('protecaoSaldo').textContent = semSaldo ? 'Saldo ainda não informado.' :
-      'Saldo no app · ' + preciso(Number(medidas.saldo) / porUnidade) + ' ' + (medidas.unidadeSaldo || 'un.');
+      'Saldo no app · ' + formatarQuantidade(Number(medidas.saldo) / porUnidade) + ' ' + (medidas.unidadeSaldo || 'un.');
     el('protecaoQtdLabel').textContent = 'Quantidade conferida (' + (medidas.unidadeSaldo || 'un.') + ')';
     el('protecaoCustoLabel').textContent = 'Maior custo atual (R$ por ' + (medidas.unidadeSaldo || 'un.') + ')';
     const aplicar = el('aplicarProtecao');

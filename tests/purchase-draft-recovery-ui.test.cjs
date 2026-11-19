@@ -17,6 +17,8 @@ const draftScript = html.slice(draftStart, draftEnd);
 const applyShopScript = html.slice(html.indexOf('function aplicarEstadoLoja('), html.indexOf('function salvarEstadoLojaAtivo('));
 const applyStateScript = html.slice(html.indexOf('function aplicarDadosEstadoAtual('), html.indexOf('function hexToRgba('));
 const saveScript = html.slice(html.indexOf('async function salvarCompraDaNota('), html.indexOf('// Um único ponto de gravação controla'));
+const formatarDecimalScript = html.slice(html.indexOf('function formatarDecimalCompra('), html.indexOf('function normalizarNomeCadastro('));
+const descontoScript = html.slice(html.indexOf('function textoDescontoNotaCompra('), html.indexOf('function lerQuantidade('));
 const copy = value => value == null ? value : JSON.parse(JSON.stringify(value));
 const key = id => 'rei_chapa_rascunho_compra_v1:l1:' + (id == null ? 'nova' : encodeURIComponent(id));
 
@@ -49,7 +51,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   const fields = Object.fromEntries([
     'despData', 'despNF', 'despCategoria', 'despSubcategoria', 'despFornecedor',
     'despStatus', 'despVencimento', 'despOrigemPagamento', 'despDesconto', 'despObs', 'despesaTitulo', 'btnSalvarDespesa',
-  ].map(id => [id, { value: '', textContent: '', disabled: false }]));
+  ].map(id => [id, { value: '', textContent: '', disabled: false, dataset: {} }]));
   function element(tag) {
     const handlers = {};
     const node = {
@@ -168,6 +170,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   });
   vm.runInContext(applyShopScript + '\n' + applyStateScript, context);
   vm.runInContext(saveScript, context);
+  vm.runInContext(formatarDecimalScript + descontoScript, context);
   vm.runInContext(draftScript.replace('var rascunhosCarregados = false;', 'var rascunhosCarregados = true;'), context);
   return {
     window, fields, modal, storage, reads, reviewRequests, mutations,
@@ -274,6 +277,22 @@ test('origem do pagamento da compra é carregada e pode ser corrigida no rascunh
   app.close();
   app.open(anterior);
   assert.equal(app.fields.despOrigemPagamento.value, 'dinheiro');
+});
+
+test('o rascunho retém o desconto exato ao reabrir com duas casas na tela', () => {
+  const anterior = nota();
+  const app = criarAmbiente({ notas: [anterior], confirmadas: [anterior] });
+  app.open(anterior);
+  app.window._descontoNotaTipo = 'percent';
+  app.fields.despDesconto.value = '10,51';
+  app.fields.despDesconto.dataset.descontoExato = '10,5051';
+  app.input();
+  assert.equal(app.readDraft(anterior.id).campos.despDesconto, '10,5051');
+  app.close();
+  app.open(anterior);
+  assert.equal(app.fields.despDesconto.value, '10,51');
+  assert.equal(app.fields.despDesconto.dataset.descontoExato, '10,5051');
+  assert.equal(app.window._descontoNotaTipo, 'percent');
 });
 
 test('recarregar o módulo recupera a gravação própria mesmo sem o acompanhamento pendente em memória', () => {

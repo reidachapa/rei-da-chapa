@@ -1745,7 +1745,7 @@ const $$=s=>document.querySelectorAll(s);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const moeda=v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const moedaSimple=v=>v.toFixed(2).replace('.',',');
-function formatarPrecisaoCompra(valor){var numero=Number(valor);return Number.isFinite(numero)?numero.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4}):'';}
+function formatarDecimalCompra(valor){var numero=Number(valor);return Number.isFinite(numero)?numero.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2,useGrouping:false}):'';}
 function normalizarNomeCadastro(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR').replace(/[^a-z0-9]+/g,' ').trim().replace(/\s+/g,' ')}
 function compararTextoCadastro(a,b){return String(a||'').trim().localeCompare(String(b||'').trim(),'pt-BR',{sensitivity:'base',numeric:true})}
 function chaveOrdenacaoCategoriaCadastro(v){var texto=String(v||'').trim(),partes=texto.match(/^(\S+)\s+(.*)$/);return partes&&!/[A-Za-z0-9\u00C0-\u024F]/.test(partes[1])?partes[2]:texto}
@@ -1783,6 +1783,13 @@ function lerDescontoNota(valor,tipo){
   return (tipo||window._descontoNotaTipo||'valor')==='percent'
     ?window.PrecosCompra.lerPercentualNota(valor)
     :(lerMoeda(valor)||0);
+}
+function textoDescontoNotaCompra(campo){
+  return campo?.dataset?.descontoExato??campo?.value??'';
+}
+function mostrarDescontoNotaCompra(campo,entrada){
+  campo.dataset.descontoExato=entrada;
+  campo.value=entrada?formatarDecimalCompra(lerDescontoNota(entrada,window._descontoNotaTipo)):'';
 }
 function lerQuantidade(str){const v=String(str==null?'':str).trim().replace(/\s/g,'').replace(',','.');if(!v)return 0;const n=Number(v);return Number.isFinite(n)&&n>=0?n:0}
 function buscarIngredienteCompra(it){if(!it)return null;var alvo=it.vinc?alvoEstoque(it.vinc):null;if(alvo&&alvo.tipo==='ing')return alvo.obj;var base=normalizarNomeCadastro(it.nomeBase||it.nome),nome=normalizarNomeCadastro(it.nome);return(base&&ingredientes.find(function(x){return normalizarNomeCadastro(x.nomeBase||x.nome)===base}))||(nome&&ingredientes.find(function(x){return normalizarNomeCadastro(x.nome)===nome}))||null}
@@ -3153,7 +3160,7 @@ function renderIngredientes(){
   if(!lista.length){cont.innerHTML='<p class="vazio">'+(ingredientes.length?'Nenhum ingrediente ou marca encontrado.':'Nenhum ingrediente. Cadastre ao lado.')+'</p>';return}
   lista.forEach(ing=>{
     const isCom=!ing.semEstoque,saldo=dadosSaldoIngrediente(ing),cls=isCom?(ing.estoque<=0?'zerado':ing.estoque<=ing.minEstoque?'baixo':''):'';
-    const unidadeEstoque=unidadeIngredienteEstoqueLabel(ing),extraFmt=((Number(ing.precoExtra)||0)*medidaParaQtdEstoque(1,ing)).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4}),custoFmt=custoIngredienteUnidadeExibicao(ing).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4});
+    const unidadeEstoque=unidadeIngredienteEstoqueLabel(ing),extraFmt=formatarDecimalCompra((Number(ing.precoExtra)||0)*medidaParaQtdEstoque(1,ing)),custoFmt=formatarDecimalCompra(custoIngredienteUnidadeExibicao(ing));
     const media=window.EstoqueIngredientes.usaMediaPorContagem(ing),unidadeMedia=window.EstoqueIngredientes.unidadeFisicaInterna(ing);
     const saldoTxt=media?(Number(ing.fatorConsumoMedia)>0?' · média '+formatarQtdEstoque(ing.fatorConsumoMedia,unidadeMedia+' por uso')+' · custo/uso '+moeda(custoIng(ing.id)):' · média pendente da contagem'):'';
     const badge=isCom?'<span class="ing-badge com">COM ESTOQUE</span>':'<span class="ing-badge sem">SEM CONTROLE</span>';
@@ -3808,7 +3815,8 @@ async function salvarCompraDaNota(e){
   }
   if(!window.ComprasDuplicadas)return toast('Não consegui carregar a conferência de notas repetidas. Atualize o app antes de continuar; os campos atuais existem apenas nesta tela.');
   var campoCompra=function(id){return (document.getElementById(id)||{}).value||''};
-  var descontoDigitado=lerDescontoNota(campoCompra('despDesconto'),window._descontoNotaTipo);
+  var campoDesconto=document.getElementById('despDesconto');
+  var descontoDigitado=lerDescontoNota(campoDesconto?.dataset?.descontoExato??campoCompra('despDesconto'),window._descontoNotaTipo);
   var tipoDesconto=window._descontoNotaTipo||'valor';
   var statusCompra=campoCompra('despStatus')||'pago';
   var origemPagamento=campoCompra('despOrigemPagamento');
@@ -3981,6 +3989,7 @@ async function salvarCompraDaNota(e){
 document.addEventListener('click',function(e){var b=e.target&&e.target.closest?e.target.closest('#btnSalvarDespesa'):null;if(b)salvarCompraDaNota(e);},true);
 
 $('#despDesconto').addEventListener('input', function(e) {
+  delete e.target.dataset.descontoExato;
   if(window._descontoNotaTipo==='percent'){
     e.target.value=window.PrecosCompra.normalizarPercentualDigitado(e.target.value);
   }else{
@@ -3988,6 +3997,9 @@ $('#despDesconto').addEventListener('input', function(e) {
     e.target.setSelectionRange(e.target.value.length, e.target.value.length);
   }
   if(typeof atualizarTotaisDesp === 'function') atualizarTotaisDesp();
+});
+$('#despDesconto').addEventListener('blur',function(e){
+  mostrarDescontoNotaCompra(e.target,textoDescontoNotaCompra(e.target));
 });
 
 function periodoDRE(filtro){return window.PeriodosDRE.periodo(filtro)}
@@ -6066,7 +6078,7 @@ function atualizarSubtotalItem(idx){
 function atualizarTotaisDesp(){
   var sub=calcularSubtotalDesp();
   var descEl=document.getElementById('despDesconto');
-  var desc=descEl?lerDescontoNota(descEl.value,window._descontoNotaTipo):0;
+  var desc=lerDescontoNota(textoDescontoNotaCompra(descEl),window._descontoNotaTipo);
   var total=Math.max(0,sub-desc);
   var s1=document.getElementById('despSubtotal');
   var s2=document.getElementById('despTotalFinal');
@@ -6744,7 +6756,7 @@ window.salvarVendaManual = function() {
     var arr=window.despItensTemp||[];
     var sub=arr.reduce(function(s,it){return s+subFinal(it);},0);
     var el=document.getElementById('despDesconto');
-    var dRaw=el?lerDescontoNota(el.value,window._descontoNotaTipo):0;
+    var dRaw=lerDescontoNota(textoDescontoNotaCompra(el),window._descontoNotaTipo);
     var dEf=window._descontoNotaTipo==='percent'?(sub*dRaw/100):dRaw;
     var s1=document.getElementById('despSubtotal');
     var s2=document.getElementById('despTotalFinal');
@@ -6855,12 +6867,8 @@ window.salvarVendaManual = function() {
 
     window._descontoNotaTipo=(despesa&&despesa.descontoTipo)||'valor';
     var dE=document.getElementById('despDesconto');
-    if(despesa&&despesa.descontoOriginal!=null){
-      if(window._descontoNotaTipo==='percent')dE.value=String(despesa.descontoOriginal).replace('.',',');
-      else dE.value=despesa.descontoOriginal.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-    }else if(despesa&&despesa.desconto>0){
-      dE.value=despesa.desconto.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-    }else dE.value='';
+    var descontoOriginal=despesa?.descontoOriginal??despesa?.desconto;
+    mostrarDescontoNotaCompra(dE,descontoOriginal==null?'':Number(descontoOriginal).toLocaleString('pt-BR',{useGrouping:false,maximumSignificantDigits:21}));
 
     if(despesa&&despesa.itens&&despesa.itens.length){
       window.despItensTemp=despesa.itens.map(function(i,index){
@@ -6926,7 +6934,7 @@ window.salvarVendaManual = function() {
         var novo=b.dataset.tipo;
         if(novo===window._descontoNotaTipo)return;
         var sub=window.calcularSubtotalDesp();
-        var dAt=lerDescontoNota(el.value,window._descontoNotaTipo);
+        var dAt=lerDescontoNota(textoDescontoNotaCompra(el),window._descontoNotaTipo);
         if(sub>0&&dAt>0){
           dAt=novo==='percent'?Math.round((dAt/sub*100)*100)/100:Math.round((sub*dAt/100)*100)/100;
         }
@@ -6936,13 +6944,8 @@ window.salvarVendaManual = function() {
           x.style.background=on?'linear-gradient(180deg,#4d9de5,#2a6da8)':'transparent';
           x.style.color=on?'#fff':'var(--muted)';
         });
-        if(novo==='percent'){
-          el.value=dAt?String(dAt).replace('.',','):'';
-          el.placeholder='%';
-        }else{
-          el.value=dAt?dAt.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
-          el.placeholder='0,00';
-        }
+        mostrarDescontoNotaCompra(el,dAt?String(dAt).replace('.',','):'');
+        el.placeholder=novo==='percent'?'%':'0,00';
         window.atualizarTotaisDesp();
       });
     });
@@ -7161,7 +7164,7 @@ window.salvarVendaManual = function() {
     var net = Math.max(0, somaBruto - somaDescItens);
 
     var elDesc = document.getElementById('despDesconto');
-    var dRaw = elDesc ? lerDescontoNota(elDesc.value,window._descontoNotaTipo) : 0;
+    var dRaw = lerDescontoNota(textoDescontoNotaCompra(elDesc),window._descontoNotaTipo);
     var dEf = window._descontoNotaTipo==='percent' ? (net * dRaw / 100) : dRaw;
     var total = Math.max(0, net - dEf);
 
@@ -7795,7 +7798,7 @@ window.salvarVendaManual = function() {
         var unidade = aplicado.vinc.startsWith('ing:') ? (it.unidadeEstoque || 'un. de estoque') : (it.unid || 'un.');
         var formato = { maximumFractionDigits: 8 };
         var quantidade = Number(aplicado.qtdEst).toLocaleString('pt-BR', formato);
-        var custo = aplicado.custoUnitario.toLocaleString('pt-BR', { ...formato, minimumFractionDigits: 2 });
+        var custo = formatarDecimalCompra(aplicado.custoUnitario);
         loteTxt = 'Lote de ' + quantidade + ' ' + unidade + ' · R$ ' + custo + ' por ' + unidade;
       }
       
@@ -10171,11 +10174,11 @@ window.salvarVendaManual = function() {
       if(atual&&!opcoes.some(function(c){return String(c.v)===String(atual)}))opcoes.unshift({v:atual,t:it.tipoItem==='ing'?(CATEGORIA_EMOJI[atual]||'🏷️')+' '+(CATEGORIA_LABEL[atual]||atual):atual});
       return '<option value="">— Categoria —</option>'+opcoes.map(function(c){return '<option value="'+esc(c.v)+'" '+(String(c.v)===String(atual)?'selected':'')+'>'+esc(c.t)+'</option>'}).join('');
     }
-    function infoCustoLinha(it){var qtd=Number(it.qtd)||0,bruto=qtd*(Number(it.valor)||0),desc=Number(it.desconto)||0;if(it.descontoTipo==='percent')desc=bruto*Math.min(100,desc)/100;var liquido=Math.max(0,bruto-Math.min(bruto,desc));var flex=it.tipoItem==='ing'&&(it.modoCompra==='flexivel'||(!it.modoCompra&&/^(kg|g|l|ml)$/i.test(String(it.unid||''))));if(flex){var ing=buscarIngredienteCompra(it),rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ing&&ing.rendimento)||0),unidadeBase=it.unidadeEstoque||(ing&&ing.unidadeEstoque),unidade=rend>0?(unidadeBase||'porção'):(/^(mg|g|kg|ml|l)$/i.test(String(unidadeBase||''))?unidadeBase:it.unid||(ing&&ing.unidade)||'kg'),qtdEst=rend>0?qtd*rend:converterQuantidadeUnidade(qtd,it.unid||(ing&&ing.unidade)||unidade,unidade);if(qtdEst>0){var custoUn=liquido/qtdEst;return 'Estoque: +'+qtdEst.toLocaleString('pt-BR')+' '+unidade+' · custo: '+moeda(custoUn)+'/'+unidade}return 'Deixe o rendimento vazio se não souber; usaremos '+unidade+' por '+unidade+' comprada.'}return it.custoModo==='total'?'🔒 Custo por unidade: R$ '+(qtd>0?liquido/qtd:0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4}):'🔒 Total do item: R$ '+bruto.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+    function infoCustoLinha(it){var qtd=Number(it.qtd)||0,bruto=qtd*(Number(it.valor)||0),desc=Number(it.desconto)||0;if(it.descontoTipo==='percent')desc=bruto*Math.min(100,desc)/100;var liquido=Math.max(0,bruto-Math.min(bruto,desc));var flex=it.tipoItem==='ing'&&(it.modoCompra==='flexivel'||(!it.modoCompra&&/^(kg|g|l|ml)$/i.test(String(it.unid||''))));if(flex){var ing=buscarIngredienteCompra(it),rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ing&&ing.rendimento)||0),unidadeBase=it.unidadeEstoque||(ing&&ing.unidadeEstoque),unidade=rend>0?(unidadeBase||'porção'):(/^(mg|g|kg|ml|l)$/i.test(String(unidadeBase||''))?unidadeBase:it.unid||(ing&&ing.unidade)||'kg'),qtdEst=rend>0?qtd*rend:converterQuantidadeUnidade(qtd,it.unid||(ing&&ing.unidade)||unidade,unidade);if(qtdEst>0){var custoUn=liquido/qtdEst;return 'Estoque: +'+qtdEst.toLocaleString('pt-BR')+' '+unidade+' · custo: '+moeda(custoUn)+'/'+unidade}return 'Deixe o rendimento vazio se não souber; usaremos '+unidade+' por '+unidade+' comprada.'}return it.custoModo==='total'?'🔒 Custo por unidade: '+moeda(qtd>0?liquido/qtd:0):'🔒 Total do item: '+moeda(bruto)}
 
     function projetarPrecos(){
       var id=window.editandoDespesaId||editandoDespesaId||(typeof window.__obterIdRascunhoCompra==='function'?window.__obterIdRascunhoCompra():null);
-      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:arr.map(quantidadeEstoqueProjetada),notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor',incluirRascunhosSemNome:true});
+      return window.PrecosCompra.calcular({itens:arr,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:arr.map(quantidadeEstoqueProjetada),notaAnterior:id?despesas.find(function(d){return String(d.id)===String(id)}):null,descontoNota:lerDescontoNota(textoDescontoNotaCompra(document.getElementById('despDesconto')),window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor',incluirRascunhosSemNome:true});
     }
     function atualizarPrecosProjetados(){
       if(arr!==window.despItensTemp)return;
@@ -10200,8 +10203,8 @@ window.salvarVendaManual = function() {
         var precoExibido=info.preco;
         if(venda&&document.activeElement!==venda)venda.value=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
         var lucroExibido=info.lucroPct;
-        if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':formatarPrecisaoCompra(lucroExibido);
-        if(media)media.textContent=protegido?'A compra atualiza os lotes. Confirme a sugestão no botão Preço protegido.':Number(it.valor)>0?'Custo médio com esta compra: R$ '+formatarPrecisaoCompra(info.custoMedio)+' por unidade':'';
+        if(margem&&document.activeElement!==margem)margem.value=lucroExibido===null||!Number.isFinite(lucroExibido)?'':formatarDecimalCompra(lucroExibido);
+        if(media)media.textContent=protegido?'A compra atualiza os lotes. Confirme a sugestão no botão Preço protegido.':Number(it.valor)>0?'Custo médio com esta compra: '+moeda(info.custoMedio)+' por unidade':'';
       });
       return calculo;
     }
@@ -10238,15 +10241,15 @@ window.salvarVendaManual = function() {
 
       var isPct = it.descontoTipo === 'percent';
       var custoExibido = it.custoModo === 'total' ? (Number(it.totalCusto)||0) : (Number(it.valor)||0);
-      var vStr = custoExibido > 0 ? custoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:it.custoModo==='total'?2:4}) : '';
+      var vStr = custoExibido > 0 ? formatarDecimalCompra(custoExibido) : '';
       var custoInfo = infoCustoLinha(it);
       var infoPreco=precosProjetados.porIndice[i],precoExibido=infoPreco?infoPreco.preco:null;
       var pvStr=precoExibido===null?'':precoExibido.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-      var lucroStr = it.lucroPct != null && Number.isFinite(Number(it.lucroPct)) ? formatarPrecisaoCompra(Number(it.lucroPct)) : '';
+      var lucroStr = it.lucroPct == null ? '' : formatarDecimalCompra(it.lucroPct);
       var unidadesCompra=['un','kg','g','L','ml','pé','fatia','porção','pacote','caixa'];
       if(it.unid && !unidadesCompra.some(function(u){return u.toLocaleLowerCase('pt-BR')===String(it.unid).toLocaleLowerCase('pt-BR');})) unidadesCompra.unshift(String(it.unid));
       var unidOpts='<option value="">Unidade…</option>'+unidadesCompra.map(function(u){return '<option value="'+esc(u)+'">'+esc(u)+'</option>';}).join('');
-      var dStr = it.desconto > 0 ? (isPct ? Number(it.desconto).toFixed(15).replace(/0+$/,'').replace(/\.$/,'').replace('.',',') : String(it.desconto).replace('.',',')) : '';
+      var dStr = it.desconto > 0 ? formatarDecimalCompra(it.desconto) : '';
       var brutoItem = (Number(it.qtd)||0)*(Number(it.valor)||0);
       var descItem = isPct ? brutoItem*Math.min(100,Number(it.desconto)||0)/100 : (Number(it.desconto)||0);
       var sub = Math.max(0, brutoItem-Math.min(brutoItem,descItem));
@@ -10371,7 +10374,25 @@ window.salvarVendaManual = function() {
     cont.querySelectorAll('.ic-qtd').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i];it.qtd=lerQuantidade(e.target.value);if(it.custoModo==='total')it.valor=it.qtd>0?(Number(it.totalCusto)||0)/it.qtd:0;else it.totalCusto=it.qtd*(Number(it.valor)||0);atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-valor').forEach(function(inp){inp.addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);var i=e.target.dataset.idx,it=arr[i],valor=lerMoeda(e.target.value),q=Number(it.qtd)||0;if(it.custoModo==='total'){it.totalCusto=valor;it.valor=q>0?valor/q:0;}else{it.valor=valor;it.totalCusto=q*valor;}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-subtotal-manual').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i],desejado=Math.max(0,lerMoeda(e.target.value)),pct=it.descontoTipo==='percent'?Math.max(0,Number(it.desconto)||0):0;if(pct>=100&&desejado>0)return;var bruto=it.descontoTipo==='percent'?desejado/(1-pct/100):desejado+(Number(it.desconto)||0),q=Number(it.qtd)||0;if(q>0){it.valor=bruto/q;it.totalCusto=bruto;var custo=cont.querySelector('.ic-valor[data-idx="'+i+'"]');if(custo)custo.value=(it.custoModo==='total'?bruto:it.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});inp.addEventListener('blur',function(e){var it=arr[e.target.dataset.idx],bruto=(Number(it.qtd)||0)*(Number(it.valor)||0),desc=it.descontoTipo==='percent'?bruto*(Number(it.desconto)||0)/100:(Number(it.desconto)||0);e.target.value=moedaSimple(Math.max(0,bruto-Math.min(bruto,desc)));});});
-    cont.querySelectorAll('.ic-desc-item').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i];if(it.descontoTipo==='percent'){var r=e.target.value.replace(/[^\d.,]/g,'').replace(',','.');e.target.value=r;it.desconto=parseFloat(r)||0;}else{e.target.value=formatarMoedaDigitada(e.target.value);it.desconto=lerMoeda(e.target.value);}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
+    cont.querySelectorAll('.ic-desc-item').forEach(function(inp){
+      inp.addEventListener('input',function(){
+        var i=inp.dataset.idx,it=arr[i];
+        if(it.descontoTipo==='percent'){
+          inp.value=inp.value.replace(/[^\d.,]/g,'').replace(',','.');
+          it.desconto=parseFloat(inp.value)||0;
+        }else{
+          inp.value=formatarMoedaDigitada(inp.value);
+          it.desconto=lerMoeda(inp.value);
+        }
+        atualizarInfoCusto(i);
+        window.atualizarSubtotalItem(i);
+        window.atualizarTotaisDesp();
+      });
+      inp.addEventListener('blur',function(){
+        var desconto=arr[inp.dataset.idx].desconto;
+        inp.value=desconto>0?formatarDecimalCompra(desconto):'';
+      });
+    });
     cont.querySelectorAll('.tipo-desc').forEach(function(b){ b.addEventListener('click',function(){ var i=parseInt(b.dataset.idx,10); if(typeof window.convTipoDescontoCompra==='function') window.convTipoDescontoCompra(arr[i], b.dataset.tipo); window.renderDespItens(); }); });
     function aplicarPrecoDigitado(campo){
       if(arr!==window.despItensTemp)return;
@@ -10400,8 +10421,10 @@ window.salvarVendaManual = function() {
       window.__atualizarPrecosCompra();
     }
     cont.querySelectorAll('.ic-margem').forEach(function(inp){
+      function margemExibida(){var margem=arr[inp.dataset.idx].lucroPct;return margem==null?'':formatarDecimalCompra(margem);}
       inp.addEventListener('input',function(){aplicarMargemDigitada(inp)});
-      inp.addEventListener('change',function(){aplicarMargemDigitada(inp)});
+      inp.addEventListener('change',function(){if(inp.value!==margemExibida())aplicarMargemDigitada(inp)});
+      inp.addEventListener('blur',function(){inp.value=margemExibida()});
     });
     cont.querySelectorAll('.ic-pv').forEach(function(inp){
       inp.addEventListener('input',function(){aplicarPrecoDigitado(inp)});
@@ -10488,7 +10511,7 @@ window.salvarVendaManual = function() {
         if(paraEstoque.length&&typeof aplicarCompraEstoque==='function')aplicarCompraEstoque(paraEstoque);
         itensCompra.forEach(function(it,i){it.desconto=descontosAplicados[i];it.descontoTipo='valor';});
         var subtotal=itensCompra.reduce(function(s,it){return s+Math.max(0,Number(it.qtd||0)*Number(it.valor||0)-descontoEfetivo(it));},0);
-        var descEntrada=lerDescontoNota(document.getElementById('despDesconto').value,window._descontoNotaTipo);
+        var descEntrada=lerDescontoNota(textoDescontoNotaCompra(document.getElementById('despDesconto')),window._descontoNotaTipo);
         var descNota=window._descontoNotaTipo==='percent'?subtotal*Math.min(100,descEntrada)/100:descEntrada;
         var dados={id:'desp_'+(typeof uid==='function'?uid():Date.now()),descricao:(document.getElementById('despSubcategoria').value||'').trim()||'Compra',categoria:document.getElementById('despCategoria').value,subcategoria:(document.getElementById('despSubcategoria').value||'').trim(),fornecedor:(document.getElementById('despFornecedor').value||'').trim(),nf:(document.getElementById('despNF').value||'').trim(),status:document.getElementById('despStatus').value,obs:(document.getElementById('despObs')&&document.getElementById('despObs').value||'').trim(),desconto:descNota,descontoTipo:window._descontoNotaTipo||'valor',descontoOriginal:descEntrada,itens:itensCompra,valor:Math.max(0,subtotal-descNota),data:dataEl.value,criadoEm:new Date().toISOString()};
         if(editId&&anterior){Object.assign(anterior,dados,{id:editId});}else despesas.push(dados);
@@ -11244,7 +11267,10 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     if (!estaAberto()) return;
     try {
       var campos = {};
-      camposIds.forEach(function (id) { var el = document.getElementById(id); if (el) campos[id] = el.value; });
+      camposIds.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) campos[id] = id === 'despDesconto' ? (el.dataset?.descontoExato ?? el.value) : el.value;
+      });
       if(campos.despCategoria&&typeof categoriaLabelSelecionada==='function')campos.despCategoriaNome=categoriaLabelSelecionada(campos.despCategoria);
       var anterior = lerChave(chaveRascunhoAtivo || chave(lojaRascunho, idRascunho)) || {};
       var caixaModal = modal.querySelector('.modal-box');
@@ -11525,12 +11551,14 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     var k = chaveRascunhoAtivo || chave(loja, id);
     var registro = lerChave(k);
     if (!registro || registro.versao !== 1 || !temConteudoRascunho(registro)) return;
+    window._descontoNotaTipo = registro.descontoTipo || 'valor';
     camposIds.forEach(function (campoId) {
       var el = document.getElementById(campoId);
-      if (el && registro.campos && Object.prototype.hasOwnProperty.call(registro.campos, campoId)) el.value = registro.campos[campoId];
+      if (!el || !registro.campos || !Object.prototype.hasOwnProperty.call(registro.campos, campoId)) return;
+      if(campoId==='despDesconto'&&typeof mostrarDescontoNotaCompra==='function')mostrarDescontoNotaCompra(el,registro.campos[campoId]);
+      else el.value = registro.campos[campoId];
     });
     window.atualizarCamposPagamentoCompra?.();
-    window._descontoNotaTipo = registro.descontoTipo || 'valor';
     var itens = Array.isArray(registro.itens) ? clonar(registro.itens) : [];
     window.despItensTemp = itens;
     if (typeof despItensTemp !== 'undefined') despItensTemp = itens;
