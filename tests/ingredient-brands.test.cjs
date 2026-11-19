@@ -2,8 +2,11 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 const fs = require('node:fs');
 const path = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
 const PrecosCompra = require('../purchase-pricing.js');
 const EstoqueIngredientes = require('../ingredient-stock.js');
+const PrecoProtegido = require('../protected-pricing.js');
+const VencimentosCompras = require('../purchase-payables.js');
 
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8').replace(/\r\n/g, '\n');
 function source(name, next) {
@@ -30,12 +33,16 @@ test('nome base normalizado encontra o mesmo ingrediente com outra marca', () =>
   assert.equal(buscar({ nome: '  maionese Hellmann’s ', nomeBase: ' MAIONESE ', marca: 'Hellmann’s' }, ingredientes), ingredientes[0]);
 });
 
-function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], itens, editId = null }) {
-  const campos = Object.fromEntries(Object.entries({ despData: '2026-11-14', despCategoria: 'outro', despSubcategoria: '', despFornecedor: 'Fornecedor teste', despNF: '000.123', despStatus: 'pago', despObs: '', despDesconto: '' }).map(([id, value]) => [id, { value }]));
+function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], itens, editId = null, camposNota = {}, itensAoAbrir = null }) {
+  const campos = Object.fromEntries(Object.entries({ despData: '2026-11-14', despCategoria: 'outro', despSubcategoria: '', despFornecedor: 'Fornecedor teste', despNF: '000.123', despStatus: 'pago', despObs: '', despDesconto: '', ...camposNota }).map(([id, value]) => [id, { value }]));
   campos.btnSalvarDespesa = { disabled: false, textContent: editId ? 'Atualizar nota' : 'Salvar compra' };
   campos.modalDespesa = { classList: { remove() {} } };
   const document = { getElementById(id) { return campos[id] || null; }, querySelector() { return null; } };
-  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
+  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, PrecoProtegido, VencimentosCompras, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: 'valor', BackupSys: { async salvar() { return true; } } };
+  if (itensAoAbrir) {
+    const snapshot = structuredClone(itensAoAbrir);
+    window.__itensDaCompraSemEdicao = itensAtuais => isDeepStrictEqual(itensAtuais, snapshot);
+  }
   const messages = [];
   const deps = { ingredientes, produtos, paes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
   const saveStart = html.indexOf('async function salvarCompraDaNota(');
@@ -54,6 +61,8 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
     ${source('lerMoeda', 'lerQuantidade')}
     ${source('alvoEstoque', 'refrescarEstoqueUI')}
     ${lookupSource}
+    ${html.split('\n').find(line => line.startsWith('function invalidarPrecoProtegido('))}
+    window.invalidarPrecoProtegido=invalidarPrecoProtegido;
     ${source('reverterCompraEstoque', 'vincularItemCompra')}
     ${source('aplicarCompraEstoque')}
     ${html.slice(saveStart, saveEnd)}
@@ -78,6 +87,80 @@ test('compra da Coca-Cola vinculada soma no estoque e preserva o preço de venda
   assert.equal(coca.preco, 10.78);
   assert.equal(fixture.app.notas[0].valor, 12);
   assert.equal(fixture.app.notas[0].itens[0].pv, null);
+});
+
+function compraProtegidaEmEdicao({ vencimento, novoCusto = 6, camposNota = {} }) {
+  const coca = {
+    id: 'coca-600', nome: '0600ml Coca-Cola', unidade: 'un', categoria: 'Refrigerante',
+    estoque: 12, custo: 52 / 12, preco: 10.78,
+  };
+  const vinc = 'prod:' + coca.id;
+  const linha = {
+    nome: coca.nome, tipoItem: 'prod', vinc, qtd: 2, valor: 6, unid: 'un',
+    categoria: coca.categoria, desconto: 0, descontoOriginal: 0, descontoTipo: 'valor',
+    aplicado: { vinc, qtdEst: 2, custoAntes: 4, custoUnitario: 6 },
+  };
+  const nota = {
+    id: 'nota-coca', tipoRegistro: 'compra', descricao: 'Compra', categoria: 'outro', categoriaNome: 'Outro',
+    subcategoria: '', fornecedor: 'Fornecedor teste', nf: '000.123', obs: '',
+    data: '2026-11-14', criadoEm: '2026-11-14T12:00:00Z',
+    status: 'pendente', vencimento: '2026-12-14', desconto: 0, descontoOriginal: 0, descontoTipo: 'valor',
+    valor: 12, itens: [linha],
+  };
+  coca.precoProtegido = PrecoProtegido.iniciar(coca, [nota], 6, 25);
+  const itensAoAbrir = [{ ...linha, _indiceOriginalNota: 0 }];
+  const fixture = memoria({
+    produtos: [coca], notas: [nota], editId: nota.id,
+    itens: [{ ...itensAoAbrir[0], valor: novoCusto }],
+    itensAoAbrir,
+    camposNota: { despStatus: nota.status, despVencimento: vencimento, ...camposNota },
+  });
+  return { ...fixture, coca, nota };
+}
+
+test('editar apenas o vencimento mantém estoque, custo e preço protegido da compra', async () => {
+  const { app, coca, nota } = compraProtegidaEmEdicao({ vencimento: '2026-12-15' });
+  coca.estoque = 1;
+  const produtoAntes = structuredClone(coca);
+  const movimentoAntes = structuredClone(nota.itens[0].aplicado);
+
+  await app.salvarCompraDaNota();
+
+  assert.equal(app.notas.length, 1);
+  assert.equal(app.notas[0].vencimento, '2026-12-15');
+  assert.equal(app.notas[0].valor, 12);
+  assert.equal(app.notas[0].itens[0].qtd, 2);
+  assert.deepEqual(app.notas[0].itens[0].aplicado, movimentoAntes);
+  assert.deepEqual(app.produtos[0], produtoAntes);
+  assert.equal(PrecoProtegido.calcular(app.produtos[0], app.notas).preco, 7.5);
+});
+
+test('editar o custo da compra recalcula a média e pede conferência do preço protegido', async () => {
+  const { app } = compraProtegidaEmEdicao({ vencimento: '2026-12-14', novoCusto: 7 });
+
+  await app.salvarCompraDaNota();
+
+  assert.equal(app.notas[0].vencimento, '2026-12-14');
+  assert.equal(app.notas[0].valor, 14);
+  assert.equal(app.notas[0].itens[0].aplicado.custoUnitario, 7);
+  assert.equal(app.produtos[0].estoque, 12);
+  assert.equal(app.produtos[0].custo, 4.5);
+  assert.equal(app.produtos[0].preco, 10.78);
+  assert.equal(app.produtos[0].precoProtegido.revisar, true);
+  assert.equal(PrecoProtegido.calcular(app.produtos[0], app.notas).status, 'conferir');
+});
+
+test('quitar uma compra pelo banco grava a origem e mantém o vencimento e o estoque', async () => {
+  const { app, coca, nota } = compraProtegidaEmEdicao({
+    vencimento: '2026-12-14', camposNota: { despStatus: 'pago', despOrigemPagamento: 'banco' },
+  });
+  coca.estoque = 1;
+  const produtoAntes = structuredClone(coca);
+  await app.salvarCompraDaNota();
+  assert.equal(nota.status, 'pago');
+  assert.equal(nota.origemPagamento, 'banco');
+  assert.equal(nota.vencimento, '2026-12-14');
+  assert.deepEqual(app.produtos[0], produtoAntes);
 });
 
 test('salvar compra com marca diferente soma no ingrediente existente e mantém rótulo da nota', async () => {

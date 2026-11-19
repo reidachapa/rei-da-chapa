@@ -9,7 +9,7 @@ const PrecosCompra = require('../purchase-pricing.js');
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
 const mergeStart = html.indexOf('function clonarDadosEstado(');
 const mergeEnd = html.indexOf('window.notaCompraIgual=', mergeStart);
-const notaCompraIgual = new Function(html.slice(mergeStart, mergeEnd) + ';return notaCompraIgual;')();
+const { notaCompraIgual, dadosIguais } = new Function(html.slice(mergeStart, mergeEnd) + ';return { notaCompraIgual, dadosIguais };')();
 const draftStart = html.indexOf('<script>', html.indexOf('<style id="rascunho-compra-proteger-atualizacao">')) + '<script>'.length;
 const draftEnd = html.indexOf('</script>', draftStart);
 assert(draftStart > 0 && draftEnd > draftStart, 'o módulo real de rascunho existe');
@@ -48,7 +48,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
   const windowEvents = {};
   const fields = Object.fromEntries([
     'despData', 'despNF', 'despCategoria', 'despSubcategoria', 'despFornecedor',
-    'despStatus', 'despDesconto', 'despObs', 'despesaTitulo', 'btnSalvarDespesa',
+    'despStatus', 'despVencimento', 'despOrigemPagamento', 'despDesconto', 'despObs', 'despesaTitulo', 'btnSalvarDespesa',
   ].map(id => [id, { value: '', textContent: '', disabled: false }]));
   function element(tag) {
     const handlers = {};
@@ -150,7 +150,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     },
   };
   context = vm.createContext({
-    window, document, localStorage, navigator: {}, console, supa,
+    window, document, localStorage, navigator: {}, console, supa, dadosIguais,
     despesas: copy(notas), despItensTemp: [], editandoDespesaId: null, lojaAtivaId: 'l1',
     estadoLocalSujo: false, salvandoRemoto: false, compraNotaEmAndamento: false, revisaoLocal: 0,
     estadoBaseSincronizado: null, ultimaAtualizacao: 'versao-anterior',
@@ -248,6 +248,32 @@ test('reabrir um rascunho existente conserva a correção da base sem apagar os 
   assert.equal(app.base().valor, 120);
   assert.equal(app.fields.despObs.value, 'Rascunho deste aparelho');
   assert.equal(app.window.__obterIdRascunhoCompra(), 'nota-1');
+});
+
+test('o vencimento da nota é carregado e uma nova data sobrevive à reabertura do rascunho', () => {
+  const anterior = nota({ status: 'pendente', vencimento: '2026-12-15' });
+  const app = criarAmbiente({ notas: [anterior], confirmadas: [anterior] });
+  app.open(anterior);
+  assert.equal(app.fields.despVencimento.value, '2026-12-15');
+  app.fields.despVencimento.value = '2027-01-15';
+  app.input();
+  assert.equal(app.readDraft(anterior.id).campos.despVencimento, '2027-01-15');
+  app.close();
+  app.open(anterior);
+  assert.equal(app.fields.despVencimento.value, '2027-01-15');
+});
+
+test('origem do pagamento da compra é carregada e pode ser corrigida no rascunho', () => {
+  const anterior = nota({ status: 'pago', origemPagamento: 'banco' });
+  const app = criarAmbiente({ notas: [anterior], confirmadas: [anterior] });
+  app.open(anterior);
+  assert.equal(app.fields.despOrigemPagamento.value, 'banco');
+  app.fields.despOrigemPagamento.value = 'dinheiro';
+  app.input();
+  assert.equal(app.readDraft(anterior.id).campos.despOrigemPagamento, 'dinheiro');
+  app.close();
+  app.open(anterior);
+  assert.equal(app.fields.despOrigemPagamento.value, 'dinheiro');
 });
 
 test('recarregar o módulo recupera a gravação própria mesmo sem o acompanhamento pendente em memória', () => {

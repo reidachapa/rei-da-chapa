@@ -31,6 +31,11 @@ test('Caixa considera o mês de Brasília e separa compras pagas e a pagar', () 
   const mes = calcular(dados, '2026-11', valorDevido);
   assert.deepEqual([mes.recebido, mes.comprado, mes.comprasPagas, mes.comprasAPagar, mes.saldo], [10010, 10800, 10300, 500, -290]);
   assert.deepEqual(mes.porPagamento, { pix: 5000, credito: 5000, semForma: 10 });
+  assert.deepEqual(mes.porOrigem, {
+    dinheiro: { recebido: 0, pago: 0, saldo: 0 },
+    banco: { recebido: 10000, pago: 0, saldo: 10000 },
+    semOrigem: { recebido: 10, pago: 10300, saldo: -10290 },
+  });
   assert.equal(mes.quantidadeVendas, 2);
   assert.equal(mes.porDia[30].recebido, 10);
   assert.equal(calcular(dados, '2027-01', valorDevido).temMovimento, false);
@@ -51,6 +56,44 @@ test('Caixa separa pagamentos de meses distintos quando o histórico informa o v
   assert.deepEqual(anterior.porPagamento, { pix: 4000 });
   assert.equal(atual.recebido, 6000);
   assert.deepEqual(atual.porPagamento, { dinheiro: 6000 });
+  assert.equal(anterior.porOrigem.banco.recebido, 4000);
+  assert.equal(atual.porOrigem.dinheiro.recebido, 6000);
+});
+
+test('Caixa mantém os centavos de pagamento misto e reconcilia dinheiro, banco e sem origem', () => {
+  const { calcular } = caixa();
+  const venda = (id, total, pagamentos, taxaEntrega = 0) => ({
+    id, total, pagamentos, taxaEntrega, status: 'finalizado', pago: true, data: '2026-11-10',
+  });
+  const compra = (id, valor, origemPagamento, status = 'pago') => ({
+    id, valor, origemPagamento, status, tipoRegistro: 'compra', data: '2026-11-10',
+  });
+  const dados = {
+    historico: [
+      venda('mista', 106.01, { pix: 53.01, dinheiro: 53 }, 6),
+      venda('cartoes', 10, { debito: 2, credito: 3, cartao: 5 }),
+      venda('outra-forma', 4, { vale: 4 }),
+    ],
+    despesas: [
+      compra('especie', 20, 'dinheiro'),
+      compra('bancaria', 35, 'banco'),
+      compra('legada', 11),
+      compra('desconhecida', 1, 'boleto'),
+      compra('pendente', 40, 'dinheiro', 'pendente'),
+    ],
+  };
+  const mes = calcular(dados, '2026-11', valorDevido);
+  assert.deepEqual(mes.porOrigem, {
+    dinheiro: { recebido: 5000, pago: 2000, saldo: 3000 },
+    banco: { recebido: 6001, pago: 3500, saldo: 2501 },
+    semOrigem: { recebido: 400, pago: 1200, saldo: -800 },
+  });
+  assert.equal(mes.comprasAPagar, 4000);
+  const origens = Object.values(mes.porOrigem);
+  assert.equal(origens.reduce((soma, origem) => soma + origem.recebido, 0), mes.recebido);
+  assert.equal(origens.reduce((soma, origem) => soma + origem.pago, 0), mes.comprasPagas);
+  assert.equal(origens.reduce((soma, origem) => soma + origem.saldo, 0), mes.saldo);
+  assert.equal(mes.saldo, 4701);
 });
 
 test('Caixa mantém o mês ao navegar entre dezembro e janeiro', () => {

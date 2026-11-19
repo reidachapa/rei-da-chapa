@@ -89,6 +89,10 @@
     return Number.isFinite(numero) ? numero : null;
   }
 
+  function normalizarOrigemPagamento(valor) {
+    return valor === 'dinheiro' || valor === 'banco' ? valor : '';
+  }
+
   function rascunhoCorrespondeACompraSalva(registro, notas, assinatura) {
     if (!registro || !Array.isArray(notas) || typeof assinatura !== 'function'
       || registro.savedRecordId != null || registro.editId != null || registro.operacao === 'editar'
@@ -168,6 +172,8 @@
         || texto(nota.subcategoria) !== texto(subcategoria)
         || texto(nota.descricao) !== texto(subcategoria || 'Compra')
         || texto(nota.status) !== texto(campos.despStatus)
+        || texto(nota.vencimento) !== texto(campos.despVencimento)
+        || normalizarOrigemPagamento(nota.origemPagamento) !== normalizarOrigemPagamento(campos.despOrigemPagamento)
         || texto(nota.obs) !== texto(campos.despObs)
         || texto(nota.descontoTipo || 'valor') !== texto(registro.descontoTipo || 'valor')
         || !mesmoNumero(descontoNota, desconto)
@@ -260,9 +266,55 @@
     });
   }
 
+  function reconciliarCamposPagamento(copia, registro, notaServidor) {
+    var campos = copia.campos || {};
+    var possuiData = Object.prototype.hasOwnProperty.call(campos, 'despVencimento');
+    var base = registro.baseNota;
+    var mesmaBase = base && String(base.id) === String(notaServidor.id);
+    var dataBase = mesmaBase ? String(base.vencimento || '') : '';
+    var dataLocal = String(campos.despVencimento || '');
+    var dataServidor = String(notaServidor.vencimento || '');
+    if (!possuiData || (mesmaBase && dataLocal === dataBase)) {
+      campos.despVencimento = dataServidor;
+    } else if (mesmaBase && dataServidor !== dataBase && dataLocal !== dataServidor) {
+      var orientacao = dataServidor
+        ? 'use a data mais recente do servidor (' + dataServidor.split('-').reverse().join('/') + ')'
+        : 'limpe o campo para usar a opção sem vencimento do servidor';
+      var erro = new Error('O vencimento da compra mudou em outro aparelho. Para continuar, ' +
+        orientacao + ' ou descarte o rascunho e abra a nota novamente.');
+      erro.code = 'RASCUNHO_COMPRA_VENCIMENTO_CONFLITO';
+      throw erro;
+    }
+    // A tela trata as notas legadas sem status como pagas.
+    function status(valor) { return valor === 'pendente' ? 'pendente' : 'pago'; }
+    if (!Object.prototype.hasOwnProperty.call(campos, 'despStatus') ||
+        (mesmaBase && status(campos.despStatus) === status(base.status))) {
+      campos.despStatus = status(notaServidor.status);
+    }
+    var origemBase = mesmaBase ? normalizarOrigemPagamento(base.origemPagamento) : '';
+    var origemLocal = normalizarOrigemPagamento(campos.despOrigemPagamento);
+    var origemServidor = normalizarOrigemPagamento(notaServidor.origemPagamento);
+    if (!Object.prototype.hasOwnProperty.call(campos, 'despOrigemPagamento') ||
+        (mesmaBase && origemLocal === origemBase)) {
+      campos.despOrigemPagamento = origemServidor;
+    } else if (mesmaBase && origemServidor !== origemBase && origemLocal !== origemServidor) {
+      var rotulosOrigem = { banco: 'Banco', dinheiro: 'Dinheiro', '': 'Não informado' };
+      var erroOrigem = new Error('A origem do pagamento da compra mudou em outro aparelho. Para continuar, ' +
+        'use a origem mais recente do servidor (' + rotulosOrigem[origemServidor] +
+        ') ou descarte o rascunho e abra a nota novamente.');
+      erroOrigem.code = 'RASCUNHO_COMPRA_ORIGEM_PAGAMENTO_CONFLITO';
+      throw erroOrigem;
+    }
+    copia.campos = campos;
+  }
+
   function prepararRegistro(registro, opcoes) {
     var copia = clonar(registro || {});
     opcoes = opcoes || {};
+    if (registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
+        String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId)) {
+      reconciliarCamposPagamento(copia, registro, opcoes.baseNota);
+    }
     delete copia.savedRecordId;
     delete copia.savedSession;
     delete copia.savedNote;

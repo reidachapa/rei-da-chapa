@@ -42,6 +42,115 @@ const notaSalva = {
   itens: [{ nome: 'Suco goiaba', qtd: 12, valor: 3.24, unid: 'un', categoria: 'Produtos' }],
 };
 
+test('edição da mesma nota incorpora o vencimento do servidor quando o rascunho não o mudou', () => {
+  const registro = congelar({
+    editId: notaSalva.id,
+    baseNota: { ...notaSalva, vencimento: null },
+    campos: { despVencimento: '', despObs: 'Alterada neste aparelho' }
+  });
+  const notaServidor = { ...notaSalva, vencimento: '2026-12-15' };
+  const preparado = prepararRegistro(registro, { editId: notaSalva.id, baseNota: notaServidor });
+  assert.deepEqual(preparado.campos, {
+    despVencimento: '2026-12-15', despObs: 'Alterada neste aparelho', despStatus: 'pago', despOrigemPagamento: ''
+  });
+  assert.equal(preparado.baseNota.vencimento, '2026-12-15');
+});
+
+test('datas de vencimento concorrentes bloqueiam a gravação até o gerente usar a data do servidor', () => {
+  const dataBase = '2026-12-15';
+  const registro = congelar({
+    editId: notaSalva.id,
+    baseNota: { ...notaSalva, vencimento: dataBase },
+    campos: { despVencimento: '2026-12-20' }
+  });
+  const notaServidor = { ...notaSalva, vencimento: '2026-12-18' };
+  assert.throws(
+    () => prepararRegistro(registro, { editId: notaSalva.id, baseNota: notaServidor }),
+    /vencimento.*18\/12\/2026.*descarte/i
+  );
+  const camposRevistos = { ...registro.campos, despVencimento: notaServidor.vencimento };
+  assert.equal(prepararRegistro({ ...registro, campos: camposRevistos }, {
+    editId: notaSalva.id, baseNota: notaServidor
+  }).campos.despVencimento, '2026-12-18');
+  assert.equal(prepararRegistro(registro, {
+    editId: notaSalva.id, baseNota: registro.baseNota
+  }).campos.despVencimento, '2026-12-20');
+  assert.equal(registro.campos.despVencimento, '2026-12-20');
+});
+
+test('rascunho sem base preserva um vencimento digitado e herda o ausente', () => {
+  const opcoes = { editId: notaSalva.id, baseNota: { ...notaSalva, vencimento: '2026-12-18' } };
+  const registro = { editId: notaSalva.id, campos: { despVencimento: '2026-12-20' } };
+  assert.equal(prepararRegistro(registro, opcoes).campos.despVencimento, '2026-12-20');
+  assert.equal(prepararRegistro({ ...registro, campos: {} }, opcoes).campos.despVencimento, '2026-12-18');
+});
+
+test('editar só o vencimento preserva o pagamento confirmado pelo outro aparelho', () => {
+  const base = { ...notaSalva, status: 'pendente', vencimento: '2026-12-15' };
+  const registro = congelar({
+    editId: base.id,
+    baseNota: base,
+    campos: { despStatus: 'pendente', despVencimento: '2026-12-20' }
+  });
+  const preparado = prepararRegistro(registro, {
+    editId: base.id,
+    baseNota: { ...base, status: 'pago' }
+  });
+  assert.deepEqual(preparado.campos, { despStatus: 'pago', despVencimento: '2026-12-20', despOrigemPagamento: '' });
+  assert.equal(preparado.baseNota.status, 'pago');
+});
+
+test('preparo da mesma nota mantém a mudança de status local e o padrão pago no legado', () => {
+  const base = { ...notaSalva, status: undefined, vencimento: '2026-12-15' };
+  const registro = { editId: base.id, baseNota: base, campos: { despStatus: 'pago' } };
+  assert.equal(prepararRegistro(registro, {
+    editId: base.id, baseNota: { ...base, status: 'pendente' }
+  }).campos.despStatus, 'pendente');
+  assert.equal(prepararRegistro({ ...registro, campos: { despStatus: 'pendente' } }, {
+    editId: base.id, baseNota: base
+  }).campos.despStatus, 'pendente');
+  const semBase = { editId: base.id, campos: { despStatus: 'pendente' } };
+  assert.equal(prepararRegistro(semBase, { editId: base.id, baseNota: base }).campos.despStatus, 'pendente');
+});
+
+test('origem de pagamento ausente ou intocada herda a confirmação do outro aparelho', () => {
+  const base = { ...notaSalva, origemPagamento: 'dinheiro' };
+  const notaServidor = { ...base, origemPagamento: 'banco' };
+  const opcoes = { editId: base.id, baseNota: notaServidor };
+  for (const campos of [{}, { despOrigemPagamento: 'dinheiro' }]) {
+    const registro = congelar({ editId: base.id, baseNota: base, campos });
+    assert.equal(prepararRegistro(registro, opcoes).campos.despOrigemPagamento, 'banco');
+  }
+  const semBase = { editId: base.id, campos: { despOrigemPagamento: 'dinheiro' } };
+  assert.equal(prepararRegistro(semBase, opcoes).campos.despOrigemPagamento, 'dinheiro');
+  assert.equal(prepararRegistro({ ...semBase, baseNota: base, campos: { despOrigemPagamento: 'banco' } }, {
+    editId: base.id, baseNota: base
+  }).campos.despOrigemPagamento, 'banco');
+  assert.equal(prepararRegistro({ ...semBase, baseNota: base }, {
+    editId: base.id, baseNota: { ...base, origemPagamento: null }
+  }).campos.despOrigemPagamento, '');
+});
+
+test('duas mudanças divergentes na origem de pagamento preservam o rascunho e indicam a origem do servidor', () => {
+  const casos = [
+    [undefined, 'dinheiro', 'banco', /Banco/],
+    ['banco', '', 'dinheiro', /Dinheiro/],
+    ['dinheiro', 'banco', undefined, /Não informado/],
+  ];
+  for (const [origemBase, origemLocal, origemServidor, rotulo] of casos) {
+    const base = { ...notaSalva, origemPagamento: origemBase };
+    const registro = congelar({ editId: base.id, baseNota: base, campos: { despOrigemPagamento: origemLocal } });
+    const opcoes = { editId: base.id, baseNota: { ...base, origemPagamento: origemServidor } };
+    assert.throws(() => prepararRegistro(registro, opcoes), {
+      code: 'RASCUNHO_COMPRA_ORIGEM_PAGAMENTO_CONFLITO',
+      message: rotulo,
+    });
+    assert.equal(registro.campos.despOrigemPagamento, origemLocal);
+    const confirmandoServidor = { ...registro, campos: { despOrigemPagamento: origemServidor || '' } };
+    assert.equal(prepararRegistro(confirmandoServidor, opcoes).campos.despOrigemPagamento, origemServidor || '');
+  }
+});
+
 test('compra nova salva encerra o rascunho após normalização sem ignorar diferenças da compra', () => {
   const registro = {
     operacao: 'nova',
@@ -87,6 +196,21 @@ test('rascunho antigo sem vínculo só é reconhecido como compra já salva quan
   assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, itens: [{ ...notaSalva.itens[0], pv: 7.5 }] }], ComprasDuplicadas.assinatura), false);
   assert.equal(rascunhoCorrespondeACompraSalva({ ...registro, campos: { ...registro.campos, despFornecedor: '' } }, [notaSalva], ComprasDuplicadas.assinatura), false);
   assert.equal(rascunhoCorrespondeACompraSalva({ ...registro, operacao: 'editar', editId: notaSalva.id }, [notaSalva], ComprasDuplicadas.assinatura), false);
+  const pendente = { ...notaSalva, status: 'pendente', vencimento: '2026-12-14' };
+  const rascunhoBoleto = { ...registro, campos: { ...registro.campos, despStatus: 'pendente', despVencimento: pendente.vencimento } };
+  assert.equal(rascunhoCorrespondeACompraSalva(rascunhoBoleto, [pendente], ComprasDuplicadas.assinatura), true);
+  assert.equal(rascunhoCorrespondeACompraSalva(rascunhoBoleto, [{ ...pendente, vencimento: '2027-01-14' }], ComprasDuplicadas.assinatura), false);
+});
+
+test('rascunho só é reconhecido como compra já salva se a origem de pagamento também coincidir', () => {
+  const campos = { despData: notaSalva.data, despFornecedor: notaSalva.fornecedor, despNF: notaSalva.nf,
+    despDesconto: '0,00', despCategoria: notaSalva.categoria, despCategoriaNome: notaSalva.categoriaNome,
+    despStatus: 'pago', despOrigemPagamento: 'banco' };
+  const registro = { operacao: 'nova', descontoTipo: 'valor', campos, itens: notaSalva.itens };
+  const assinatura = ComprasDuplicadas.assinatura;
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, origemPagamento: 'banco' }], assinatura), true);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [{ ...notaSalva, origemPagamento: 'dinheiro' }], assinatura), false);
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [notaSalva], assinatura), false);
 });
 
 test('confirmação da própria gravação avança a base antiga preservando o rascunho mais recente', () => {
@@ -451,7 +575,8 @@ test('confirmação normal, retomada e sincronização passam pela limpeza condi
   const limpeza = html.slice(inicio, fim);
   assert.match(limpeza, /removerRascunhoConfirmadoSeIgual\(k,esperado\)/);
   assert.doesNotMatch(limpeza, /__appMemoryStorage\.removeItem/);
-  const abertura = html.slice(html.indexOf('window.abrirModalDespesa = function (despesa)'), html.indexOf('aberturaRascunho++;', html.indexOf('window.abrirModalDespesa = function (despesa)')));
+  const inicioAbertura = html.indexOf('window.abrirModalDespesa = function (despesa');
+  const abertura = html.slice(inicioAbertura, html.indexOf('aberturaRascunho++;', inicioAbertura));
   assert.match(abertura, /limpezasConfirmadas\.get\(chaveLimpezaNova\)/);
   assert.match(abertura, /limpezaNova\.then\(continuarNovaCompra,continuarNovaCompra\)/);
 });

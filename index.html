@@ -439,10 +439,26 @@
   .caixa-dias progress{width:100%;height:6px;accent-color:var(--blue)}
   .caixa-dias summary{cursor:pointer;font-weight:800;padding:6px 0}
   .caixa-dias .dre-linha{flex-wrap:wrap;gap:4px 12px}
+  .dre-cards.caixa-saldos,.dre-cards.caixa-indicadores{grid-template-columns:repeat(3,minmax(0,1fr))}
   #modalPrecoProtegido [hidden]{display:none!important}
   #precoProtegidoResumo{display:grid;gap:6px;margin:10px 0 14px}
   #precoProtegidoResumo strong{color:var(--gold-2)}
   button.preco-protegido-alerta{border-color:var(--red);color:var(--red)}
+  .compras-prazos-atalhos{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  #campoVencimentoCompra[hidden],#campoOrigemPagamentoCompra[hidden],#btnProximoVencimentoCompra[hidden]{display:none!important}
+  .compra-vencimento-campos{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+  .compra-vencimento-campos input{flex:1;min-width:140px}
+  .reg-btn.compra-vencimento-aviso{background:#252226;color:var(--txt);border:1px solid var(--iron-5)}
+  .reg-btn.compra-vencimento-aviso:is([data-situacao="proximo"],[data-situacao="hoje"],[data-situacao="vencido"]){background:#351f24;color:#ffb8bd;border-color:#e5484d}
+  .compra-vencimento-sinal{display:inline-block;margin-right:4px;vertical-align:middle;font-size:10px}
+  .compra-vencimento-aviso:is([data-situacao="proximo"],[data-situacao="hoje"]) .compra-vencimento-sinal{animation:pulsar-vencimento 1.8s ease-in-out infinite}
+  @keyframes pulsar-vencimento{50%{opacity:.55;transform:scale(1.20)}}
+  @media(prefers-reduced-motion:reduce){.compra-vencimento-aviso .compra-vencimento-sinal{animation:none!important}}
+  #listaComprasAPagar{display:grid;gap:8px;margin-top:12px;max-height:52vh;overflow:auto}
+  .compra-a-pagar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;min-height:54px;text-align:left;align-items:baseline;background:var(--iron-2,#242428);color:var(--txt);border:1px solid var(--iron-5);border-radius:10px;padding:10px;font:inherit;cursor:pointer;overflow-wrap:anywhere}
+  .compra-a-pagar small,.compra-prazo-semData{color:var(--muted)}
+  .compra-prazo-vencido,.compra-prazo-hoje,.compra-prazo-proximo{color:#ffb8bd}
+  @media(max-width:360px){.compra-a-pagar{grid-template-columns:minmax(0,1fr)}}
   .dre-secao{background:linear-gradient(170deg,#232326,#18181a);border:1px solid var(--iron-5);border-radius:14px;padding:14px;margin-bottom:12px}
   .dre-secao h3{font-size:13px;color:var(--gold-2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--iron-5);font-family:Georgia,serif;display:flex;justify-content:space-between;align-items:center;gap:8px}
   .btn-mini{background:linear-gradient(180deg,var(--green),#2a9a5c);color:#fff;border:0;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:.3px;text-transform:uppercase}
@@ -702,7 +718,10 @@
     .hist-num{text-align:left}
     .hist-valor{text-align:left;align-items:flex-start}
   }
-  @media(max-width:600px){.dre-cards.dre-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:600px){
+    .dre-cards.dre-kpis,.dre-cards.caixa-saldos{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .caixa-saldos .dre-card:first-child{grid-column:1/-1}
+  }
   @media(max-width:360px){.dre-cards.dre-kpis{grid-template-columns:1fr}}
 #splashScreen{position:fixed;inset:0;background:#000;z-index:99999;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:opacity .25s}
 #splashScreen.esconder{opacity:0;pointer-events:none} @keyframes splashLogoEntrada{to{opacity:1}} @keyframes splashLogoRespira{0%{transform:scale(.97);filter:blur(0) drop-shadow(0 0 12px rgba(255,160,50,.28))}100%{transform:scale(1.035);filter:blur(0) drop-shadow(0 0 24px rgba(255,160,50,.62))}}
@@ -1175,7 +1194,13 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
       <input id="comprasNF" class="reg-input" placeholder="Buscar NF...">
       <button type="button" class="reg-btn" id="btnExportarCompras">Exportar relatório Excel completo</button>
       <button type="button" class="reg-btn alt" id="btnNovaCompraHist">➕ Nova Compra</button>
-      <button type="button" class="reg-btn" id="btnRetomarRascunhoCompra">Retomar rascunho</button>
+      <div class="compras-prazos-atalhos">
+        <button type="button" class="reg-btn" id="btnRetomarRascunhoCompra">Retomar rascunho</button>
+        <button type="button" class="reg-btn compra-vencimento-aviso" id="btnProximoVencimentoCompra" hidden>
+          <span class="compra-vencimento-sinal" aria-hidden="true">🔴</span><span id="avisoVencimentoCompra"></span>
+        </button>
+        <button type="button" class="reg-btn alt" id="btnComprasAPagar">Compras a pagar</button>
+      </div>
     </div>
     <div id="comprasStats" class="dre-cards" style="margin-bottom:12px"></div>
     <div id="comprasLista" class="reg-wrap"></div>
@@ -1497,6 +1522,12 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   </div>
 </div></div>
 
+<div id="modalComprasAPagar" class="modal"><div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="tituloComprasAPagar">
+  <h3 id="tituloComprasAPagar">Compras a pagar</h3>
+  <div id="listaComprasAPagar"></div>
+  <div class="modal-acoes"><button type="button" class="btn-fantasma" id="btnFecharComprasAPagar">Fechar</button></div>
+</div></div>
+
 <div id="modalDespesa" class="modal"><div class="modal-box">
   <h3 id="despesaTitulo">🛒 Registrar Compra</h3>
   <div class="dupla">
@@ -1523,8 +1554,23 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
     <div class="campo"><label>🏪 Fornecedor</label><input id="despFornecedor" list="listaFornecedores" placeholder="Ex: Atacadão"><datalist id="listaFornecedores"></datalist></div>
     <div class="campo"><label>Status</label><select id="despStatus">
       <option value="pago">✅ Pago</option>
-      <option value="pendente">⏳ Pendente (fiado)</option>
+      <option value="pendente">⏳ A pagar (boleto ou fiado)</option>
     </select></div>
+  </div>
+  <div class="campo" id="campoVencimentoCompra" hidden>
+    <label for="despVencimento">Vencimento do boleto (opcional)</label>
+    <div class="compra-vencimento-campos">
+      <input id="despVencimento" type="date">
+      <button type="button" class="reg-btn alt" id="btnVencimento30Dias" title="30 dias após a data da compra">+30 dias</button>
+    </div>
+  </div>
+  <div class="campo" id="campoOrigemPagamentoCompra" hidden>
+    <label for="despOrigemPagamento">Pagamento saiu de</label>
+    <select id="despOrigemPagamento">
+      <option value="">Não informado</option>
+      <option value="dinheiro">Dinheiro em caixa</option>
+      <option value="banco">Banco</option>
+    </select>
   </div>
   <div class="campo"><label>📦 Itens da Nota (opcional)</label><small style="display:block;color:var(--muted);font-size:10px;margin:-4px 0 8px">Use a categoria de cada item para organizar produtos no estoque e no PDV. O botão ⚙️ permite criar e renomear essas categorias.</small>
     <div class="aviso-tipo" style="margin-bottom:8px">🥬 Ingrediente por kg: informe a quantidade, escolha <b>Total do item</b> e marque <b>Ingrediente</b>. Em <b>Por rendimento</b>, deixe o rendimento vazio se não souber. Para estimar o uso nas vendas, ative <b>Estimar consumo pela contagem</b> no cadastro e conte os kg que sobraram.</div>
@@ -1658,6 +1704,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="purchase-pricing.js"></script>
 <script src="order-adjustments.js"></script>
 <script src="monthly-cash.js"></script>
+<script src="purchase-payables.js"></script>
 <script src="protected-pricing.js"></script>
 <script src="patrimonio.js"></script>
 <script src="dre-periods.js"></script>
@@ -1871,7 +1918,7 @@ window.toast=function(msg){const el=$('#toast');el.textContent=msg;el.classList.
 const toast=window.toast;
 
 function atualizarVisibilidadeBackup(){var botao=document.getElementById('fabBackup');if(!botao)return;var mostrar=!!window.__authPermitido&&souGerente();botao.classList.toggle('escondido',!mostrar);botao.style.display=mostrar?'flex':'none'}
-function aplicarRole(){const ehGer=souGerente();window.atualizarPainelPrecoProtegido?.();const menuPatrimonio=$('#menuPatrimonio');const tabDre=$('#tabDre'),tabHist=$('#tabHist');const tabEst=$('#tabEstoque'),tabIng=$('#tabIngredientes'),tabDesp=$('#tabDespesas');
+function aplicarRole(){const ehGer=souGerente();window.atualizarPainelPrecoProtegido?.();window.renderVencimentosCompra?.();const menuPatrimonio=$('#menuPatrimonio');const tabDre=$('#tabDre'),tabHist=$('#tabHist');const tabEst=$('#tabEstoque'),tabIng=$('#tabIngredientes'),tabDesp=$('#tabDespesas');
 const tabCaixa=$('#tabCaixa');if(tabCaixa)tabCaixa.classList.toggle('escondido',!ehGer);
 if(!ehGer&&$('#view-caixa')?.classList.contains('ativo')){$('#caixaResumo').replaceChildren();$('.tabs .tab[data-tab="vendas"]').click();}
 if(ehGer){tabDre.classList.remove('escondido');var tabC=document.getElementById('tabCompras');if(tabC)tabC.classList.remove('escondido');if(tabDesp)tabDesp.classList.remove('escondido');tabHist.classList.remove('escondido');if(tabEst)tabEst.classList.remove('escondido');if(tabIng)tabIng.classList.remove('escondido');}
@@ -1947,7 +1994,7 @@ async function carregarCaixaMensal() {
 
 function renderCaixaMensal(destino, caixa) {
   const emReais = centavos => moeda(centavos / 100);
-  const sinal = caixa.saldo > 0 ? 'verde' : caixa.saldo < 0 ? 'vermelho' : '';
+  const sinal = saldo => saldo > 0 ? 'verde' : saldo < 0 ? 'vermelho' : '';
   const situacao = caixa.saldo > 0 ? 'Positivo' : caixa.saldo < 0 ? 'Negativo' : 'Zerado';
   const ticket = caixa.quantidadeVendas ? Math.round(caixa.recebido / caixa.quantidadeVendas) : 0;
   const card = (titulo, valor, detalhe, classe = '') =>
@@ -1957,6 +2004,8 @@ function renderCaixaMensal(destino, caixa) {
     cartao: 'Cartão', semForma: 'Não informado', outros: 'Outros' };
   const linha = (rotulo, valor) =>
     '<div class="dre-linha"><span class="label">' + rotulo + '</span><strong class="valor-dre">' + emReais(valor) + '</strong></div>';
+  const { dinheiro, banco, semOrigem } = caixa.porOrigem;
+  const detalheSaldo = origem => 'Entrou ' + emReais(origem.recebido) + ' · Saiu ' + emReais(origem.pago);
   const dias = Object.entries(caixa.porDia);
   const maxDia = Math.max(1, ...dias.map(([, valores]) => valores.recebido));
   const porDia = dias.map(([dia, valores]) => {
@@ -1965,12 +2014,18 @@ function renderCaixaMensal(destino, caixa) {
       '<progress aria-label="Recebido no dia ' + dia + '" value="' + valores.recebido + '" max="' + maxDia + '"></progress>' +
       linha(data + ' · Compras', valores.comprado);
   }).join('');
-  destino.innerHTML = '<div class="dre-cards dre-kpis">' +
+  destino.innerHTML = '<div class="dre-cards dre-kpis caixa-saldos">' +
+    card('Saldo total do mês', caixa.saldo, situacao + ' · vendas recebidas menos compras pagas', sinal(caixa.saldo)) +
+    card('Dinheiro em caixa', dinheiro.saldo, detalheSaldo(dinheiro), sinal(dinheiro.saldo)) +
+    card('Banco', banco.saldo, detalheSaldo(banco), sinal(banco.saldo)) + '</div>' +
+    '<div class="dre-cards dre-kpis caixa-indicadores">' +
     card('Vendas recebidas', caixa.recebido, caixa.quantidadeVendas + ' pedido(s) · média ' + emReais(ticket), 'verde') +
     card('Compras do mês', caixa.comprado, caixa.quantidadeCompras + ' nota(s) · pagas ' + emReais(caixa.comprasPagas)) +
-    card('Compras a pagar', caixa.comprasAPagar, 'Notas pendentes') +
-    card('Saldo do mês', caixa.saldo, situacao + ' · vendas recebidas menos compras pagas', sinal) + '</div>' +
-    '<p class="dre-vazio">Vendas sem o repasse do motoboy. Compras pela data da nota.</p>' +
+    card('Compras a pagar', caixa.comprasAPagar, 'Notas pendentes') + '</div>' +
+    (semOrigem.recebido || semOrigem.pago ? '<div class="dre-secao"><h3>Sem origem informada</h3>' +
+      linha('Vendas recebidas', semOrigem.recebido) + linha('Compras pagas', semOrigem.pago) +
+      linha('Saldo incluído no total', semOrigem.saldo) + '</div>' : '') +
+    '<p class="dre-vazio">Saldos do mês pelos lançamentos do app. Banco inclui Pix e cartões registrados. Compras pela data da nota. Vendas sem o repasse do motoboy.</p>' +
     (caixa.recebido ? '<div class="dre-secao"><h3>Por forma de pagamento</h3>' +
       Object.entries(caixa.porPagamento).map(([metodo, valor]) => linha(formas[metodo], valor)).join('') + '</div>' : '') +
     '<details class="dre-secao caixa-dias"><summary>Movimento por dia</summary>' + porDia + '</details>';
@@ -3503,11 +3558,7 @@ document.getElementById('comprasLista').addEventListener('click',async function(
   }else if(acao==='editar'){
     abrirModalDespesa(d);
   }else if(acao==='pagar'){
-    if(d.status!=='pendente')return;
-    if(!confirm('Marcar esta compra como paga?\n\n'+(d.fornecedor||d.descricao)+' — '+moeda(d.valor)))return;
-    var statusAnterior=d.status;btn.disabled=true;d.status='pago';var resultado=await salvar();
-    if(!resultado||!resultado.ok){d.status=statusAnterior;renderCompras();return toast('⚠️ Não consegui confirmar o pagamento no servidor.')}
-    renderCompras();renderDRE();toast('✅ Compra marcada como paga');
+    if(d.status==='pendente')return window.abrirModalDespesa(d,{quitar:true});
   }else if(acao==='excluir'){
     if(!confirm('Excluir esta compra?\n\n'+(d.fornecedor||d.descricao)+' — '+moeda(d.valor)))return;
     var estadoAntes={produtos:clonarDadosEstado(produtos),ingredientes:clonarDadosEstado(ingredientes),paes:clonarDadosEstado(paes),despesas:clonarDadosEstado(despesas)};
@@ -3718,14 +3769,15 @@ async function salvarCompraDaNota(e){
   if(compraNotaEmAndamento||window.__recuperacaoCompraEmAndamento)return;
   if(!souGerente()) return toast('Apenas o gerente pode salvar compras');
   var arr=window.despItensTemp||despItensTemp||[];
+  var itensSemEdicao=window.__itensDaCompraSemEdicao?.(arr);
   var dataEl=document.getElementById('despData');
   var data=dataEl&&dataEl.value;
   if(!data) return toast('Informe a data da compra');
    var itens=arr.filter(function(it){return it&&String(it.nome||'').trim()&&(Number(it.qtd)||0)>0;});
-   if(!itens.length) return toast('Adicione ao menos um item da compra');
+  if(!itens.length&&!itensSemEdicao) return toast('Adicione ao menos um item da compra');
    function ingredienteDaCompra(it){return buscarIngredienteCompra(it)}
    var rendimentoApagado=itens.find(function(it){var ing=ingredienteDaCompra(it);return (it.tipoItem||'prod')==='ing'&&it.rendimentoInformado&&!(Number(it.rend)>0)&&ing&&ing.modoCompra==='flexivel'&&Number(ing.rendimento)>0});
-   if(rendimentoApagado)return toast('O item "'+rendimentoApagado.nome+'" já tem rendimento salvo. Informe o valor para preservar a ficha e o estoque.');
+   if(rendimentoApagado&&!itensSemEdicao)return toast('O item "'+rendimentoApagado.nome+'" já tem rendimento salvo. Informe o valor para preservar a ficha e o estoque.');
   var editId=window.editandoDespesaId||editandoDespesaId||(typeof window.__obterIdRascunhoCompra==='function'?window.__obterIdRascunhoCompra():null);
   var anterior=editId?despesas.find(function(d){return String(d.id)===String(editId);}):null;
   if(editId){
@@ -3735,6 +3787,7 @@ async function salvarCompraDaNota(e){
       if(typeof window.__prepararRevisaoRascunhoCompra!=='function')throw new Error('Atualize o app e tente novamente.');
       var notaConciliada=await window.__prepararRevisaoRascunhoCompra({idOriginal:editId,atualizarExistente:true,silencioso:true});
       if(!notaConciliada||notaConciliada.nova||String(notaConciliada.editId)!==String(editId))throw new Error('Não consegui confirmar a mesma nota no servidor. O rascunho foi mantido.');
+      itensSemEdicao=notaConciliada.itensSemEdicao??itensSemEdicao;
       arr=window.despItensTemp||despItensTemp||[];
       itens=arr.filter(function(it){return it&&String(it.nome||'').trim()&&(Number(it.qtd)||0)>0;});
       editId=notaConciliada.editId;
@@ -3746,10 +3799,22 @@ async function salvarCompraDaNota(e){
       if(botaoAtualizarNota){botaoAtualizarNota.disabled=false;botaoAtualizarNota.textContent=textoBotaoAtualizarNota||'🔄 Atualizar nota'}
     }
   }
+  data = (document.getElementById('despData')||{}).value;
+  if(!data)return toast('Informe a data da compra');
+  var vencimento = (document.getElementById('despVencimento')||{}).value || '';
+  if(vencimento&&(!window.VencimentosCompras?.dataValida(vencimento)||vencimento<data)){
+    return toast('Informe um vencimento válido na data da compra ou depois dela.');
+  }
   if(!window.ComprasDuplicadas)return toast('Não consegui carregar a conferência de notas repetidas. Atualize o app antes de continuar; os campos atuais existem apenas nesta tela.');
   var campoCompra=function(id){return (document.getElementById(id)||{}).value||''};
+  var descontoDigitado=lerDescontoNota(campoCompra('despDesconto'),window._descontoNotaTipo);
+  var tipoDesconto=window._descontoNotaTipo||'valor';
+  var statusCompra=campoCompra('despStatus')||'pago';
+  var origemPagamento=campoCompra('despOrigemPagamento');
+  var preservarItens=anterior&&itensSemEdicao&&tipoDesconto===(anterior.descontoTipo||'valor')&&descontoDigitado===(Number(anterior.descontoOriginal??anterior.desconto)||0);
+  if(!preservarItens&&!itens.length)return toast('Adicione ao menos um item da compra');
   var itensCandidatos=itens.map(function(it){return Object.assign({},it,{descontoOriginal:Number(it.desconto)||0})});
-  var candidataCompra={id:editId||null,tipoRegistro:'compra',data:data,fornecedor:campoCompra('despFornecedor'),nf:campoCompra('despNF'),itens:itensCandidatos,descontoOriginal:lerDescontoNota(campoCompra('despDesconto'),window._descontoNotaTipo),descontoTipo:window._descontoNotaTipo||'valor'};
+  var candidataCompra={id:editId||null,tipoRegistro:'compra',data:data,fornecedor:campoCompra('despFornecedor'),nf:campoCompra('despNF'),itens:preservarItens?anterior.itens:itensCandidatos,descontoOriginal:descontoDigitado,descontoTipo:tipoDesconto};
   var notasCandidatas=despesas.filter(function(n){return !editId||String(n.id)!==String(editId)}).concat([candidataCompra]);
   try{window.ComprasDuplicadas.validarEstado({porLoja:{atual:{despesas:despesas}}},{porLoja:{atual:{despesas:notasCandidatas}}})}catch(erroDuplicada){return toast('⚠️ '+erroDuplicada.message+' Os campos permanecem apenas nesta tela; a compra não foi gravada.');}
   var botaoSalvarNota=document.getElementById('btnSalvarDespesa');
@@ -3760,10 +3825,10 @@ async function salvarCompraDaNota(e){
   var estadoAntes=null;
   var revisaoCompraEnviada=null;
   var compraConfirmadaNoServidor=false;
-    var backupCompraCriado=false;
-  try{
-    var precosCompra=window.PrecosCompra.calcular({itens:itens,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:itens.map(function(it){var calcularQuantidade=window.__quantidadeEstoqueProjetadaCompra;return typeof calcularQuantidade==='function'?calcularQuantidade(it):Number(it&&it.qtd)||0}),notaAnterior:anterior,descontoNota:lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo),descontoNotaTipo:window._descontoNotaTipo||'valor'});
-    estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
+  var backupCompraCriado=false;
+  var subtotal,descEntrada,descNota;
+  function aplicarItensEditados(){
+    var precosCompra=window.PrecosCompra.calcular({itens:itens,produtos:produtos,ingredientes:ingredientes,paes:paes,quantidadesEstoquePorIndice:itens.map(function(it){var calcularQuantidade=window.__quantidadeEstoqueProjetadaCompra;return typeof calcularQuantidade==='function'?calcularQuantidade(it):Number(it&&it.qtd)||0}),notaAnterior:anterior,descontoNota:descontoDigitado,descontoNotaTipo:tipoDesconto});
     var notaOriginalAntesDeReverter=anterior&&estadoAntes.despesas.find(function(d){return String(d.id)===String(anterior.id)})||null;
     if(anterior) reverterCompraEstoque(anterior.itens,anterior);
     function normalizarNome(v){return String(v||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('pt-BR');}
@@ -3833,14 +3898,14 @@ async function salvarCompraDaNota(e){
     var descItem=[];
     var descontoOriginal=itens.map(function(it){return Number(it.desconto)||0;});
     var tipoDescontoOriginal=itens.map(function(it){return it.descontoTipo||'valor';});
-     var subtotal=itens.reduce(function(s,it){
+    subtotal=itens.reduce(function(s,it){
       var bruto=Math.max(0,(Number(it.qtd)||0)*(Number(it.valor)||0));
       var d=Math.max(0,Number(it.desconto)||0);
       if(it.descontoTipo==='percent') d=bruto*Math.min(100,d)/100;
       d=Math.min(bruto,d);descItem.push(d);return s+bruto-d;
      },0);
-    var descEntrada=lerDescontoNota((document.getElementById('despDesconto')||{}).value,window._descontoNotaTipo);
-    var descNota=window._descontoNotaTipo==='percent'?subtotal*Math.min(100,descEntrada)/100:descEntrada;
+    descEntrada=descontoDigitado;
+    descNota=tipoDesconto==='percent'?subtotal*Math.min(100,descEntrada)/100:descEntrada;
     descNota=Math.min(subtotal,Math.max(0,descNota));
     itens.forEach(function(it,i){
       var base=Math.max(0,(Number(it.qtd)||0)*(Number(it.valor)||0)-descItem[i]);
@@ -3863,8 +3928,22 @@ async function salvarCompraDaNota(e){
       alvo.obj[campoPreco]=grupo.modoPreco==='percentual'?Math.round((Math.max(0,(Number(alvo.obj.custo)||0)*(1+grupo.lucroPct/100))+Number.EPSILON)*100)/100:grupo.preco;
       grupo.indices.forEach(function(i){itens[i].pv=alvo.obj[campoPreco];itens[i].modoPreco=grupo.modoPreco;itens[i].lucroPct=grupo.lucroPct;});
     });
-    var campo=function(id){var el=document.getElementById(id);return el?el.value:'';};function categoriaDaOpcaoDoItem(it){var idx=arr.indexOf(it);var sel=idx>=0?document.querySelector('#despItensLista .ic-cat[data-idx="'+idx+'"]'):null;return sel&&sel.value===String(it.categoria||'')&&sel.options[sel.selectedIndex]?String(sel.options[sel.selectedIndex].textContent||'').trim():String(it.categoria||'').trim()}
-     itens.forEach(function(it){var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';delete it._indiceOriginalNota});var categoriaDespesa=campo('despCategoria');var categoriaFinanceiraNome=anterior&&String(anterior.categoria||'')===String(categoriaDespesa||'')&&anterior.categoriaNome?anterior.categoriaNome:categoriaLabelSelecionada(categoriaDespesa);var dados={id:editId||(typeof uid==='function'?'desp_'+uid():'desp_'+Date.now()),tipoRegistro:'compra',descricao:String(campo('despSubcategoria')).trim()||'Compra',categoria:categoriaDespesa,categoriaNome:categoriaFinanceiraNome,subcategoria:String(campo('despSubcategoria')).trim(),fornecedor:String(campo('despFornecedor')).trim(),nf:String(campo('despNF')).trim(),status:campo('despStatus')||'pago',obs:String(campo('despObs')).trim(),desconto:descNota,descontoTipo:window._descontoNotaTipo||'valor',descontoOriginal:descEntrada,itens:itens,valor:Math.max(0,subtotal-descNota),data:data,criadoEm:anterior&&anterior.criadoEm||new Date().toISOString()};
+    function categoriaDaOpcaoDoItem(it){var idx=arr.indexOf(it);var sel=idx>=0?document.querySelector('#despItensLista .ic-cat[data-idx="'+idx+'"]'):null;return sel&&sel.value===String(it.categoria||'')&&sel.options[sel.selectedIndex]?String(sel.options[sel.selectedIndex].textContent||'').trim():String(it.categoria||'').trim()}
+    itens.forEach(function(it){var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';delete it._indiceOriginalNota});
+  }
+  try{
+    estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
+    if(preservarItens){
+      itens=anterior.itens;
+      descEntrada=anterior.descontoOriginal??anterior.desconto;
+      descNota=anterior.desconto;
+    }else{
+      aplicarItensEditados();
+    }
+    var categoriaDespesa=campoCompra('despCategoria');var categoriaFinanceiraNome=anterior&&String(anterior.categoria||'')===String(categoriaDespesa||'')&&anterior.categoriaNome?anterior.categoriaNome:categoriaLabelSelecionada(categoriaDespesa);var dados={id:editId||(typeof uid==='function'?'desp_'+uid():'desp_'+Date.now()),tipoRegistro:'compra',descricao:String(campoCompra('despSubcategoria')).trim()||'Compra',categoria:categoriaDespesa,categoriaNome:categoriaFinanceiraNome,subcategoria:String(campoCompra('despSubcategoria')).trim(),fornecedor:String(campoCompra('despFornecedor')).trim(),nf:String(campoCompra('despNF')).trim(),status:statusCompra,obs:String(campoCompra('despObs')).trim(),desconto:descNota,descontoTipo:tipoDesconto,descontoOriginal:descEntrada,itens:itens,valor:preservarItens?anterior.valor:Math.max(0,subtotal-descNota),data:data,criadoEm:anterior&&anterior.criadoEm||new Date().toISOString()};
+    if(vencimento||anterior?.vencimento)dados.vencimento=vencimento||null;
+    origemPagamento=statusCompra==='pago'&&(origemPagamento==='dinheiro'||origemPagamento==='banco')?origemPagamento:null;
+    if(origemPagamento||anterior?.origemPagamento)dados.origemPagamento=origemPagamento;
     if(anterior) Object.assign(anterior,dados); else despesas.push(dados);
     if(typeof window.marcarRascunhoCompraPendente==='function')window.marcarRascunhoCompraPendente(editId,dados.id);
     notaCompraEmSincronizacaoId=dados.id;
@@ -3886,7 +3965,8 @@ async function salvarCompraDaNota(e){
     if(dados.subcategoria)addSugestao('subcategoria',dados.subcategoria);
     itens.forEach(function(it){if(it.nome)addSugestao('produto',it.nome);});
     popularTodasSugestoes();
-    toast(backupCompraCriado?'Compra salva e estoque atualizado no Supabase; o backup desta compra foi confirmado no Supabase.':'Compra salva e estoque atualizado no Supabase, mas o Supabase não confirmou o backup compartilhado. Faça um backup quando a conexão estiver estável.');
+    var resumoSalvo=preservarItens?'Compra atualizada no Supabase.':'Compra salva e estoque atualizado no Supabase.';
+    toast(resumoSalvo+(backupCompraCriado?' Backup da compra confirmado.':' O Supabase não confirmou o backup compartilhado. Faça um backup quando a conexão estiver estável.'));
   }catch(err){
     console.error('Falha ao salvar compra:',err);
     var semAlteracoesPosteriores=revisaoCompraEnviada===null||revisaoLocal===revisaoCompraEnviada;
@@ -4607,7 +4687,7 @@ function abrirModalEscolherMotoboy(p){
 
 $('#btnFecharEscolherMotoboy').addEventListener('click',()=>$('#modalEscolherMotoboy').classList.remove('aberto'));
 function renderStats(){const hoje=new Date().toDateString();const doDia=historico.filter(v=>new Date(v.finalizadoEm||v.data).toDateString()===hoje);const total=doDia.reduce((s,v)=>s+(v.subtotal!==undefined?v.subtotal:(v.total-(v.taxaEntrega||0))),0);$('#statVendas').textContent=moeda(total);$('#statPedidos').textContent=doDia.length}
-function renderTudo(){renderVendas();renderCarrinho();renderPedidos();renderEstoque();renderStats();if(typeof window.renderPatrimonio==='function')window.renderPatrimonio();if(document.getElementById('view-dre')?.classList.contains('ativo')&&typeof renderDRE==='function')renderDRE();if(document.getElementById('view-caixa')?.classList.contains('ativo'))carregarCaixaMensal()}
+function renderTudo(){renderVendas();renderCarrinho();renderPedidos();renderEstoque();renderStats();window.renderVencimentosCompra?.();if(typeof window.renderPatrimonio==='function')window.renderPatrimonio();if(document.getElementById('view-dre')?.classList.contains('ativo')&&typeof renderDRE==='function')renderDRE();if(document.getElementById('view-caixa')?.classList.contains('ativo'))carregarCaixaMensal()}
 $('#busca').addEventListener('input',renderVendas);
 
 const CHAVE_LOJAS='burgercontrol_lojas_v1';
@@ -5549,6 +5629,7 @@ var k=comprasSort.c,dir=comprasSort.d;arr.sort(function(a,b){var r;if(k==='total
 function montarFiltrosCompras(){var sm=document.getElementById('comprasMes'),sc=document.getElementById('comprasCat');if(!sm||!sc)return;var set={};set[new Date().toISOString().slice(0,7)]=1;(despesas||[]).forEach(function(d){if(d.data&&!ehDespesaAvulsa(d))set[String(d.data).slice(0,7)]=1});var meses=Object.keys(set).sort().reverse();sm.innerHTML='<option value="">Todos os meses</option>'+meses.map(function(m){return '<option value="'+m+'">'+rotuloMes(m)+'</option>'}).join('');sm.value=comprasMes;var dc=document.getElementById('despCategoria');var o='<option value="">Todas categorias financeiras</option>'; if(dc)Array.prototype.forEach.call(dc.options,function(op){if(op.value&&op.value!=='__nova__')o+='<option value="'+op.value+'">'+esc(op.textContent)+'</option>'});var vistos={};if(dc)Array.prototype.forEach.call(dc.options,function(op){vistos[op.value]=1});(despesas||[]).forEach(function(d){if(d.categoria&&!vistos[d.categoria]){vistos[d.categoria]=1;o+='<option value="'+d.categoria+'">'+esc(nomeCatCompra(d.categoria))+'</option>'}});sc.innerHTML=o;sc.value=comprasCat}
 function renderCompras(){
   if(!souGerente())return;
+  window.renderVencimentosCompra?.();
   sincronizarCategoriasFinanceiras({});
   montarFiltrosCompras();
   var f=comprasFiltradas();
@@ -7626,12 +7707,7 @@ window.salvarVendaManual = function() {
       if(acao==='ver')return abrirModalVerCompra(d);
       if(acao==='editar')return typeof window.abrirModalDespesa==='function'?window.abrirModalDespesa(d):undefined;
       if(acao==='pagar'){
-        if(d.status!=='pendente')return;
-        if(!confirm('Marcar esta compra como paga?\n\n'+(d.fornecedor||d.descricao)+' — '+moeda(d.valor)))return;
-        var statusAnterior=d.status;btn.disabled=true;d.status='pago';
-        try{var resultadoPagar=await salvar();if(!resultadoPagar||!resultadoPagar.ok){d.status=statusAnterior;renderCompras();if(resultadoPagar&&resultadoPagar.conflict&&typeof baixarDoServidor==='function')await baixarDoServidor();return toast('⚠️ Não consegui confirmar o pagamento no servidor.')}renderCompras();renderDRE();toast('✅ Compra marcada como paga')}
-        catch(err){d.status=statusAnterior;renderCompras();console.error('Falha ao marcar compra como paga:',err);toast('⚠️ Não consegui confirmar o pagamento no servidor.')}
-        return;
+        if(d.status==='pendente')return window.abrirModalDespesa(d,{quitar:true});
       }
       if(acao==='excluir'){
         if(!confirm('Excluir esta compra?\n\n'+(d.fornecedor||d.descricao)+' — '+moeda(d.valor)))return;
@@ -10876,8 +10952,12 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
   var prefixoServidor = 'rascunho_compra_v1:';
   var chaveIdDispositivo = 'rei_chapa_id_dispositivo_v1';
   var idDispositivo = obterIdDispositivo();
-  var camposIds = ['despData', 'despNF', 'despCategoria', 'despSubcategoria', 'despFornecedor', 'despStatus', 'despDesconto', 'despObs'];
+  var camposIds = ['despData', 'despNF', 'despCategoria', 'despSubcategoria', 'despFornecedor', 'despStatus', 'despVencimento', 'despOrigemPagamento', 'despDesconto', 'despObs'];
   var abrirOriginal = window.abrirModalDespesa;
+  var itensDaNotaAoAbrir = null;
+  window.__itensDaCompraSemEdicao = function(itens){
+    return itensDaNotaAoAbrir!==null&&Array.isArray(itens)&&dadosIguais(itensDaNotaAoAbrir,clonar(itens));
+  };
   var lojaRascunho = 'padrao';
   var idRascunho = null;
   var chaveRascunhoAtivo = null;
@@ -11250,6 +11330,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       if(!salvarRascunho())throw new Error('Não consegui manter o rascunho na memória desta tela. Evite recarregar a página antes de concluir.');
       var chaveAntes=chaveRascunhoAtivo||chave(lojaRascunho,idRascunho),registro=lerChave(chaveAntes),novoId=atual?atual.id:null,novaChave=chave(info.loja,novoId),outro=lerChave(novaChave);
       if(novaChave!==chaveAntes&&temConteudoRascunho(outro))throw new Error('Já existe outro rascunho para essa nota nesta tela. Ele permanece somente na memória da aba; confira-o antes de continuar.');
+      var itensSemEdicao=window.__itensDaCompraSemEdicao(registro.itens);
       var preparado=window.RecuperacaoCompra.prepararRegistro(registro,{editId:novoId,baseNota:atual});
       preparado.updatedAt=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
       if(atual)preparado.notaServidorAntesDaRevisao=clonar(atual);
@@ -11265,7 +11346,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var titulo=document.getElementById('despesaTitulo'),salvar=document.getElementById('btnSalvarDespesa');
       if(titulo)titulo.textContent=atual?'✏️ Editar nota de compra':'🛒 Registrar compra';
       if(salvar)salvar.textContent=atual?'🔄 Atualizar nota':'💾 Salvar compra';
-      return {ok:true,editId:novoId,nova:!atual};
+      return {ok:true,editId:novoId,nova:!atual,itensSemEdicao:itensSemEdicao};
     }finally{window.__recuperacaoCompraEmAndamento=false}
   };
   window.__mostrarRevisaoRascunhoCompra=function(idOriginal){
@@ -11412,6 +11493,11 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     aberturaRascunho++;
     var resultado=abrirOriginal.call(window,null);
     if(!estaAberto())return resultado;
+    itensDaNotaAoAbrir=null;
+    var vencimento=document.getElementById('despVencimento');
+    if(vencimento)vencimento.value='';
+    var origem=document.getElementById('despOrigemPagamento');
+    if(origem)origem.value='';
     modoRascunhoCompra='editar';
     lojaRascunho=lojaAtual();idRascunho=registro.editId==null?null:registro.editId;chaveRascunhoAtivo=k;baseNotaAtiva=registro.baseNota?clonar(registro.baseNota):null;
     var idOriginal=registro.savedRecordId||registro.editId;
@@ -11430,6 +11516,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
       var el = document.getElementById(campoId);
       if (el && registro.campos && Object.prototype.hasOwnProperty.call(registro.campos, campoId)) el.value = registro.campos[campoId];
     });
+    window.atualizarCamposPagamentoCompra?.();
     window._descontoNotaTipo = registro.descontoTipo || 'valor';
     var itens = Array.isArray(registro.itens) ? clonar(registro.itens) : [];
     window.despItensTemp = itens;
@@ -11459,7 +11546,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     }
   }
 
-  window.abrirModalDespesa = function (despesa) {
+  window.abrirModalDespesa = function (despesa, opcoes) {
     if (!despesa) {
       var chavePadraoNova = chave(lojaAtual(), null);
       var rascunhoPadrao = lerChave(chavePadraoNova);
@@ -11485,7 +11572,7 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     if (despesa && window.__authPermitido && supa && !rascunhosCarregados) {
       if (typeof window.toast === 'function') window.toast('⏳ Conferindo os rascunhos deste aparelho no Supabase…');
       carregarRascunhosServidor().then(function (carga) {
-        if (carga.ok) window.abrirModalDespesa(despesa);
+        if (carga.ok) window.abrirModalDespesa(despesa, opcoes);
         else if (typeof window.toast === 'function') window.toast('⚠️ Não consegui consultar os rascunhos. Tente novamente; não substituí nenhum.');
       });
       return;
@@ -11562,6 +11649,12 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     var notaInicial = despesa ? clonar(despesa) : null;
     var resultado = abrirOriginal.call(this, despesa || null);
     if (!estaAberto()) return resultado;
+    itensDaNotaAoAbrir=despesa?clonar(window.despItensTemp||[]):null;
+    var vencimento = document.getElementById('despVencimento');
+    if (vencimento) vencimento.value = despesa?.vencimento || '';
+    var origem = document.getElementById('despOrigemPagamento');
+    if (origem) origem.value = despesa?.origemPagamento || '';
+    window.atualizarCamposPagamentoCompra?.();
     if (!despesa && chaveSeparadaParaAbrir && chaveNovaCompraSeparada === chaveSeparadaParaAbrir) chaveNovaCompraSeparada = null;
     modoRascunhoCompra=despesa?'editar':'nova';
     window.editandoDespesaId=despesa?despesa.id:null;
@@ -11592,6 +11685,12 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
     }
     sujo = false;
     restaurarRascunho(lojaRascunho, idRascunho);
+    if(despesa&&opcoes?.quitar){
+      var status=document.getElementById('despStatus');
+      status.value='pago';
+      window.atualizarCamposPagamentoCompra?.();
+      origem?.focus();
+    }
     if (avisoNotaJaSalva && typeof window.toast === 'function') window.toast('✅ Esta nota já foi confirmada no servidor; não lancei outra compra.');
     if (avisoRascunhoComoNova && typeof window.toast === 'function') window.toast('📝 Rascunho mantido como nova compra. Ele não vai atualizar uma nota já lançada.');
     if (avisoNovaCompraAposFalha && typeof window.toast === 'function') { window.toast(avisoNovaCompraAposFalha); avisoNovaCompraAposFalha = ''; }
@@ -11933,5 +12032,6 @@ html.nota-compra-aberta #modalDespesa,html.nota-compra-aberta #modalDespesa .mod
 </script>
 <script src="print-queue.js"></script>
 <script src="protected-pricing-app.js"></script>
+<script src="purchase-payables-app.js"></script>
 </body>
 </html>

@@ -6,6 +6,7 @@
   'use strict';
 
   const encerrados = new Set(['finalizado', 'entregue', 'concluido', 'concluído']);
+  const pagamentosBancarios = new Set(['pix', 'debito', 'credito', 'cartao']);
   const calendario = new Intl.DateTimeFormat('pt-BR', {
     timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
   });
@@ -104,6 +105,11 @@
     const resultado = {
       recebido: 0, comprado: 0, comprasPagas: 0, comprasAPagar: 0,
       saldo: 0, quantidadeVendas: 0, quantidadeCompras: 0,
+      porOrigem: {
+        dinheiro: { recebido: 0, pago: 0, saldo: 0 },
+        banco: { recebido: 0, pago: 0, saldo: 0 },
+        semOrigem: { recebido: 0, pago: 0, saldo: 0 },
+      },
       porPagamento: {}, porDia: {}, temMovimento: false,
     };
     function diaNoMes(data) {
@@ -130,6 +136,10 @@
       }
       if (contouVenda) resultado.quantidadeVendas++;
     }
+    for (const [metodo, valor] of Object.entries(resultado.porPagamento)) {
+      const origem = metodo === 'dinheiro' ? 'dinheiro' : pagamentosBancarios.has(metodo) ? 'banco' : 'semOrigem';
+      resultado.porOrigem[origem].recebido += valor;
+    }
     for (const nota of loja.despesas) {
       if (!nota || nota.tipoRegistro === 'despesa' ||
           (nota.tipoRegistro !== 'compra' && !(Array.isArray(nota.itens) && nota.itens.length))) continue;
@@ -140,8 +150,13 @@
       resultado.quantidadeCompras++;
       movimentoDia(dia).comprado += valor;
       if (nota.status === 'pendente') resultado.comprasAPagar += valor;
-      else resultado.comprasPagas += valor;
+      else {
+        resultado.comprasPagas += valor;
+        const origem = ['dinheiro', 'banco'].includes(nota.origemPagamento) ? nota.origemPagamento : 'semOrigem';
+        resultado.porOrigem[origem].pago += valor;
+      }
     }
+    for (const total of Object.values(resultado.porOrigem)) total.saldo = total.recebido - total.pago;
     resultado.saldo = resultado.recebido - resultado.comprasPagas;
     resultado.temMovimento = resultado.quantidadeVendas > 0 || resultado.quantidadeCompras > 0;
     return resultado;
