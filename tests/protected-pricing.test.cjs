@@ -40,13 +40,20 @@ test('ordena compras pela criação e protege o maior custo quando um lote mais 
   assert.equal(calcular(p, despesas).preco, 15);
 });
 
-test('lotes de uma mesma compra seguram o maior custo até o fim daquela entrada', () => {
-  const { iniciar, calcular } = carregar();
-  const despesas = [nota('unica', '2026-11-20T12:00:00Z', linha(3, 5), linha(2, 0))];
-  const p = { ...produto, estoque: 2, precoProtegido: iniciar({ ...produto, estoque: 0 }, [], 0, 30) };
-  assert.deepEqual(calcular(p, despesas).lotes, [{ qtd: 2, custo: 5 }]);
-  assert.equal(calcular(p, despesas).preco, 6.5);
-  assert.equal(calcular(p, [nota('unica', '2026-11-20T12:00:00Z', linha(2, 0))]).preco, 0);
+test('mesma nota separa custo pago de bonificação e considera as unidades mais baratas como primeira saída', () => {
+  const { iniciar, calcular, assinaturaCompra } = carregar();
+  const compra = nota('unica', '2026-11-20T12:00:00Z', linha(2, 5), linha(2, 0), linha(1, 5));
+  const invertida = { ...compra, itens: compra.itens.slice().reverse() };
+  const precoProtegido = iniciar({ ...produto, estoque: 0 }, [], 0, 30);
+  const apurar = (estoque, compraDoEstoque = compra) => calcular({ ...produto, estoque, precoProtegido }, [compraDoEstoque]);
+  assert.deepEqual(apurar(5).lotes, [{ qtd: 2, custo: 0 }, { qtd: 3, custo: 5 }]);
+  assert.deepEqual(apurar(4).lotes, [{ qtd: 1, custo: 0 }, { qtd: 3, custo: 5 }]);
+  assert.deepEqual(apurar(2).lotes, [{ qtd: 2, custo: 5 }]);
+  assert.equal(apurar(5).preco, 6.5);
+  assert.equal(apurar(2).preco, 6.5);
+  assert.equal(apurar(2, nota('unica', '2026-11-20T12:00:00Z', linha(2, 0))).preco, 0);
+  assert.equal(assinaturaCompra(compra, vinc), assinaturaCompra(invertida, vinc));
+  assert.deepEqual(apurar(4, invertida), apurar(4));
 });
 
 test('refazer ou remover uma compra anterior à conferência exige nova conferência', () => {

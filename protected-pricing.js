@@ -19,7 +19,8 @@
     if (!nota || nota.tipoRegistro === 'despesa' || !Array.isArray(nota.itens)) return null;
     const tipo = vinculo.split(':')[0];
     const linhas = [];
-    let quantidade = 0, custo = 0, valida = true;
+    const lotesPorCusto = new Map();
+    let quantidade = 0, valida = true;
     for (const item of nota.itens) {
       if (!item) continue;
       const aplicado = item.aplicado;
@@ -40,12 +41,13 @@
       } else {
         linhas.push(JSON.stringify([qtd, valor]));
         quantidade += qtd;
-        custo = Math.max(custo, valor);
+        lotesPorCusto.set(valor, (lotesPorCusto.get(valor) || 0) + qtd);
       }
     }
     if (!linhas.length) return null;
     const data = typeof nota.criadoEm === 'string' ? Date.parse(nota.criadoEm) : NaN;
-    return { assinatura: JSON.stringify(linhas.sort()), valida: valida && Number.isFinite(quantidade), quantidade, custo, data };
+    const lotes = Array.from(lotesPorCusto, ([custo, quantidade]) => ({ custo, quantidade }));
+    return { assinatura: JSON.stringify(linhas.sort()), valida: valida && Number.isFinite(quantidade), quantidade, lotes, data };
   }
 
   function assinaturaCompra(nota, vinculo) {
@@ -130,12 +132,14 @@
     }
     if (saldo === 0) return resultado('semEstoque');
     entradas.sort(([idA, a], [idB, b]) => b.data - a.data || (idA < idB ? 1 : idA > idB ? -1 : 0));
-    // O saldo PEPS é formado pelas compras mais recentes. Linhas da mesma nota
-    // têm a mesma ordem de entrada, então se usa o maior custo da nota até esgotá-la.
+    // O saldo PEPS começa pelas compras mais recentes. Na mesma nota, onde a
+    // ordem física é desconhecida, preservamos primeiro os lotes mais caros.
+    const lotesRecebidos = entradas.flatMap(([, entrada]) => entrada.lotes.sort((a, b) => b.custo - a.custo));
+    lotesRecebidos.push({ quantidade: quantidadeInicial, custo: custoInicial });
     const lotes = [];
     const tolerancia = Math.min(1e-8, Number.EPSILON * Math.max(1, saldo) * 4);
     let restante = saldo, custoProtegido = 0;
-    for (const [, entrada] of entradas.concat([['', { quantidade: quantidadeInicial, custo: custoInicial }]])) {
+    for (const entrada of lotesRecebidos) {
       if (restante <= 0 || (lotes.length > 0 && restante <= tolerancia)) break;
       const qtdEntrada = quantidade(entrada.quantidade, opcoes);
       if (qtdEntrada === null) return resultado('conferir');

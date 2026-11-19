@@ -439,6 +439,7 @@
   .caixa-dias progress{width:100%;height:6px;accent-color:var(--blue)}
   .caixa-dias summary{cursor:pointer;font-weight:800;padding:6px 0}
   .caixa-dias .dre-linha{flex-wrap:wrap;gap:4px 12px}
+  .compra-lote-nota{font-size:11px;color:var(--muted);margin-top:4px}
   .dre-cards.caixa-saldos,.dre-cards.caixa-indicadores{grid-template-columns:repeat(3,minmax(0,1fr))}
   #modalPrecoProtegido [hidden]{display:none!important}
   #precoProtegidoResumo{display:grid;gap:6px;margin:10px 0 14px}
@@ -7779,13 +7780,24 @@ window.salvarVendaManual = function() {
     var descItens = 0;
     var itensHtml = (d.itens || []).map(function(it){
       var b = (it.qtd || 0) * (it.valor || 0);
-      var desc = it.desconto || 0;
+      var desc = window.PrecosCompra.calcularDescontoItem(it, true);
       var sub = Math.max(0, b - desc);
       
       bruto += b;
       descItens += desc;
       
       var descTxt = desc > 0 ? '<div style="font-size:10px;color:var(--red);margin-top:2px;">📉 Desconto: -' + moeda(desc) + '</div>' : '';
+      var aplicado = it.aplicado;
+      var loteTxt = '';
+      if (aplicado?.preservadoPorContagem) {
+        loteTxt = 'Saldo preservado pela contagem do estoque';
+      } else if (aplicado?.vinc && Number(aplicado.qtdEst) > 0 && Number.isFinite(aplicado.custoUnitario) && aplicado.custoUnitario >= 0) {
+        var unidade = aplicado.vinc.startsWith('ing:') ? (it.unidadeEstoque || 'un. de estoque') : (it.unid || 'un.');
+        var formato = { maximumFractionDigits: 8 };
+        var quantidade = Number(aplicado.qtdEst).toLocaleString('pt-BR', formato);
+        var custo = aplicado.custoUnitario.toLocaleString('pt-BR', { ...formato, minimumFractionDigits: 2 });
+        loteTxt = 'Lote de ' + quantidade + ' ' + unidade + ' · R$ ' + custo + ' por ' + unidade;
+      }
       
       return `
         <div style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;">
@@ -7793,6 +7805,7 @@ window.salvarVendaManual = function() {
             <div style="font-size:13px;font-weight:700;color:var(--txt);">${it.qtd}x ${esc(it.nome)}</div>
             <div style="font-size:11px;color:var(--muted);">${moeda(it.valor)} / un</div>
             ${descTxt}
+            ${loteTxt ? '<div class="compra-lote-nota">' + esc(loteTxt) + '</div>' : ''}
           </div>
           <div style="font-size:14px;font-weight:800;color:var(--gold-2);">${moeda(sub)}</div>
         </div>
@@ -7800,7 +7813,7 @@ window.salvarVendaManual = function() {
     }).join('');
 
     var descNota = d.desconto || 0;
-    var totalLiquido = Math.max(0, bruto - descItens - descNota);
+    var totalLiquido = d.valor ?? Math.max(0, bruto - descItens - descNota);
 
     var resumoHtml = `
       <div style="background:#141416;border:1px solid var(--gold-dark);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px;margin-top:6px;">
