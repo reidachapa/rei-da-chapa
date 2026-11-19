@@ -5,7 +5,6 @@ const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const PrecosCompra = require('../purchase-pricing.js');
 const EstoqueIngredientes = require('../ingredient-stock.js');
-const PrecoProtegido = require('../protected-pricing.js');
 const VencimentosCompras = require('../purchase-payables.js');
 
 const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8').replace(/\r\n/g, '\n');
@@ -39,7 +38,7 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
   campos.btnSalvarDespesa = { disabled: false, textContent: editId ? 'Atualizar nota' : 'Salvar compra' };
   campos.modalDespesa = { classList: { remove() {} } };
   const document = { getElementById(id) { return campos[id] || null; }, querySelector() { return null; } };
-  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, PrecoProtegido, VencimentosCompras, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: tipoDesconto, BackupSys: { async salvar() { return true; } } };
+  const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, VencimentosCompras, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: tipoDesconto, BackupSys: { async salvar() { return true; } } };
   if (itensAoAbrir) {
     const snapshot = structuredClone(itensAoAbrir);
     window.__itensDaCompraSemEdicao = itensAtuais => isDeepStrictEqual(itensAtuais, snapshot);
@@ -62,8 +61,6 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
     ${source('lerMoeda', 'lerQuantidade')}
     ${source('alvoEstoque', 'refrescarEstoqueUI')}
     ${lookupSource}
-    ${html.split('\n').find(line => line.startsWith('function invalidarPrecoProtegido('))}
-    window.invalidarPrecoProtegido=invalidarPrecoProtegido;
     ${source('reverterCompraEstoque', 'vincularItemCompra')}
     ${source('aplicarCompraEstoque')}
     ${html.slice(saveStart, saveEnd)}
@@ -74,9 +71,13 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
 
 const ingrediente = () => ({ id: 'milho', nome: 'Milho', nomeBase: 'Milho', marca: 'Quero', estoque: 3, custo: 2, modoCompra: 'pacote', unidade: 'un', semEstoque: false });
 const item = (extra = {}) => ({ nome: 'Milho Bonduelle', nomeBase: 'Milho', marca: 'Bonduelle', tipoItem: 'ing', qtd: 2, valor: 3, unid: 'un', controlaEstoque: true, ...extra });
+const configuracaoAntigaDeLotes = () => ({ quantidadeInicial: 10, custoInicial: 4, percentual: 90, comprasIniciais: {} });
 
 test('compra da Coca-Cola vinculada soma no estoque e preserva o preço de venda do cadastro', async () => {
-  const coca = { id: 'coca-600', nome: '0600ml Coca-Cola', estoque: 10, custo: 4, preco: 10.78, categoria: 'Refrigerante' };
+  const coca = {
+    id: 'coca-600', nome: '0600ml Coca-Cola', estoque: 10, custo: 4, preco: 10.78,
+    categoria: 'Refrigerante', precoProtegido: configuracaoAntigaDeLotes(),
+  };
   const fixture = memoria({ produtos: [coca], itens: [{
     nome: '0600ml Coca-Cola', tipoItem: 'prod', vinc: 'prod:coca-600',
     qtd: 2, valor: 6, pv: null, lucroPct: null, modoPreco: null,
@@ -85,9 +86,28 @@ test('compra da Coca-Cola vinculada soma no estoque e preserva o preço de venda
   await fixture.app.salvarCompraDaNota();
   assert.equal(fixture.app.produtos.length, 1);
   assert.equal(coca.estoque, 12);
+  assert.equal(coca.custo, 52 / 12);
   assert.equal(coca.preco, 10.78);
   assert.equal(fixture.app.notas[0].valor, 12);
   assert.equal(fixture.app.notas[0].itens[0].pv, null);
+});
+
+test('compra com margem explícita calcula o preço sobre o custo médio mesmo com configuração antiga de lotes', async () => {
+  const coca = {
+    id: 'coca-600', nome: 'Coca-Cola', estoque: 10, custo: 4, preco: 10.78,
+    precoProtegido: configuracaoAntigaDeLotes(),
+  };
+  const { app } = memoria({ produtos: [coca], itens: [{
+    nome: coca.nome, tipoItem: 'prod', vinc: 'prod:coca-600',
+    qtd: 2, valor: 6, pv: null, lucroPct: 25, modoPreco: 'percentual',
+  }] });
+
+  await app.salvarCompraDaNota();
+
+  assert.equal(coca.estoque, 12);
+  assert.equal(coca.custo, 52 / 12);
+  assert.equal(coca.preco, 5.42);
+  assert.equal(app.notas[0].itens[0].pv, 5.42);
 });
 
 test('salvar nota usa o desconto e o custo unitário exatos com o campo visual em duas casas', async () => {
@@ -104,7 +124,7 @@ test('salvar nota usa o desconto e o custo unitário exatos com o campo visual e
   assert.ok(Math.abs(nota.valor - 88 * (1 - 10.5051 / 100)) < 1e-12);
 });
 
-function compraProtegidaEmEdicao({ vencimento, novoCusto = 6, camposNota = {} }) {
+function compraEmEdicao({ vencimento, novoCusto = 6, camposNota = {} }) {
   const coca = {
     id: 'coca-600', nome: '0600ml Coca-Cola', unidade: 'un', categoria: 'Refrigerante',
     estoque: 12, custo: 52 / 12, preco: 10.78,
@@ -122,7 +142,6 @@ function compraProtegidaEmEdicao({ vencimento, novoCusto = 6, camposNota = {} })
     status: 'pendente', vencimento: '2026-12-14', desconto: 0, descontoOriginal: 0, descontoTipo: 'valor',
     valor: 12, itens: [linha],
   };
-  coca.precoProtegido = PrecoProtegido.iniciar(coca, [nota], 6, 25);
   const itensAoAbrir = [{ ...linha, _indiceOriginalNota: 0 }];
   const fixture = memoria({
     produtos: [coca], notas: [nota], editId: nota.id,
@@ -133,8 +152,8 @@ function compraProtegidaEmEdicao({ vencimento, novoCusto = 6, camposNota = {} })
   return { ...fixture, coca, nota };
 }
 
-test('editar apenas o vencimento mantém estoque, custo e preço protegido da compra', async () => {
-  const { app, coca, nota } = compraProtegidaEmEdicao({ vencimento: '2026-12-15' });
+test('editar apenas o vencimento mantém o movimento de estoque, custo médio e preço do cadastro', async () => {
+  const { app, coca, nota } = compraEmEdicao({ vencimento: '2026-12-15' });
   coca.estoque = 1;
   const produtoAntes = structuredClone(coca);
   const movimentoAntes = structuredClone(nota.itens[0].aplicado);
@@ -147,11 +166,10 @@ test('editar apenas o vencimento mantém estoque, custo e preço protegido da co
   assert.equal(app.notas[0].itens[0].qtd, 2);
   assert.deepEqual(app.notas[0].itens[0].aplicado, movimentoAntes);
   assert.deepEqual(app.produtos[0], produtoAntes);
-  assert.equal(PrecoProtegido.calcular(app.produtos[0], app.notas).preco, 7.5);
 });
 
-test('editar o custo da compra recalcula a média e pede conferência do preço protegido', async () => {
-  const { app } = compraProtegidaEmEdicao({ vencimento: '2026-12-14', novoCusto: 7 });
+test('editar o custo da compra recalcula a média e preserva o preço quando não há margem informada', async () => {
+  const { app } = compraEmEdicao({ vencimento: '2026-12-14', novoCusto: 7 });
 
   await app.salvarCompraDaNota();
 
@@ -161,12 +179,10 @@ test('editar o custo da compra recalcula a média e pede conferência do preço 
   assert.equal(app.produtos[0].estoque, 12);
   assert.equal(app.produtos[0].custo, 4.5);
   assert.equal(app.produtos[0].preco, 10.78);
-  assert.equal(app.produtos[0].precoProtegido.revisar, true);
-  assert.equal(PrecoProtegido.calcular(app.produtos[0], app.notas).status, 'conferir');
 });
 
 test('quitar uma compra pelo banco grava a origem e mantém o vencimento e o estoque', async () => {
-  const { app, coca, nota } = compraProtegidaEmEdicao({
+  const { app, coca, nota } = compraEmEdicao({
     vencimento: '2026-12-14', camposNota: { despStatus: 'pago', despOrigemPagamento: 'banco' },
   });
   coca.estoque = 1;
@@ -196,7 +212,7 @@ test('novo ingrediente criado pela compra mantém nome base e marca em campos se
 });
 
 test('compra salva preço de venda pela margem e categoria no ingrediente existente', async () => {
-  const ing = { ...ingrediente(), estoque: 10, custo: 2, precoExtra: 1 };
+  const ing = { ...ingrediente(), estoque: 10, custo: 2, precoExtra: 1, precoProtegido: configuracaoAntigaDeLotes() };
   const fixture = memoria({ ingredientes: [ing], itens: [item({
     vinc: 'ing:milho', qtd: 2, valor: 5, categoria: 'Molhos',
     modoPreco: 'percentual', lucroPct: 80, pv: null,
@@ -209,7 +225,7 @@ test('compra salva preço de venda pela margem e categoria no ingrediente existe
 });
 
 test('compra salva preço de venda e categoria no pão cadastrado', async () => {
-  const pao = { id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 2, preco: 3 };
+  const pao = { id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 2, preco: 3, precoProtegido: configuracaoAntigaDeLotes() };
   const fixture = memoria({ paes: [pao], itens: [{
     nome: 'Pão Brioche', tipoItem: 'pao', vinc: 'pao:brioche', qtd: 2, valor: 5,
     categoria: 'Pães especiais', modoPreco: 'percentual', lucroPct: 80, pv: null,
