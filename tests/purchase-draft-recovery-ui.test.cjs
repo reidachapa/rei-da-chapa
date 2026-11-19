@@ -63,6 +63,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     return node;
   }
   const modal = element('div');
+  fields.btnRetomarRascunhoCompra = element('button');
   function findNode(predicate, node = modal) {
     if (predicate(node)) return node;
     for (const child of node.children) { const found = findNode(predicate, child); if (found) return found; }
@@ -187,6 +188,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     },
     captureReviewPanel() { window.__mostrarRevisaoRascunhoCompra = id => { reviewRequests.push(id); }; },
     async authorize() { await Promise.all((windowEvents.reiChapaGerenteAutorizado || []).map(fn => fn())); },
+    async resume() { await fields.btnRetomarRascunhoCompra.click(); },
     save() { return context.salvarCompraDaNota(); },
     button(text) { return findNode(node => node.tagName === 'button' && node.textContent === text); },
     get notes() { return copy(context.despesas); },
@@ -495,6 +497,8 @@ test('retomar uma edição cuja nota sumiu reabre os campos sem abrir o painel d
   app.setServer([]);
   app.captureReviewPanel();
   await app.authorize();
+  assert.equal(app.modal.classList.contains('aberto'), false);
+  await app.resume();
   assert.equal(app.modal.classList.contains('aberto'), true);
   assert.equal(app.fields.despObs.value, 'Alteração ainda não enviada');
   assert.equal(app.window.despItensTemp[0].qtd, 11);
@@ -516,6 +520,8 @@ test('retomar um rascunho antigo de compra nova preserva os campos sem editar ou
   const recarregado = criarAmbiente({ storage });
   recarregado.captureReviewPanel();
   await recarregado.authorize();
+  assert.equal(recarregado.modal.classList.contains('aberto'), false);
+  await recarregado.resume();
   assert.equal(recarregado.modal.classList.contains('aberto'), true);
   for (const [id, value] of Object.entries(registro.campos)) assert.equal(recarregado.fields[id].value, value);
   assert.deepEqual(copy(recarregado.window.despItensTemp), registro.itens);

@@ -65,6 +65,21 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
 const ingrediente = () => ({ id: 'milho', nome: 'Milho', nomeBase: 'Milho', marca: 'Quero', estoque: 3, custo: 2, modoCompra: 'pacote', unidade: 'un', semEstoque: false });
 const item = (extra = {}) => ({ nome: 'Milho Bonduelle', nomeBase: 'Milho', marca: 'Bonduelle', tipoItem: 'ing', qtd: 2, valor: 3, unid: 'un', controlaEstoque: true, ...extra });
 
+test('compra da Coca-Cola vinculada soma no estoque e preserva o preço de venda do cadastro', async () => {
+  const coca = { id: 'coca-600', nome: '0600ml Coca-Cola', estoque: 10, custo: 4, preco: 10.78, categoria: 'Refrigerante' };
+  const fixture = memoria({ produtos: [coca], itens: [{
+    nome: '0600ml Coca-Cola', tipoItem: 'prod', vinc: 'prod:coca-600',
+    qtd: 2, valor: 6, pv: null, lucroPct: null, modoPreco: null,
+  }] });
+
+  await fixture.app.salvarCompraDaNota();
+  assert.equal(fixture.app.produtos.length, 1);
+  assert.equal(coca.estoque, 12);
+  assert.equal(coca.preco, 10.78);
+  assert.equal(fixture.app.notas[0].valor, 12);
+  assert.equal(fixture.app.notas[0].itens[0].pv, null);
+});
+
 test('salvar compra com marca diferente soma no ingrediente existente e mantém rótulo da nota', async () => {
   const fixture = memoria({ ingredientes: [ingrediente()], itens: [item()] });
   await fixture.app.salvarCompraDaNota();

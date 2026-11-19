@@ -204,6 +204,7 @@
 
   return {
     calcular: calcular,
+    normalizarNome: nomeNormalizado,
     calcularDescontoItem: descontoItem,
     somarDescontosItens: somarDescontosItens,
     normalizarPercentualDigitado: normalizarPercentualDigitado,

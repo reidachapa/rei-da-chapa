@@ -4,7 +4,7 @@ const test = require('node:test');
 const vm = require('node:vm');
 
 const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
-const inicio = html.indexOf('  async function retomarRascunhoAposAutorizacao() {');
+const inicio = html.indexOf('  async function retomarRascunhoCompra() {');
 const fim = html.indexOf('  function abrirRascunhoCompraAusente(', inicio);
 assert(inicio >= 0 && fim > inicio);
 const funcao = html.slice(inicio, fim);
@@ -20,7 +20,7 @@ test('retoma a compra nova pela mesma chave UUID e mantém o sinal de retomada',
       setTimeout(fn) { fn(); },
       abrirModalDespesa(nota) { abertura = { nota, chave: context.chaveNovaCompraSeparada }; },
     },
-    document: { querySelector() { return null; } },
+    document: { querySelector(selector) { return selector === '.view.ativo' ? { id: 'view-compras' } : null; } },
     souGerente: () => true, estaAberto: () => false,
     carregarRascunhosServidor: async () => ({ ok: true }),
     localizarRascunhoParaRetomar: () => ({ chave: chaveRascunho, registro }),
@@ -30,7 +30,7 @@ test('retoma a compra nova pela mesma chave UUID e mantém o sinal de retomada',
   };
   vm.createContext(context);
   vm.runInContext(funcao, context);
-  await context.retomarRascunhoAposAutorizacao();
+  await context.retomarRascunhoCompra();
   assert.deepEqual(abertura, { nota: null, chave: chaveRascunho });
   assert.equal(registro.retomarAoVoltar, true);
 });
