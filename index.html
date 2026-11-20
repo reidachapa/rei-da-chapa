@@ -3755,6 +3755,21 @@ function alterarModoCustoItemCompra(item,modo){
   item.custoModo=modo;
   return true;
 }
+function limparEstoqueDaDespesaDaCompra(item){
+  ['aplicado','categoria','categoriaNome','marca','nomeBase','pv','lucroPct','modoPreco','rend','rendimentoInformado','unidadeEstoque','controlaEstoque','modoCompra','criarNovo','preservarSaldoContado'].forEach(function(campo){delete item[campo]});
+  item.vinc='';
+}
+function alterarTipoItemCompra(item,tipo){
+  if(item.tipoItem===tipo)return;
+  if(tipo==='despesa'||item.tipoItem==='despesa')limparEstoqueDaDespesaDaCompra(item);
+  delete item.categoriaFinanceira;
+  delete item.categoriaFinanceiraNome;
+  item.tipoItem=tipo;
+  item.vinc='';
+  if(tipo!=='despesa'){
+    item.pv=null;item.lucroPct=null;item.modoPreco=null;item.categoria='';item.categoriaNome='';
+  }
+}
 async function salvarCompraDaNota(e){
   if(e){e.preventDefault();e.stopImmediatePropagation();}
   if(compraNotaEmAndamento||window.__recuperacaoCompraEmAndamento)return;
@@ -3804,6 +3819,11 @@ async function salvarCompraDaNota(e){
   var statusCompra=campoCompra('despStatus')||'pago';
   var origemPagamento=campoCompra('despOrigemPagamento');
   var preservarItens=anterior&&itensSemEdicao&&tipoDesconto===(anterior.descontoTipo||'valor')&&descontoDigitado===(Number(anterior.descontoOriginal??anterior.desconto)||0);
+  if(!preservarItens&&arr.some(function(it){
+    if(!it||it.tipoItem!=='despesa')return false;
+    var descricao=String(it.nome||'').trim(),categoria=String(it.categoriaFinanceira||'').trim();
+    return (descricao||categoria||Number(it.totalCusto)||Number(it.valor))&&(!descricao||!categoria||!(Number(it.qtd)>0));
+  }))return toast('Preencha a descrição, a quantidade e a categoria financeira da despesa.');
   if(!preservarItens&&!itens.length)return toast('Adicione ao menos um item da compra');
   var itensCandidatos=itens.map(function(it){return Object.assign({},it,{descontoOriginal:Number(it.desconto)||0})});
   var candidataCompra={id:editId||null,tipoRegistro:'compra',data:data,fornecedor:campoCompra('despFornecedor'),nf:campoCompra('despNF'),itens:preservarItens?anterior.itens:itensCandidatos,descontoOriginal:descontoDigitado,descontoTipo:tipoDesconto};
@@ -3833,6 +3853,12 @@ async function salvarCompraDaNota(e){
       return obj?{tipo:tipo==='ing'?'ing':tipo==='pao'?'pao':'prod',obj:obj}:null;
     }
     itens.forEach(function(it){
+      if(it.tipoItem==='despesa'){
+        limparEstoqueDaDespesaDaCompra(it);
+        it.nome=String(it.nome).trim();
+        it.categoriaFinanceiraNome=it.categoriaFinanceiraNome||categoriaLabelSelecionada(it.categoriaFinanceira);
+        return;
+      }
       var tipo=String(it.vinc||'').indexOf('ing:')===0?'ing':String(it.vinc||'').indexOf('pao:')===0?'pao':(it.tipoItem==='ing'||it.tipoItem==='pao'?it.tipoItem:'prod');
       var alvo=it.vinc?alvoEstoque(it.vinc):null;
       if(alvo)tipo=alvo.tipo;
@@ -3912,7 +3938,14 @@ async function salvarCompraDaNota(e){
       grupo.indices.forEach(function(i){itens[i].pv=alvo.obj[campoPreco];itens[i].modoPreco=grupo.modoPreco;itens[i].lucroPct=grupo.lucroPct;});
     });
     function categoriaDaOpcaoDoItem(it){var idx=arr.indexOf(it);var sel=idx>=0?document.querySelector('#despItensLista .ic-cat[data-idx="'+idx+'"]'):null;return sel&&sel.value===String(it.categoria||'')&&sel.options[sel.selectedIndex]?String(sel.options[sel.selectedIndex].textContent||'').trim():String(it.categoria||'').trim()}
-    itens.forEach(function(it){var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';delete it._indiceOriginalNota});
+    itens.forEach(function(it){
+      if(it.tipoItem!=='despesa'){
+        var original=itemAnteriorDaNota(it),cat=String(it.categoria||'').trim();
+        if(original&&normalizarNome(original.categoria||'')===normalizarNome(cat))it.categoriaNome=original.categoriaNome||original.categoria||'';
+        else it.categoriaNome=cat?categoriaDaOpcaoDoItem(it)||cat:'';
+      }
+      delete it._indiceOriginalNota;
+    });
   }
   try{
     estadoAntes={produtos:JSON.parse(JSON.stringify(produtos)),ingredientes:JSON.parse(JSON.stringify(ingredientes)),paes:JSON.parse(JSON.stringify(paes)),despesas:JSON.parse(JSON.stringify(despesas))};
@@ -3940,15 +3973,16 @@ async function salvarCompraDaNota(e){
     try{if(window.BackupSys){var backupCompra=await window.BackupSys.salvar('auto',{origem:'compra',notaId:dados.id,notaNF:dados.nf});backupCompraCriado=!!(backupCompra&&backupCompra.compartilhado)}}catch(erroBackupCompra){console.warn('Compra salva, mas não consegui confirmar o backup compartilhado:',erroBackupCompra)}
     if(typeof refrescarEstoqueUI==='function') refrescarEstoqueUI();
     if(typeof renderCompras==='function') renderCompras();
+    if(typeof renderDespesasAvulsas==='function'&&document.getElementById('view-despesas')?.classList.contains('ativo'))renderDespesasAvulsas();
     if(typeof renderDRE==='function') renderDRE();
     if(typeof renderVendas==='function') renderVendas();
     var modal=document.getElementById('modalDespesa');if(modal)modal.classList.remove('aberto');
     window.despItensTemp=[];despItensTemp=[];window.editandoDespesaId=null;editandoDespesaId=null;
     if(dados.fornecedor)addSugestao('fornecedor',dados.fornecedor);
     if(dados.subcategoria)addSugestao('subcategoria',dados.subcategoria);
-    itens.forEach(function(it){if(it.nome)addSugestao('produto',it.nome);});
+    itens.forEach(function(it){if(it.nome&&it.tipoItem!=='despesa')addSugestao('produto',it.nome);});
     popularTodasSugestoes();
-    var resumoSalvo=preservarItens?'Compra atualizada no Supabase.':'Compra salva e estoque atualizado no Supabase.';
+    var resumoSalvo=preservarItens?'Compra atualizada no Supabase.':'Compra salva no Supabase.';
     toast(resumoSalvo+(backupCompraCriado?' Backup da compra confirmado.':' O Supabase não confirmou o backup compartilhado. Faça um backup quando a conexão estiver estável.'));
   }catch(err){
     console.error('Falha ao salvar compra:',err);
@@ -4112,14 +4146,52 @@ function validarItensDespesaAvulsa(itens){
   return(Array.isArray(itens)?itens:[]).every(function(it){it=it||{};var nome=String(it.nome||'').trim(),qtd=it.qtd===undefined?1:Number(it.qtd),valor=Number(it.valor)||0,comecou=!!nome||valor!==0||qtd!==1;if(!comecou)return true;return!!nome&&Number.isFinite(qtd)&&qtd>0&&Number.isFinite(valor)&&valor>0});
 }
 
+function despesasVinculadasDeCompra(nota, valores){
+  var partilha=valores||window.PrecosCompra.separarValoresDaCompra(nota);
+  if(!partilha)return [];
+  return partilha.despesas.map(function(linha){
+    var item=nota.itens[linha.indice];
+    return {
+      notaCompraId:nota.id,nf:nota.nf,fornecedor:nota.fornecedor,data:nota.data,criadoEm:nota.criadoEm,
+      status:nota.status,descricao:item.nome,categoria:item.categoriaFinanceira||'outro',
+      categoriaNome:item.categoriaFinanceiraNome,valor:linha.valorCentavos/100
+    };
+  });
+}
+
+function referenciaDespesaDeCompra(d){
+  return [d.nf?'NF '+d.nf:'Compra',d.fornecedor].filter(Boolean).join(' · ');
+}
+
+function botaoVerNotaDaDespesa(id){
+  return '<button type="button" class="btn-mini azul" data-acao="ver-nota-compra" data-id="'+esc(id)+'">Ver nota</button>';
+}
+
+function abrirNotaDaDespesa(id){
+  if(!souGerente())return;
+  var nota=(despesas||[]).find(function(d){return String(d.id)===String(id)&&!ehDespesaAvulsa(d)});
+  if(nota)window.abrirModalVerCompra?.(nota);
+}
+
 function separarDespesasDRE(despFiltradas){
-  var lista=Array.isArray(despFiltradas)?despFiltradas:[];
-  var comprasEstoque=lista.filter(function(d){if(d.tipoRegistro==='despesa')return false;return(Array.isArray(d.itens)?d.itens:[]).some(function(it){
-    if(Number(it.aplicado&&it.aplicado.qtdEst)>0)return true;
-    var alvo=typeof alvoEstoque==='function'?alvoEstoque(it.vinc):null;
-    return!!(alvo&&!alvo.obj.semEstoque);
-  })});
-  return{comprasEstoque:comprasEstoque,despesasOperacionais:lista.filter(function(d){return!comprasEstoque.includes(d)})};
+  var comprasEstoque=[],despesasOperacionais=[];
+  (Array.isArray(despFiltradas)?despFiltradas:[]).forEach(function(d){
+    var itens=Array.isArray(d.itens)?d.itens:[];
+    if(d.tipoRegistro!=='despesa'&&itens.some(function(it){return it?.tipoItem==='despesa'})){
+      var valores=window.PrecosCompra.separarValoresDaCompra(d);
+      despesasOperacionais.push(...despesasVinculadasDeCompra(d,valores));
+      if(itens.some(function(it){return it&&it.tipoItem!=='despesa'}))comprasEstoque.push(Object.assign({},d,{valor:valores.estoqueCentavos/100}));
+      return;
+    }
+    var temEstoque=d.tipoRegistro!=='despesa'&&itens.some(function(it){
+      if(!it)return false;
+      if(Number(it.aplicado&&it.aplicado.qtdEst)>0)return true;
+      var alvo=typeof alvoEstoque==='function'?alvoEstoque(it.vinc):null;
+      return !!(alvo&&!alvo.obj.semEstoque);
+    });
+    (temEstoque?comprasEstoque:despesasOperacionais).push(d);
+  });
+  return {comprasEstoque:comprasEstoque,despesasOperacionais:despesasOperacionais};
 }
 
 function totalizarDespesasOperacionais(despesasOperacionais){
@@ -4316,7 +4388,10 @@ function renderDRE() {
       const dataFmt = dataRegistroDRE(d.data).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const detalhesDespesa = formatarDetalhesFinanceirosDespesa(d);
       const categoriaHistorica = rotuloCategoriaFinanceira(d);
-      html.push(`<div class="desp-item"><div class="desp-icone">${info.e}</div><div class="desp-info"><strong>${esc(d.descricao)}</strong><small>${esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)} · ${dataFmt}${detalhesDespesa ? ' · ' + detalhesDespesa : ''}${d.obs ? ' · ' + esc(d.obs) : ''}</small></div><div class="desp-valor">−${moeda(d.valor)}</div><div class="desp-acoes"><button data-acao="editar" data-id="${esc(d.id)}">✏️</button><button data-acao="excluir" data-id="${esc(d.id)}" class="perigo">🗑️</button></div></div>`);
+      const referenciaNota=d.notaCompraId!=null?' · '+esc(referenciaDespesaDeCompra(d)):'';
+      const acoes=d.notaCompraId!=null?botaoVerNotaDaDespesa(d.notaCompraId):
+        `<button data-acao="editar" data-id="${esc(d.id)}">✏️</button><button data-acao="excluir" data-id="${esc(d.id)}" class="perigo">🗑️</button>`;
+      html.push(`<div class="desp-item"><div class="desp-icone">${info.e}</div><div class="desp-info"><strong>${esc(d.descricao)}</strong><small>${esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)} · ${dataFmt}${referenciaNota}${detalhesDespesa ? ' · ' + detalhesDespesa : ''}${d.obs ? ' · ' + esc(d.obs) : ''}</small></div><div class="desp-valor">−${moeda(d.valor)}</div><div class="desp-acoes">${acoes}</div></div>`);
     });
     html.push(`</div>`);
   }
@@ -4363,6 +4438,7 @@ function renderDRE() {
     btn.addEventListener('click', () => {
       if (!souGerente()) return toast('🔒');
       const { acao, id } = btn.dataset;
+      if(acao==='ver-nota-compra')return abrirNotaDaDespesa(id);
       const d = despesas.find(x => x.id === id);
       if (!d) return;
       if (acao === 'editar') {
@@ -4674,7 +4750,13 @@ function abrirModalEscolherMotoboy(p){
 
 $('#btnFecharEscolherMotoboy').addEventListener('click',()=>$('#modalEscolherMotoboy').classList.remove('aberto'));
 function renderStats(){const hoje=new Date().toDateString();const doDia=historico.filter(v=>new Date(v.finalizadoEm||v.data).toDateString()===hoje);const total=doDia.reduce((s,v)=>s+(v.subtotal!==undefined?v.subtotal:(v.total-(v.taxaEntrega||0))),0);$('#statVendas').textContent=moeda(total);$('#statPedidos').textContent=doDia.length}
-function renderTudo(){renderVendas();renderCarrinho();renderPedidos();renderEstoque();renderStats();window.renderVencimentosCompra?.();if(typeof window.renderPatrimonio==='function')window.renderPatrimonio();if(document.getElementById('view-dre')?.classList.contains('ativo')&&typeof renderDRE==='function')renderDRE();if(document.getElementById('view-caixa')?.classList.contains('ativo'))carregarCaixaMensal()}
+function renderTudo(){
+  renderVendas();renderCarrinho();renderPedidos();renderEstoque();renderStats();window.renderVencimentosCompra?.();
+  if(typeof window.renderPatrimonio==='function')window.renderPatrimonio();
+  if(document.getElementById('view-dre')?.classList.contains('ativo')&&typeof renderDRE==='function')renderDRE();
+  if(document.getElementById('view-despesas')?.classList.contains('ativo'))renderDespesasAvulsas();
+  if(document.getElementById('view-caixa')?.classList.contains('ativo'))carregarCaixaMensal();
+}
 $('#busca').addEventListener('input',renderVendas);
 
 const CHAVE_LOJAS='burgercontrol_lojas_v1';
@@ -5456,6 +5538,7 @@ function reverterCompraEstoque(itens,nota){
   var notaCompra=typeof ehNotaCompraSalva==='function'&&ehNotaCompraSalva(nota);
   var subtotalSemDescNota=lista.reduce(function(s,it){var bruto=Math.max(0,(Number(it.qtd)||0)*(Number(it.valor)||0)),d=Math.max(0,Number(it.descontoOriginal!==undefined?it.descontoOriginal:it.desconto)||0);if(it.descontoTipo==='percent')d=bruto*Math.min(100,d)/100;return s+Math.max(0,bruto-Math.min(bruto,d))},0);
   lista.forEach(function(it){
+    if(!it||it.tipoItem==='despesa')return;
     var ap=it&&it.aplicado, vinc=ap&&ap.vinc||it&&it.vinc;
     if(ap&&ap.preservadoPorContagem)return;
     if(!ap&&!notaCompra)return;
@@ -5494,6 +5577,7 @@ function vincularItemCompra(it){var a=alvoEstoque(it.vinc);if(!a){it.rend=0;retu
 function aplicarCompraEstoque(itens){
   (itens||[]).forEach(function(it){
     delete it.aplicado;
+    if(it.tipoItem==='despesa')return;
     var a = alvoEstoque(it.vinc);
     if(!a || !(it.qtd>0)) return;
     var o = a.obj;
@@ -5575,7 +5659,7 @@ function garantirCategoriaFinanceira(nome,emoji){
 }
 function categoriaLabelSelecionada(id){var sel=document.getElementById('despCategoria');if(!sel)return String(id||'');var op=Array.prototype.find.call(sel.options,function(x){return x.value===String(id||'')});return op?String(op.textContent||'').trim():String(id||'')}
 function rotuloCategoriaFinanceira(d){if(!d)return'—';var categoria=String(d.categoria||'').trim(),nome=String(d.categoriaNome||'').trim();return nome&&nome!==categoria?nome:nomeCatCompra(categoria)}
-function rotuloCategoriaItem(it){if(!it)return'';if(it.categoriaNome)return String(it.categoriaNome);return String(it.categoria||'').trim()}
+function rotuloCategoriaItem(it){if(!it)return'';if(it.tipoItem==='despesa')return String(it.categoriaFinanceiraNome||it.categoriaFinanceira||'').trim();if(it.categoriaNome)return String(it.categoriaNome);return String(it.categoria||'').trim()}
 function categoriasDaNota(d){var saida=[],vistos={};(d&&Array.isArray(d.itens)?d.itens:[]).forEach(function(it){var rot=rotuloCategoriaItem(it).trim();if(!rot)return;var chave=normalizarNomeCadastro(rot);if(!vistos[chave]){vistos[chave]=1;saida.push(rot)}});return saida}
 function guardarCategoriaCompraLocal(k,v){try{window.__appMemoryStorage.setItem(k,JSON.stringify(v))}catch(e){}}
 function colecoesDeTodasAsLojas(campo,atual){if(typeof salvarEstadoLojaAtivo==='function')salvarEstadoLojaAtivo();var listas=[],mapa=estadoRemotoPorLoja||{};Object.keys(mapa).forEach(function(id){var lista=mapa[id]&&mapa[id][campo];if(Array.isArray(lista)&&listas.indexOf(lista)<0)listas.push(lista)});if(Array.isArray(atual)&&listas.indexOf(atual)<0)listas.push(atual);return listas}
@@ -5714,21 +5798,50 @@ function salvarDespesaAvulsa(e){
 }
 function renderDespesasAvulsas(){
   if(!souGerente())return;
-  var lista=(despesas||[]).filter(ehDespesaAvulsa),meses={};
+  var lista=(despesas||[]).flatMap(function(d){return ehDespesaAvulsa(d)?[d]:despesasVinculadasDeCompra(d)}),meses={};
   lista.forEach(function(d){if(d.data)meses[String(d.data).slice(0,7)]=true});
   var mesSel=document.getElementById('filtroMesDespesas'),mesesOrdenados=Object.keys(meses).sort().reverse();
   if(mesSel){var valorAtual=despesasAvulsasMes;mesSel.innerHTML='<option value="">Todos os meses</option>'+mesesOrdenados.map(function(m){return'<option value="'+esc(m)+'">'+esc(rotuloMes(m))+'</option>'}).join('');if(meses[valorAtual])mesSel.value=valorAtual;else{despesasAvulsasMes='';mesSel.value=''}}
   var busca=(document.getElementById('buscaDespesasAvulsas')||{}).value||'',status=(document.getElementById('filtroStatusDespesas')||{}).value||'';
-  var filtradas=lista.filter(function(d){var nomesItens=(Array.isArray(d.itens)?d.itens:[]).map(function(it){return it.nome||''}).join(' ');return(!despesasAvulsasMes||String(d.data||'').slice(0,7)===despesasAvulsasMes)&&(!status||(d.status==='pendente'?'pendente':'pago')===status)&&(!busca||((d.descricao||'')+' '+(d.obs||'')+' '+nomesItens+' '+nomeCatCompra(d.categoria)).toLocaleLowerCase('pt-BR').includes(busca.toLocaleLowerCase('pt-BR')))}).sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''))||String(b.criadoEm||'').localeCompare(String(a.criadoEm||''))});
+  var filtradas=lista.filter(function(d){
+    var nomesItens=(Array.isArray(d.itens)?d.itens:[]).map(function(it){return it.nome||''}).join(' ');
+    var texto=[d.descricao,d.obs,nomesItens,rotuloCategoriaFinanceira(d),d.nf,d.fornecedor].join(' ').toLocaleLowerCase('pt-BR');
+    return (!despesasAvulsasMes||String(d.data||'').slice(0,7)===despesasAvulsasMes)&&
+      (!status||(d.status==='pendente'?'pendente':'pago')===status)&&
+      (!busca||texto.includes(busca.toLocaleLowerCase('pt-BR')));
+  }).sort(function(a,b){return String(b.data||'').localeCompare(String(a.data||''))||String(b.criadoEm||'').localeCompare(String(a.criadoEm||''))});
   var soma=filtradas.reduce(function(s,d){return s+(Number(d.valor)||0)},0),pago=filtradas.filter(function(d){return d.status!=='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0),pend=filtradas.filter(function(d){return d.status==='pendente'}).reduce(function(s,d){return s+(Number(d.valor)||0)},0);
   var cards=document.getElementById('despesasAvulsasStats');
   if(cards)cards.innerHTML='<div class="dre-card azul"><div class="titulo">Lançamentos</div><div class="valor">'+filtradas.length+'</div><div class="sub">no filtro</div></div><div class="dre-card"><div class="titulo">Total</div><div class="valor">'+moeda(soma)+'</div><div class="sub">despesas</div></div><div class="dre-card verde"><div class="titulo">✅ Pago</div><div class="valor">'+moeda(pago)+'</div><div class="sub">quitado</div></div><div class="dre-card vermelho"><div class="titulo">⏳ A pagar</div><div class="valor">'+moeda(pend)+'</div><div class="sub">pendente</div></div>';
   var box=document.getElementById('listaDespesasAvulsas');
   if(!box)return;
   if(!filtradas.length){box.innerHTML='<div class="dre-vazio">Nenhuma despesa encontrada neste filtro.</div>';return}
-  box.innerHTML=filtradas.map(function(d){var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,categoriaHistorica=rotuloCategoriaFinanceira(d),dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'',itens=(Array.isArray(d.itens)?d.itens:[]).filter(function(it){return String(it.nome||'').trim()}),resumo=itens.slice(0,3).map(function(it){return esc(it.qtd||1)+'× '+esc(it.nome)+' — '+moeda((Number(it.qtd)||0)*(Number(it.valor)||0))}).join(' · ')+(itens.length>3?' · +'+(itens.length-3)+' itens':''),detalhes=formatarDetalhesFinanceirosDespesa(d);return'<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+(detalhes?' · '+detalhes:'')+(d.obs?' · '+esc(d.obs):'')+'</small>'+(resumo?'<small class="desp-itens-resumo">📦 '+resumo+'</small>':'')+'</div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes"><button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button></div></div>'}).join('');
+  box.innerHTML=filtradas.map(function(d){
+    var info=DESPESA_LABEL[d.categoria]||DESPESA_LABEL.outro,categoriaHistorica=rotuloCategoriaFinanceira(d);
+    var dt=d.data?new Date(d.data+'T12:00:00').toLocaleDateString('pt-BR'):'';
+    var itens=(Array.isArray(d.itens)?d.itens:[]).filter(function(it){return String(it.nome||'').trim()});
+    var resumo=itens.slice(0,3).map(function(it){return esc(it.qtd||1)+'× '+esc(it.nome)+' — '+moeda((Number(it.qtd)||0)*(Number(it.valor)||0))}).join(' · ')+(itens.length>3?' · +'+(itens.length-3)+' itens':'');
+    var detalhes=formatarDetalhesFinanceirosDespesa(d);
+    var referenciaNota=d.notaCompraId!=null?' · '+esc(referenciaDespesaDeCompra(d)):'';
+    var acoes=d.notaCompraId!=null?botaoVerNotaDaDespesa(d.notaCompraId):
+      '<button type="button" class="btn-mini azul" data-acao="editar-despesa" data-id="'+esc(d.id)+'">✏️</button><button type="button" class="btn-mini vermelho" data-acao="excluir-despesa" data-id="'+esc(d.id)+'">🗑️</button>';
+    return '<div class="desp-item"><div class="desp-icone">'+esc(info.e)+'</div><div class="desp-info"><strong>'+esc(d.descricao||d.subcategoria||'Despesa')+'</strong><small>'+esc(categoriaHistorica==='—'?info.txt:categoriaHistorica)+' · '+dt+' · '+(d.status==='pendente'?'⏳ A pagar':'✅ Pago')+referenciaNota+(detalhes?' · '+detalhes:'')+(d.obs?' · '+esc(d.obs):'')+'</small>'+(resumo?'<small class="desp-itens-resumo">📦 '+resumo+'</small>':'')+'</div><div class="desp-valor">'+moeda(d.valor||0)+'</div><div class="desp-acoes">'+acoes+'</div></div>';
+  }).join('');
 }
-document.getElementById('btnNovaDespesaPagina').addEventListener('click',function(){abrirModalDespesaAvulsa(null)});document.getElementById('btnCancelarDespesaAvulsa').addEventListener('click',function(){document.getElementById('modalDespesaAvulsa').classList.remove('aberto')});document.getElementById('modalDespesaAvulsa').addEventListener('click',function(e){if(e.target===this)this.classList.remove('aberto')});document.getElementById('formDespesaAvulsa').addEventListener('submit',salvarDespesaAvulsa);document.getElementById('despAvulsaValor').addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);e.target.setSelectionRange(e.target.value.length,e.target.value.length)});document.getElementById('filtroMesDespesas').addEventListener('change',function(e){despesasAvulsasMes=e.target.value;renderDespesasAvulsas()});document.getElementById('filtroStatusDespesas').addEventListener('change',renderDespesasAvulsas);document.getElementById('buscaDespesasAvulsas').addEventListener('input',renderDespesasAvulsas);document.getElementById('listaDespesasAvulsas').addEventListener('click',function(e){var b=e.target.closest('button[data-acao]');if(!b)return;var id=b.dataset.id;if(b.dataset.acao==='editar-despesa')abrirModalDespesaAvulsa(id);else if(b.dataset.acao==='excluir-despesa'){var d=(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)});if(!d||!confirm('Excluir esta despesa?\n\n'+(d.descricao||'Despesa')+' — '+moeda(d.valor||0)))return;despesas=despesas.filter(function(x){return String(x.id)!==String(id)});salvar();renderDespesasAvulsas();renderDRE();toast('🗑️ Despesa excluída')}});
+document.getElementById('btnNovaDespesaPagina').addEventListener('click',function(){abrirModalDespesaAvulsa(null)});document.getElementById('btnCancelarDespesaAvulsa').addEventListener('click',function(){document.getElementById('modalDespesaAvulsa').classList.remove('aberto')});document.getElementById('modalDespesaAvulsa').addEventListener('click',function(e){if(e.target===this)this.classList.remove('aberto')});document.getElementById('formDespesaAvulsa').addEventListener('submit',salvarDespesaAvulsa);document.getElementById('despAvulsaValor').addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);e.target.setSelectionRange(e.target.value.length,e.target.value.length)});document.getElementById('filtroMesDespesas').addEventListener('change',function(e){despesasAvulsasMes=e.target.value;renderDespesasAvulsas()});document.getElementById('filtroStatusDespesas').addEventListener('change',renderDespesasAvulsas);document.getElementById('buscaDespesasAvulsas').addEventListener('input',renderDespesasAvulsas);
+document.getElementById('listaDespesasAvulsas').addEventListener('click',function(e){
+  var b=e.target.closest('button[data-acao]');
+  if(!b)return;
+  var id=b.dataset.id,acao=b.dataset.acao;
+  if(acao==='ver-nota-compra')return abrirNotaDaDespesa(id);
+  if(acao==='editar-despesa')return abrirModalDespesaAvulsa(id);
+  if(acao==='excluir-despesa'){
+    var d=(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)});
+    if(!d||!confirm('Excluir esta despesa?\n\n'+(d.descricao||'Despesa')+' — '+moeda(d.valor||0)))return;
+    despesas=despesas.filter(function(x){return String(x.id)!==String(id)});
+    salvar();renderDespesasAvulsas();renderDRE();toast('🗑️ Despesa excluída');
+  }
+});
 document.getElementById('btnAddItemDespesaAvulsa').addEventListener('click',function(){despesaAvulsaItensTemp.push({nome:'',qtd:1,valor:0,unid:'un'});renderItensDespesaAvulsa()});
 document.getElementById('despAvulsaItensLista').addEventListener('click',function(e){var b=e.target.closest('button.ic-del[data-idx]');if(!b)return;despesaAvulsaItensTemp.splice(Number(b.dataset.idx),1);renderItensDespesaAvulsa()});
 ['despAvulsaLitros','despAvulsaPrecoLitro'].forEach(function(id){document.getElementById(id).addEventListener('input',atualizarResumoItensDespesaAvulsa)});
@@ -6844,9 +6957,9 @@ window.salvarVendaManual = function() {
 
     if(despesa&&despesa.itens&&despesa.itens.length){
       window.despItensTemp=despesa.itens.map(function(i,index){
-        var vinc=i.vinc||'',alvo=alvoEstoque(vinc);
-        var tipo=vinc.indexOf('ing:')===0?'ing':vinc.indexOf('pao:')===0?'pao':(i.tipoItem==='ing'||i.tipoItem==='pao'?i.tipoItem:'prod');
-        return Object.assign({},i,{
+        var vinc=i.tipoItem==='despesa'?'':i.vinc||'',alvo=alvoEstoque(vinc);
+        var tipo=i.tipoItem==='despesa'?'despesa':vinc.indexOf('ing:')===0?'ing':vinc.indexOf('pao:')===0?'pao':(i.tipoItem==='ing'||i.tipoItem==='pao'?i.tipoItem:'prod');
+        var item=Object.assign({},i,{
           nome:i.nome,qtd:i.qtd,valor:i.valor,
           desconto:(i.descontoOriginal!=null?i.descontoOriginal:(i.desconto||0)),
           descontoTipo:i.descontoTipo||'valor',tipoItem:tipo,criarNovo:true,
@@ -6854,6 +6967,8 @@ window.salvarVendaManual = function() {
           vinc:vinc,unid:i.unid||(alvo&&alvo.obj.unidade)||'',rend:i.rend||0,
           _indiceOriginalNota:index,categoria:i.categoria||''
         });
+        if(tipo==='despesa')limparEstoqueDaDespesaDaCompra(item);
+        return item;
       });
     }else window.despItensTemp=[];
 
@@ -7767,6 +7882,7 @@ window.salvarVendaManual = function() {
         <div style="background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;">
           <div>
             <div style="font-size:13px;font-weight:700;color:var(--txt);">${it.qtd}x ${esc(it.nome)}</div>
+            ${it.tipoItem==='despesa'?'<div style="font-size:11px;color:var(--gold-2)">Despesa · '+esc(rotuloCategoriaItem(it))+'</div>':''}
             <div style="font-size:11px;color:var(--muted);">${moeda(it.valor)} / un</div>
             ${descTxt}
           </div>
@@ -10094,7 +10210,7 @@ window.salvarVendaManual = function() {
   }
 
   function buscarCatalogoCompra(it) {
-    if(!it)return null;
+    if(!it||it.tipoItem==='despesa')return null;
     var tipo=it.tipoItem||'prod',vinc=String(it.vinc||''),prefixo=tipo+':';
     if(tipo==='ing')return buscarIngredienteCompra(it);
     var nome=window.PrecosCompra.normalizarNome(it.nome),lista=tipo==='pao'?paes:produtos;
@@ -10117,7 +10233,7 @@ window.salvarVendaManual = function() {
     var cont = document.getElementById('despItensLista');
     if(!cont) return;
     var arr = window.despItensTemp || [];
-    arr.forEach(function(it){if(!it)return;var tipoVinc=String(it.vinc||'').split(':')[0];if(['prod','ing','pao'].indexOf(tipoVinc)>=0)it.tipoItem=tipoVinc;else if(!it.tipoItem)it.tipoItem='prod';});
+    arr.forEach(function(it){if(!it||it.tipoItem==='despesa')return;var tipoVinc=String(it.vinc||'').split(':')[0];if(['prod','ing','pao'].indexOf(tipoVinc)>=0)it.tipoItem=tipoVinc;else if(!it.tipoItem)it.tipoItem='prod';});
     atualizarListaAutocomplete();
     
     if(!arr.length){
@@ -10133,6 +10249,18 @@ window.salvarVendaManual = function() {
       var opcoes=it.tipoItem==='ing'?getCatsIngredienteCompra():it.tipoItem==='pao'?[{v:'Pães',t:'🥖 Pães'}]:cats.slice();
       if(atual&&!opcoes.some(function(c){return String(c.v)===String(atual)}))opcoes.unshift({v:atual,t:it.tipoItem==='ing'?(CATEGORIA_EMOJI[atual]||'🏷️')+' '+(CATEGORIA_LABEL[atual]||atual):atual});
       return '<option value="">— Categoria —</option>'+opcoes.map(function(c){return '<option value="'+esc(c.v)+'" '+(String(c.v)===String(atual)?'selected':'')+'>'+esc(c.t)+'</option>'}).join('');
+    }
+    function opcoesCategoriaDespesa(it){
+      var atual=String(it.categoriaFinanceira||'');
+      var existentes=document.getElementById('despCategoria')?.options||[];
+      var opcoes=ordenarCategoriasFinanceiras(Array.from(existentes).filter(function(op){
+        return op.value&&op.value!=='insumo'&&!op.value.startsWith('__')&&!op.disabled;
+      }));
+      if(atual&&!opcoes.some(function(op){return op.value===atual}))opcoes.unshift({value:atual,textContent:it.categoriaFinanceiraNome||atual});
+      return '<option value="">Selecione a categoria</option>'+opcoes.map(function(op){
+        var selecionada=op.value===atual;
+        return '<option value="'+esc(op.value)+'"'+(selecionada?' selected':'')+'>'+esc((selecionada&&it.categoriaFinanceiraNome)||op.textContent)+'</option>';
+      }).join('');
     }
     function infoCustoLinha(it){var qtd=Number(it.qtd)||0,bruto=qtd*(Number(it.valor)||0),desc=Number(it.desconto)||0;if(it.descontoTipo==='percent')desc=bruto*Math.min(100,desc)/100;var liquido=Math.max(0,bruto-Math.min(bruto,desc));var flex=it.tipoItem==='ing'&&(it.modoCompra==='flexivel'||(!it.modoCompra&&/^(kg|g|l|ml)$/i.test(String(it.unid||''))));if(flex){var ing=buscarIngredienteCompra(it),rend=it.rendimentoInformado?(Number(it.rend)||0):(Number(it.rend)>0?Number(it.rend):Number(ing&&ing.rendimento)||0),unidadeBase=it.unidadeEstoque||(ing&&ing.unidadeEstoque),unidade=rend>0?(unidadeBase||'porção'):(/^(mg|g|kg|ml|l)$/i.test(String(unidadeBase||''))?unidadeBase:it.unid||(ing&&ing.unidade)||'kg'),qtdEst=rend>0?qtd*rend:converterQuantidadeUnidade(qtd,it.unid||(ing&&ing.unidade)||unidade,unidade);if(qtdEst>0){var custoUn=liquido/qtdEst;return 'Estoque: +'+qtdEst.toLocaleString('pt-BR')+' '+unidade+' · custo: '+moeda(custoUn)+'/'+unidade}return 'Deixe o rendimento vazio se não souber; usaremos '+unidade+' por '+unidade+' comprada.'}return it.custoModo==='total'?'🔒 Custo por unidade: '+moeda(qtd>0?liquido/qtd:0):'🔒 Total do item: '+moeda(bruto)}
 
@@ -10170,8 +10298,9 @@ window.salvarVendaManual = function() {
     cont.innerHTML = arr.map(function(it, i){
       if(!it.tipoItem) it.tipoItem = 'prod';
       if(!it.descontoTipo) it.descontoTipo = 'valor';
-      if(it.controlaEstoque === undefined) it.controlaEstoque = true;
-      if(it.criarNovo === undefined) it.criarNovo = true;
+      var ehDespesa=it.tipoItem==='despesa';
+      if(!ehDespesa&&it.controlaEstoque === undefined) it.controlaEstoque = true;
+      if(!ehDespesa&&it.criarNovo === undefined) it.criarNovo = true;
 
       prepararCustoItemCompra(it);
 
@@ -10208,11 +10337,16 @@ window.salvarVendaManual = function() {
       var corIng = it.tipoItem === 'ing' ? '#fff' : 'var(--muted)';
       var bgPao = it.tipoItem === 'pao' ? 'linear-gradient(180deg,#c98a4c,#8a5520)' : 'transparent';
       var corPao = it.tipoItem === 'pao' ? '#fff' : 'var(--muted)';
+      var bgDespesa = ehDespesa ? 'linear-gradient(180deg,#9155b8,#603887)' : 'transparent';
+      var corDespesa = ehDespesa ? '#fff' : 'var(--muted)';
 
       var extraHtml = '';
       var classeCategoria = it.tipoItem==='ing'?'ic-cat-ing':it.tipoItem==='pao'?'ic-cat-pao':'ic-cat';
       var rotuloVenda = it.tipoItem==='ing'?'Adicional PDV R$':it.tipoItem==='pao'?'Preço do pão R$':'Venda R$';
-      extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
+      if(ehDespesa){
+        extraHtml='<label style="display:block;margin-top:7px;font-size:11px;color:var(--muted)">Categoria financeira da despesa'+
+          '<select class="ic-cat-despesa" data-idx="'+i+'" style="width:100%;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px">'+opcoesCategoriaDespesa(it)+'</select></label>';
+      }else extraHtml = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px">'+
         '<select class="'+classeCategoria+'" data-idx="'+i+'" aria-label="Categoria do item" style="min-width:0;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;outline:none">'+catOptsLinha+'</select>'+
         '<div aria-hidden="true"></div>'+
         '<input type="text" class="ic-margem" data-idx="'+i+'" placeholder="Lucro sobre custo (%)" title="Informe a margem para calcular o preço de venda" value="'+lucroStr+'" inputmode="decimal" style="min-width:0;width:100%;box-sizing:border-box;background:#181819;border:1px solid var(--gold);border-radius:8px;padding:10px;color:var(--gold-2);font-family:inherit;font-size:13px;font-weight:700;text-align:right;outline:none">'+
@@ -10234,12 +10368,13 @@ window.salvarVendaManual = function() {
       }
       return '<div style="background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid var(--iron-5);border-radius:12px;padding:12px;margin-bottom:10px">'+
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px"><strong style="font-size:11px;color:var(--gold-2)">ITEM '+(i+1)+'</strong><button type="button" class="ic-del" data-idx="'+i+'" style="background:rgba(229,72,77,.15);color:var(--red);border:1px solid rgba(229,72,77,.3);border-radius:6px;padding:4px 10px;cursor:pointer;font-family:inherit;font-weight:800;font-size:11px">✕</button></div>'+
-        '<input type="text" class="ic-nome" list="'+(it.tipoItem==='ing'?'listaNomesBaseIng':it.tipoItem==='pao'?'listaSugestoesCompraPao':'listaSugestoesCompra')+'" data-idx="'+i+'" placeholder="'+(it.tipoItem==='ing'?'Nome do ingrediente...':it.tipoItem==='pao'?'Nome do pão...':'Nome do produto...')+'" value="'+esc(it.tipoItem==='ing'?(it.nomeBase||it.nome||''):(it.nome||''))+'" style="width:100%;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px;margin-bottom:6px;outline:none">'+
+        '<input type="text" class="ic-nome" '+(ehDespesa?'autocomplete="off"':'list="'+(it.tipoItem==='ing'?'listaNomesBaseIng':it.tipoItem==='pao'?'listaSugestoesCompraPao':'listaSugestoesCompra')+'"')+' data-idx="'+i+'" placeholder="'+(ehDespesa?'Descrição da despesa...':it.tipoItem==='ing'?'Nome do ingrediente...':it.tipoItem==='pao'?'Nome do pão...':'Nome do produto...')+'" value="'+esc(it.tipoItem==='ing'?(it.nomeBase||it.nome||''):(it.nome||''))+'" style="width:100%;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px;margin-bottom:6px;outline:none">'+
         '<div class="status-box" id="status-box-'+i+'"></div>' + ((it.tipoItem==='ing'||it.tipoItem==='prod')?'<label style="display:block;margin:0 0 7px;font-size:11px;color:var(--muted)">Marca / subcategoria (opcional)<input type="text" class="ic-subnome" list="listaMarcasIngredientes" data-idx="'+i+'" placeholder="Ex.: Hellmann’s" value="'+esc(it.marca||'')+'" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;background:#181819;border:1px solid var(--iron-5);border-radius:8px;padding:10px;color:var(--txt);font-family:inherit;font-size:13px"></label>':'') +
-        '<div style="display:flex;background:#181819;border:1px solid var(--iron-5);border-radius:8px;overflow:hidden;margin-bottom:8px;margin-top:6px">'+
+        '<div style="display:flex;flex-wrap:wrap;background:#181819;border:1px solid var(--iron-5);border-radius:8px;overflow:hidden;margin-bottom:8px;margin-top:6px">'+
           '<button type="button" class="tipo-btn" data-idx="'+i+'" data-tipo="prod" style="flex:1;padding:8px;border:0;border-right:1px solid var(--iron-5);background:'+bgProd+';color:'+corProd+';font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">📦 Produto</button>'+
           '<button type="button" class="tipo-btn" data-idx="'+i+'" data-tipo="ing" style="flex:1;padding:8px;border:0;border-right:1px solid var(--iron-5);background:'+bgIng+';color:'+corIng+';font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">🥬 Ingrediente</button>'+
-          '<button type="button" class="tipo-btn" data-idx="'+i+'" data-tipo="pao" style="flex:1;padding:8px;border:0;background:'+bgPao+';color:'+corPao+';font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">🍞 Pão</button>'+
+          '<button type="button" class="tipo-btn" data-idx="'+i+'" data-tipo="pao" style="flex:1;padding:8px;border:0;border-right:1px solid var(--iron-5);background:'+bgPao+';color:'+corPao+';font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">🍞 Pão</button>'+
+          '<button type="button" class="tipo-btn" data-idx="'+i+'" data-tipo="despesa" aria-pressed="'+ehDespesa+'" style="flex:1;padding:8px;border:0;background:'+bgDespesa+';color:'+corDespesa+';font-family:inherit;font-weight:800;font-size:11px;cursor:pointer">💸 Despesa</button>'+
         '</div>'+
         '<div style="display:flex;gap:6px;margin:6px 0">'+
           '<button type="button" class="ic-custo-modo" data-idx="'+i+'" data-modo="unitario" aria-pressed="'+(it.custoModo==='unitario')+'" style="flex:1;min-height:42px;border:1px solid var(--iron-5);border-radius:7px;padding:7px;background:'+(it.custoModo==='unitario'?'linear-gradient(180deg,#4d9de5,#2a6da8)':'#181819')+';color:'+(it.custoModo==='unitario'?'#fff':'var(--muted)')+';font-weight:800;font-size:11px">Por unidade</button>'+
@@ -10274,6 +10409,7 @@ window.salvarVendaManual = function() {
       if(!box) return;
       
       var tipo = it.tipoItem || 'prod';
+      if(tipo==='despesa'){box.textContent='';return;}
       if(!String(it.nomeBase||it.nome||'').trim()){box.innerHTML='';return;}
       var existente = buscarCatalogoCompra(it);
       var outro = !existente && ['prod','ing','pao'].find(function(candidato) {
@@ -10292,11 +10428,12 @@ window.salvarVendaManual = function() {
     }
 
     // EVENTOS
-    cont.querySelectorAll('.tipo-btn').forEach(function(b){ b.addEventListener('click',function(){ var it=arr[b.dataset.idx],novoTipo=b.dataset.tipo;if(it.tipoItem!==novoTipo){it.tipoItem=novoTipo;it.vinc='';it.pv=null;it.lucroPct=null;it.modoPreco=null;it.categoria='';it.categoriaNome='';}window.renderDespItens(); }); });
+    cont.querySelectorAll('.tipo-btn').forEach(function(b){b.addEventListener('click',function(){alterarTipoItemCompra(arr[b.dataset.idx],b.dataset.tipo);window.renderDespItens();});});
     
     cont.querySelectorAll('.ic-nome').forEach(function(inp){
       function atualizarNome(e) {
         var i=e.target.dataset.idx,it=arr[i],nomeNovo=e.target.value;
+        if(it.tipoItem==='despesa'){it.nome=nomeNovo;return;}
         var ingrediente=it.tipoItem==='ing',nomeAntes=ingrediente?(it.nomeBase||it.nome):it.nome;
         var normalizar=ingrediente?normalizarNomeCadastro:window.PrecosCompra.normalizarNome;
         if(normalizar(nomeAntes)!==normalizar(nomeNovo)){
@@ -10319,6 +10456,13 @@ window.salvarVendaManual = function() {
     cont.querySelectorAll('.ic-rend').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx;arr[i].rend=lerQuantidade(e.target.value);arr[i].rendimentoInformado=true;if(!(arr[i].rend>0)&&!/^(mg|g|kg|ml|l)$/i.test(String(arr[i].unidadeEstoque||''))){arr[i].unidadeEstoque=arr[i].unid||'kg';var u=cont.querySelector('.ic-unid-estoque[data-idx="'+i+'"]');if(u)u.value=arr[i].unidadeEstoque}atualizarInfoCusto(i);});});
     cont.querySelectorAll('.ic-unid-estoque').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx;arr[i].unidadeEstoque=e.target.value.trim()||'porção';atualizarInfoCusto(i);});});
     cont.querySelectorAll('.ic-cat,.ic-cat-ing,.ic-cat-pao').forEach(function(s){ s.value = arr[s.dataset.idx].categoria || ''; s.addEventListener('change',function(e){ var i=e.target.dataset.idx,it=arr[i]; it.categoria=e.target.value; it.categoriaNome=''; }); });
+    cont.querySelectorAll('.ic-cat-despesa').forEach(function(s){
+      s.addEventListener('change',function(){
+        var it=arr[s.dataset.idx];
+        it.categoriaFinanceira=s.value;
+        it.categoriaFinanceiraNome=s.value?String(s.options[s.selectedIndex]?.textContent||s.value).trim():'';
+      });
+    });
     cont.querySelectorAll('.ic-qtd').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i];it.qtd=lerQuantidade(e.target.value);if(it.custoModo==='total')it.valor=it.qtd>0?(Number(it.totalCusto)||0)/it.qtd:0;else it.totalCusto=it.qtd*(Number(it.valor)||0);atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-valor').forEach(function(inp){inp.addEventListener('input',function(e){e.target.value=formatarMoedaDigitada(e.target.value);var i=e.target.dataset.idx,it=arr[i],valor=lerMoeda(e.target.value),q=Number(it.qtd)||0;if(it.custoModo==='total'){it.totalCusto=valor;it.valor=q>0?valor/q:0;}else{it.valor=valor;it.totalCusto=q*valor;}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});});
     cont.querySelectorAll('.ic-subtotal-manual').forEach(function(inp){inp.addEventListener('input',function(e){var i=e.target.dataset.idx,it=arr[i],desejado=Math.max(0,lerMoeda(e.target.value)),pct=it.descontoTipo==='percent'?Math.max(0,Number(it.desconto)||0):0;if(pct>=100&&desejado>0)return;var bruto=it.descontoTipo==='percent'?desejado/(1-pct/100):desejado+(Number(it.desconto)||0),q=Number(it.qtd)||0;if(q>0){it.valor=bruto/q;it.totalCusto=bruto;var custo=cont.querySelector('.ic-valor[data-idx="'+i+'"]');if(custo)custo.value=(it.custoModo==='total'?bruto:it.valor).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});}atualizarInfoCusto(i);window.atualizarSubtotalItem(i);window.atualizarTotaisDesp();});inp.addEventListener('blur',function(e){var it=arr[e.target.dataset.idx],bruto=(Number(it.qtd)||0)*(Number(it.valor)||0),desc=it.descontoTipo==='percent'?bruto*(Number(it.desconto)||0)/100:(Number(it.desconto)||0);e.target.value=moedaSimple(Math.max(0,bruto-Math.min(bruto,desc)));});});
@@ -10630,7 +10774,7 @@ setTimeout(function(){var form=document.getElementById('formProduto');if(form&&!
       }
       if(b.classList.contains('tipo-btn')){
         e.preventDefault();e.stopImmediatePropagation();var it=arr[idx];if(!it)return;
-        it.tipoItem=b.dataset.tipo;
+        alterarTipoItemCompra(it,b.dataset.tipo);
         if(it.tipoItem==='ing'){
           var nome=String(it.nome||'').trim().toLocaleLowerCase('pt-BR');
           var ex=(window.ingredientes||[]).find(function(x){return String(x.nome||'').trim().toLocaleLowerCase('pt-BR')===nome});

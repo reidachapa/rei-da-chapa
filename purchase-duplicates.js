@@ -21,6 +21,7 @@
   function preciso(valor) { return Math.round((valor + Number.EPSILON) * 1e8) / 1e8; }
 
   function tipo(item) {
+    if (item.tipoItem === 'despesa') return 'despesa';
     var vinc = String(item.vinc || item.aplicado && item.aplicado.vinc || '');
     if (vinc.indexOf('ing:') === 0) return 'ing';
     if (vinc.indexOf('pao:') === 0) return 'pao';
@@ -42,9 +43,10 @@
     var linhas = itens.map(function (item) {
       var quantidade = numero(item.qtd), custo = numero(item.valor);
       var bruto = Math.max(0, quantidade * custo), desconto = descontoItem(item, bruto);
+      var tipoLinha = tipo(item);
       subtotal += bruto - desconto;
       return JSON.stringify([
-        texto(item.nome), texto(item.marca), tipo(item), texto(item.unid || 'un'),
+        texto(item.nome), texto(tipoLinha === 'despesa' ? '' : item.marca), tipoLinha, texto(item.unid || 'un'),
         preciso(quantidade), preciso(custo), preciso(desconto)
       ]);
     }).sort();

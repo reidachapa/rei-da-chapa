@@ -42,6 +42,37 @@
   function somarDescontosItens(itens) {
     return (Array.isArray(itens) ? itens : []).reduce(function (s, it) { return s + descontoItem(it); }, 0);
   }
+
+  function separarValoresDaCompra(nota) {
+    if (!nota || nota.tipoRegistro === 'despesa' || !Array.isArray(nota.itens)) return null;
+    var despesas = [];
+    var bases = nota.itens.map(function (item, indice) {
+      if (!item) return 0;
+      if (item.tipoItem === 'despesa') despesas.push({ indice: indice, valorCentavos: 0 });
+      return bruto(item) - descontoItem(item, true);
+    });
+    if (!despesas.length) return null;
+    var subtotal = bases.reduce(function (s, base) { return s + base; }, 0);
+    var valor = finito(nota.valor);
+    if (valor === null) valor = subtotal - Math.max(0, numero(nota.desconto));
+    var totalCentavos = Math.round((Math.max(0, valor) + Number.EPSILON) * 100);
+    var baseAcumulada = 0, centavosDistribuidos = 0;
+    // Distribuir o líquido salvo por peso, arredondando no acumulado, fecha no total da nota.
+    var centavosPorIndice = bases.map(function (base) {
+      baseAcumulada += base;
+      var novoTotal = subtotal > 0 ? Math.round(totalCentavos * baseAcumulada / subtotal) : 0;
+      var centavos = novoTotal - centavosDistribuidos;
+      centavosDistribuidos = novoTotal;
+      return centavos;
+    });
+    var estoqueCentavos = totalCentavos;
+    despesas.forEach(function (despesa) {
+      despesa.valorCentavos = centavosPorIndice[despesa.indice];
+      estoqueCentavos -= despesa.valorCentavos;
+    });
+    return { estoqueCentavos: estoqueCentavos, despesas: despesas };
+  }
+
   function itemValido(it, incluirSemNome) { return !!(it && (String(it.nome || '').trim() || incluirSemNome) && numero(it.qtd) > 0); }
   function tipoVinculo(vinc) {
     var prefixo = String(vinc || '').split(':')[0];
@@ -82,9 +113,9 @@
   function reverterNota(nota, porTipoId) {
     var lista = nota && Array.isArray(nota.itens) ? nota.itens : [];
     var ehCompra = !!(nota && nota.tipoRegistro !== 'despesa' && lista.length);
-    var subtotal = lista.reduce(function (s, it) { return s + bruto(it) - descontoItem(it, true); }, 0);
+    var subtotal = lista.reduce(function (s, it) { return it ? s + bruto(it) - descontoItem(it, true) : s; }, 0);
     lista.forEach(function (it) {
-      if (!it) return;
+      if (!it || it.tipoItem === 'despesa') return;
       var ap = it.aplicado;
       if (ap && ap.preservadoPorContagem) return;
       if (!ap && !ehCompra) return;
@@ -157,7 +188,7 @@
     var grupos = [], porIndice = itens.map(function () { return null; }), porChave = new Map();
 
     itens.forEach(function (it, indice) {
-      if (!itemValido(it, incluirSemNome)) return;
+      if (!itemValido(it, incluirSemNome) || it.tipoItem === 'despesa') return;
       var nome = nomeNormalizado(it.nomeBase || it.nome), tipo = tipoItem(it), vinc = String(it.vinc || ''), catalogo = null;
       // A blank/changed name must not keep the previous catalog link alive in
       // the draft preview. The UI clears it on edits too; this guards stale
@@ -204,6 +235,7 @@
 
   return {
     calcular: calcular,
+    separarValoresDaCompra: separarValoresDaCompra,
     normalizarNome: nomeNormalizado,
     calcularDescontoItem: descontoItem,
     somarDescontosItens: somarDescontosItens,

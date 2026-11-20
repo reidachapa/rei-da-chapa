@@ -213,6 +213,53 @@ test('rascunho só é reconhecido como compra já salva se a origem de pagamento
   assert.equal(rascunhoCorrespondeACompraSalva(registro, [notaSalva], assinatura), false);
 });
 
+const despesaMista = {
+  tipoItem: 'despesa', nome: 'Sabão', qtd: 2, valor: 5, unid: 'un',
+  categoriaFinanceira: 'limpeza', categoriaFinanceiraNome: 'Limpeza',
+};
+
+test('reconhecimento de nota mista compara a classificação financeira de cada despesa', () => {
+  const nota = { ...notaSalva, itens: [...notaSalva.itens, despesaMista], valor: 48.88 };
+  const registro = {
+    operacao: 'nova', descontoTipo: 'valor', itens: nota.itens,
+    campos: { despData: nota.data, despFornecedor: nota.fornecedor, despNF: nota.nf,
+      despDesconto: '0,00', despCategoria: nota.categoria, despCategoriaNome: nota.categoriaNome,
+      despStatus: 'pago' },
+  };
+  const assinatura = ComprasDuplicadas.assinatura;
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [nota], assinatura), true);
+  for (const mudanca of [{ categoriaFinanceira: 'material' }, { categoriaFinanceiraNome: 'Material' }]) {
+    const diferente = { ...nota, itens: [...notaSalva.itens, { ...despesaMista, ...mudanca }] };
+    assert.equal(rascunhoCorrespondeACompraSalva(registro, [diferente], assinatura), false);
+  }
+});
+
+test('retomada de nota mista preserva a categoria alterada em outro aparelho quando o rascunho só mudou o valor', () => {
+  const produtoDeMesmoNome = { ...notaSalva.itens[0], nome: despesaMista.nome };
+  const base = { ...notaSalva, itens: [produtoDeMesmoNome, despesaMista] };
+  const registro = congelar({ editId: base.id, baseNota: base, itens: [{ ...despesaMista, valor: 6, _indiceOriginalNota: 1 }] });
+  const atual = { ...base, itens: [{ ...despesaMista, categoriaFinanceira: 'material', categoriaFinanceiraNome: 'Material' }, base.itens[0]] };
+  const preparado = prepararRegistro(registro, { editId: base.id, baseNota: atual });
+  assert.equal(preparado.itens[0]._indiceOriginalNota, 0);
+  assert.equal(preparado.itens[0].valor, 6);
+  assert.equal(preparado.itens[0].categoriaFinanceira, 'material');
+  assert.equal(preparado.itens[0].categoriaFinanceiraNome, 'Material');
+  assert.equal(registro.itens[0].categoriaFinanceira, 'limpeza');
+});
+
+test('classificações concorrentes e diferentes mantêm o rascunho para conferência', () => {
+  const base = { ...notaSalva, itens: [despesaMista] };
+  const local = { ...despesaMista, categoriaFinanceira: 'manutencao', categoriaFinanceiraNome: 'Manutenção', _indiceOriginalNota: 0 };
+  const registro = congelar({ editId: base.id, baseNota: base, itens: [local] });
+  const opcao = (item) => ({ editId: base.id, baseNota: { ...base, itens: [item] } });
+  assert.throws(
+    () => prepararRegistro(registro, opcao({ ...despesaMista, categoriaFinanceira: 'material', categoriaFinanceiraNome: 'Material' })),
+    { code: 'RASCUNHO_COMPRA_CATEGORIA_DESPESA_CONFLITO' },
+  );
+  assert.equal(prepararRegistro(registro, opcao(despesaMista)).itens[0].categoriaFinanceira, 'manutencao');
+  assert.equal(prepararRegistro(registro, opcao(local)).itens[0].categoriaFinanceira, 'manutencao');
+});
+
 test('confirmação da própria gravação avança a base antiga preservando o rascunho mais recente', () => {
   const registro = congelar({
     baseNota: { ...notaSalva, nf: '122' }, savedNote: { ...notaSalva, criadoEm: 'local' },

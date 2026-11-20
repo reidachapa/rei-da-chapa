@@ -47,6 +47,15 @@ test('tipo pode ser inferido do vínculo legado sem usar o identificador do cada
   assert.equal(assinatura(nota({ itens: [ingrediente] })), assinatura(nota({ itens: [legado] })));
 });
 
+test('despesa na nota tem tipo próprio e sua recategorização não autoriza nota duplicada', () => {
+  const despesa = item({ tipoItem: 'despesa', categoriaFinanceira: 'limpeza' });
+  const original = nota({ itens: [item(), despesa] });
+  const estoque = nota({ itens: [item(), { ...despesa, tipoItem: 'prod' }] });
+  const recategorizada = nota({ itens: [item(), { ...despesa, vinc: 'prod:antigo', marca: 'Marca do cadastro antigo', categoriaFinanceira: 'material', categoriaFinanceiraNome: 'Material' }] });
+  assert.notEqual(assinatura(original), assinatura(estoque));
+  assert.equal(assinatura(original), assinatura(recategorizada));
+});
+
 test('desconto efetivo do item compara percentual e valor e respeita descontoOriginal zero', () => {
   const porValor = nota({ itens: [item({ desconto: 9.72, descontoTipo: 'valor' })] });
   const percentual = nota({ itens: [item({ desconto: 50, descontoTipo: 'percent' })] });

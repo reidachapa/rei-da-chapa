@@ -123,14 +123,25 @@
     }
     function extrasItem(item) {
       item = item || {};
-      var tipoItem = tipoItemRascunho(item);
+      var tipo = tipoItem(item);
+      if (tipo === 'despesa') {
+        return JSON.stringify({
+          tipoItem: tipo,
+          nome: texto(item.nome),
+          unidade: texto(item.unid || 'un'),
+          categoriaFinanceira: texto(item.categoriaFinanceira),
+          categoriaFinanceiraNome: texto(item.categoriaFinanceiraNome || item.categoriaFinanceira),
+          descontoOriginal: valorMoedaRascunho(item.descontoOriginal !== undefined ? item.descontoOriginal : item.desconto),
+          descontoTipo: texto(item.descontoTipo || 'valor')
+        });
+      }
       return JSON.stringify({
         nome: texto(item.nome),
         nomeBase: texto(item.nomeBase || item.nome),
         marca: texto(item.marca),
-        tipoItem: tipoItem,
+        tipoItem: tipo,
         unidade: texto(item.unid || 'un'),
-        categoria: texto(item.categoria || (tipoItem === 'prod' ? 'Produtos' : tipoItem === 'ing' ? 'outro' : '')),
+        categoria: texto(item.categoria || (tipo === 'prod' ? 'Produtos' : tipo === 'ing' ? 'outro' : '')),
         categoriaNome: texto(item.categoriaNome || item.categoria),
         precoVenda: valorMoedaRascunho(item.pv),
         lucroPct: valorMoedaRascunho(item.lucroPct),
@@ -143,13 +154,6 @@
         controlaEstoque: item.controlaEstoque,
         rendimentoInformado: item.rendimentoInformado
       });
-    }
-    function tipoItemRascunho(item) {
-      var vinc = String(item.vinc || item.aplicado && item.aplicado.vinc || '');
-      if (vinc.indexOf('ing:') === 0) return 'ing';
-      if (vinc.indexOf('pao:') === 0) return 'pao';
-      if (vinc.indexOf('prod:') === 0) return 'prod';
-      return item.tipoItem === 'ing' || item.tipoItem === 'pao' ? item.tipoItem : 'prod';
     }
     function camposDoRascunhoIguais(nota) {
       if (!nota || !Array.isArray(nota.itens) || nota.itens.length !== registro.itens.length) return false;
@@ -199,6 +203,7 @@
   }
 
   function tipoItem(item) {
+    if (item.tipoItem === 'despesa') return 'despesa';
     var vinc = String(item.vinc || item.aplicado && item.aplicado.vinc || '');
     if (vinc.indexOf('ing:') === 0) return 'ing';
     if (vinc.indexOf('pao:') === 0) return 'pao';
@@ -208,6 +213,7 @@
 
   function identidadeItem(item) {
     if (!item || typeof item !== 'object') return null;
+    if (item.tipoItem === 'despesa') return JSON.stringify(['despesa', normalizar(item.nome)]);
     return JSON.stringify([
       String(item.vinc || item.aplicado && item.aplicado.vinc || '').trim(),
       tipoItem(item), normalizar(item.nomeBase || item.nome), normalizar(item.marca)
@@ -308,11 +314,40 @@
     copia.campos = campos;
   }
 
+  function reconciliarCategoriasDeDespesas(itens, rascunho, notaServidor) {
+    function categoria(item) {
+      var chave = String(item.categoriaFinanceira || '').trim();
+      return [chave, String(item.categoriaFinanceiraNome || chave).trim()];
+    }
+    function igual(a, b) { return a[0] === b[0] && a[1] === b[1]; }
+
+    itens.forEach(function (item, indice) {
+      if (!item || item.tipoItem !== 'despesa' || item._indiceOriginalNota == null) return;
+      var anterior = rascunho.itens[indice]._indiceOriginalNota;
+      var base = rascunho.baseNota.itens[anterior];
+      var atual = notaServidor.itens[item._indiceOriginalNota];
+      if (base.tipoItem !== 'despesa' || atual.tipoItem !== 'despesa') return;
+      var categoriaBase = categoria(base), categoriaLocal = categoria(item), categoriaServidor = categoria(atual);
+      if (igual(categoriaBase, categoriaServidor)) return;
+      if (igual(categoriaBase, categoriaLocal)) {
+        item.categoriaFinanceira = categoriaServidor[0];
+        item.categoriaFinanceiraNome = categoriaServidor[1];
+      } else if (!igual(categoriaLocal, categoriaServidor)) {
+        var erro = new Error('A categoria da despesa "' + item.nome + '" mudou em outro aparelho. ' +
+          'Para continuar, use a categoria mais recente (' + (categoriaServidor[1] || 'Sem categoria') +
+          ') ou descarte o rascunho e abra a nota novamente.');
+        erro.code = 'RASCUNHO_COMPRA_CATEGORIA_DESPESA_CONFLITO';
+        throw erro;
+      }
+    });
+  }
+
   function prepararRegistro(registro, opcoes) {
     var copia = clonar(registro || {});
     opcoes = opcoes || {};
-    if (registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
-        String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId)) {
+    var mesmaNota = registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
+      String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId);
+    if (mesmaNota) {
       reconciliarCamposPagamento(copia, registro, opcoes.baseNota);
     }
     delete copia.savedRecordId;
@@ -329,6 +364,9 @@
       copia.baseNota && Array.isArray(copia.baseNota.itens) ? copia.baseNota.itens : [],
       copia.itens
     );
+    if (mesmaNota && registro.baseNota && String(registro.baseNota.id) === String(opcoes.baseNota.id)) {
+      reconciliarCategoriasDeDespesas(copia.itens, registro, opcoes.baseNota);
+    }
     copia.temRascunho = true;
     copia.retomarAoVoltar = true;
     return copia;
