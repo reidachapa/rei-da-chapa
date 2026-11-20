@@ -7,12 +7,11 @@ const precos = require('../purchase-pricing.js');
 
 const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
 
-test('o formulário separa categoria da despesa dos campos de venda e do catálogo', () => {
+function renderizarItem(item) {
   const cartao = { innerHTML: '', querySelectorAll: () => [], querySelector: () => null };
   const categoria = { value: 'limpeza', textContent: '🧹 Limpeza', disabled: false };
-  const despesa = { tipoItem: 'despesa', nome: 'Detergente', qtd: 2, valor: 5, categoriaFinanceira: 'limpeza' };
   const contexto = {
-    window: { despItensTemp: [despesa], PrecosCompra: precos },
+    window: { despItensTemp: [item], PrecosCompra: precos },
     document: { getElementById: id => ({ despItensLista: cartao, despCategoria: { options: [categoria] } })[id] },
     atualizarListaAutocomplete() {},
     getCatsParaItem: () => [],
@@ -32,9 +31,22 @@ test('o formulário separa categoria da despesa dos campos de venda e do catálo
   assert.ok(custoInicio >= 0 && custoFim > custoInicio && renderInicio >= 0 && renderFim > renderInicio);
   vm.runInNewContext(html.slice(custoInicio, custoFim) + html.slice(renderInicio, renderFim) + '\nwindow.renderDespItens();', contexto);
 
-  assert.match(cartao.innerHTML, /data-tipo="despesa"/);
-  assert.match(cartao.innerHTML, /placeholder="Descrição da despesa/);
-  assert.match(cartao.innerHTML, /class="ic-cat-despesa"[\s\S]*value="limpeza"[^>]*selected/);
-  assert.doesNotMatch(cartao.innerHTML, /class="ic-(pv|margem)"|list="listaSugestoesCompra"/);
-  assert.match(cartao.innerHTML, /class="ic-desc-item"/);
+  return cartao.innerHTML;
+}
+
+test('um novo item da compra oferece Produto, Ingrediente e Pão', () => {
+  const cartao = renderizarItem({ tipoItem: 'prod', nome: '', qtd: 1, valor: 0 });
+  for (const tipo of ['prod', 'ing', 'pao']) {
+    assert.match(cartao, new RegExp(`data-tipo="${tipo}"`));
+  }
+  assert.doesNotMatch(cartao, /data-tipo="despesa"/);
+});
+
+test('o formulário mantém a categoria e os valores de uma despesa existente', () => {
+  const cartao = renderizarItem({ tipoItem: 'despesa', nome: 'Detergente', qtd: 2, valor: 5, categoriaFinanceira: 'limpeza' });
+  assert.match(cartao, /data-tipo="despesa"/);
+  assert.match(cartao, /placeholder="Descrição da despesa/);
+  assert.match(cartao, /class="ic-cat-despesa"[\s\S]*value="limpeza"[^>]*selected/);
+  assert.doesNotMatch(cartao, /class="ic-(pv|margem)"|list="listaSugestoesCompra"/);
+  assert.match(cartao, /class="ic-desc-item"/);
 });

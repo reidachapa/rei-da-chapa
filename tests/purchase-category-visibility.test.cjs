@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 
 const html = fs.readFileSync('index.html', 'utf8');
-const start = html.indexOf('function abrirGerenciadorCategorias(selId, tipo){');
+const start = html.indexOf('function abrirGerenciadorCategorias(selId, tipo, aoCriar){');
 const end = html.indexOf('\nfunction instalarBotao(selId, tipo){', start);
 assert(start >= 0 && end > start, 'o gerenciador de categorias existe');
 

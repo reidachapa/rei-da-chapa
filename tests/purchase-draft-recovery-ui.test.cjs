@@ -157,7 +157,7 @@ function criarAmbiente({ notas = [], confirmadas = [], storage = new Map() } = {
     estadoLocalSujo: false, salvandoRemoto: false, compraNotaEmAndamento: false, revisaoLocal: 0,
     estadoBaseSincronizado: null, ultimaAtualizacao: 'versao-anterior',
     produtos: [{ id: 'p1', estoque: 10, custo: 8 }], estadoRemotoPorLoja: {}, lojas: [],
-    sincronizarCategoriasPDV: render, sincronizarCategoriasFinanceiras: render,
+    sincronizarCategoriasPDV: render, sincronizarCategoriasFinanceiras: render, sincronizarCategoriasIngredientes: render,
     renderTudo: render, renderClientes: render, renderPaes: render,
     renderIngredientes: render, renderCompras: render, renderDRE: render,
     atualizarBotaoMotoboy: render, aplicarCorDaLoja: render, mesAtual: () => '2026-11',
