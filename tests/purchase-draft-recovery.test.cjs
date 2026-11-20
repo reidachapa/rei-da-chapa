@@ -213,6 +213,38 @@ test('rascunho só é reconhecido como compra já salva se a origem de pagamento
   assert.equal(rascunhoCorrespondeACompraSalva(registro, [notaSalva], assinatura), false);
 });
 
+test('reconhecimento de compra de pão compara o destino em estoque mesmo com descrição igual', () => {
+  const linha = { ...notaSalva.itens[0], nome: 'Pão de pacote 12 unidades', tipoItem: 'pao', vinc: 'pao:brioche' };
+  const nota = { ...notaSalva, itens: [linha] };
+  const campos = {
+    despData: nota.data, despFornecedor: nota.fornecedor, despNF: nota.nf, despDesconto: '0,00',
+    despCategoria: nota.categoria, despCategoriaNome: nota.categoriaNome, despStatus: 'pago',
+  };
+  const registro = { operacao: 'nova', descontoTipo: 'valor', campos, itens: [linha] };
+  const assinatura = ComprasDuplicadas.assinatura;
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [nota], assinatura), true);
+  const destinoDiferente = { ...nota, itens: [{ ...linha, vinc: 'pao:australia' }] };
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [destinoDiferente], assinatura), false);
+  const { vinc, ...linhaSemVinc } = linha;
+  const notaLegada = { ...nota, itens: [{ ...linhaSemVinc, aplicado: { vinc } }] };
+  assert.equal(rascunhoCorrespondeACompraSalva(registro, [notaLegada], assinatura), true);
+  const registroSemSelecao = { ...registro, itens: [{ ...linha, vinc: '', aplicado: { vinc } }] };
+  assert.equal(rascunhoCorrespondeACompraSalva(registroSemSelecao, [notaLegada], assinatura), false);
+});
+
+test('retomada de nota antiga conserva o vínculo do pão registrado apenas na aplicação de estoque', () => {
+  const linha = { tipoItem: 'pao', nome: 'Pão de pacote', qtd: 2, valor: 3, aplicado: { vinc: 'pao:brioche', qtdEst: 2 } };
+  const nota = { id: 'pao-legado', itens: [linha] };
+  const registro = congelar({ editId: nota.id, baseNota: nota, itens: [{ ...linha, _indiceOriginalNota: 0 }] });
+  const atual = { ...nota, itens: [{ ...linha, vinc: 'pao:brioche' }] };
+  const atualizado = prepararRegistro(registro, { editId: nota.id, baseNota: atual });
+  assert.equal(atualizado.itens[0]._indiceOriginalNota, 0);
+  assert.equal(atualizado.itens[0].vinc, 'pao:brioche');
+  assert.equal(atualizado.itens[0].aplicado, undefined);
+  const abandonado = itensSemAplicacao([{ ...linha, vinc: '' }]);
+  assert.equal(abandonado[0].vinc, '');
+});
+
 const despesaMista = {
   tipoItem: 'despesa', nome: 'Sabão', qtd: 2, valor: 5, unid: 'un',
   categoriaFinanceira: 'limpeza', categoriaFinanceiraNome: 'Limpeza',

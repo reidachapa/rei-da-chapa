@@ -63,6 +63,7 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
     ${lookupSource}
     ${source('reverterCompraEstoque', 'vincularItemCompra')}
     ${source('aplicarCompraEstoque')}
+    ${source('paesPadrao', 'limparEstoqueDaDespesaDaCompra')}
     ${html.slice(saveStart, saveEnd)}
     return {salvarCompraDaNota,get ingredientes(){return ingredientes},get produtos(){return produtos},get paes(){return paes},get notas(){return despesas}};
   `;
@@ -224,16 +225,21 @@ test('compra salva preço de venda pela margem e categoria no ingrediente existe
   assert.equal(fixture.app.notas[0].itens[0].pv, 4.5);
 });
 
-test('compra salva preço de venda e categoria no pão cadastrado', async () => {
+test('compra usa o pão selecionado, preservando a descrição do fornecedor e o preço configurado', async () => {
   const pao = { id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 2, preco: 3, precoProtegido: configuracaoAntigaDeLotes() };
-  const fixture = memoria({ paes: [pao], itens: [{
-    nome: 'Pão Brioche', tipoItem: 'pao', vinc: 'pao:brioche', qtd: 2, valor: 5,
+  const outro = { id: 'australia', nome: 'Pão Austrália', estoque: 3, custo: 4 };
+  const fixture = memoria({ paes: [pao, outro], itens: [{
+    nome: 'Pão Austrália', tipoItem: 'pao', vinc: 'pao:brioche', qtd: 2, valor: 5,
     categoria: 'Pães especiais', modoPreco: 'percentual', lucroPct: 80, pv: null,
   }] });
   await fixture.app.salvarCompraDaNota();
   assert.equal(pao.custo, 2.5);
   assert.equal(pao.preco, 4.5);
   assert.equal(pao.categoria, 'Pães especiais');
+  assert.equal(pao.estoque, 12);
+  assert.equal(outro.estoque, 3);
+  assert.equal(fixture.app.notas[0].itens[0].nome, 'Pão Austrália');
+  assert.equal(fixture.app.notas[0].itens[0].vinc, 'pao:brioche');
   assert.equal(fixture.app.notas[0].itens[0].pv, 4.5);
 });
 
@@ -246,11 +252,20 @@ test('compra cria ingrediente com preço e categoria digitados', async () => {
   assert.equal(fixture.app.ingredientes[0].precoExtra, 6.25);
 });
 
-test('compra cria pão com preço opcional em branco e categoria', async () => {
-  const fixture = memoria({ itens: [{ nome: 'Pão de teste', tipoItem: 'pao', qtd: 2, valor: 3, categoria: 'Pães especiais' }] });
+test('compra exige escolher um pão cadastrado, mesmo digitando o nome exato de um pão', async () => {
+  for (const vinc of ['', 'pao:removido']) {
+    const pao = { id: 'brioche', nome: 'Pão Brioche', estoque: 7, custo: 2 };
+    const fixture = memoria({ paes: [pao], itens: [{ nome: pao.nome, tipoItem: 'pao', qtd: 2, valor: 3, vinc }] });
+    await fixture.app.salvarCompraDaNota();
+    assert.equal(fixture.app.notas.length, 0);
+    assert.equal(fixture.app.paes.length, 1);
+    assert.equal(pao.estoque, 7);
+    assert.match(fixture.messages[0], /Selecione o pão/);
+  }
+  const fixture = memoria({ itens: [{ nome: 'Descrição nova do fornecedor', tipoItem: 'pao', qtd: 2, valor: 3 }] });
   await fixture.app.salvarCompraDaNota();
-  assert.equal(fixture.app.paes[0].categoria, 'Pães especiais');
-  assert.equal(fixture.app.paes[0].preco || 0, 0);
+  assert.equal(fixture.app.paes.length, 0);
+  assert.equal(fixture.app.notas.length, 0);
 });
 
 test('marca diferente não permite apagar rendimento já usado pelo ingrediente', async () => {

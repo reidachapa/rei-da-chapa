@@ -164,10 +164,39 @@ test('vínculos existentes prevalecem sobre nome e vínculo perdido reutiliza no
 });
 
 test('produto, ingrediente e pão ficam em grupos separados; linhas incompletas não entram', () => {
-  const r = calcular({ itens: [pago, { ...pago, tipoItem: 'ing' }, { ...pago, tipoItem: 'pao' }, { ...pago, qtd: 0 }, { ...pago, nome: '' }], produtos: [] });
+  const r = calcular({
+    itens: [pago, { ...pago, tipoItem: 'ing' }, { ...pago, tipoItem: 'pao', vinc: 'pao:brioche' }, { ...pago, qtd: 0 }, { ...pago, nome: '' }],
+    paes: [{ id: 'brioche', nome: 'Pão Brioche' }],
+  });
   assert.equal(r.grupos.length, 3);
   assert.deepEqual(r.grupos.map(g => [g.tipoItem, g.indices]), [['prod', [0]], ['ing', [1]], ['pao', [2]]]);
   assert.deepEqual(r.porIndice.slice(3), [null, null]);
+});
+
+test('prévia do pão usa o destino escolhido, inclusive antes de digitar a descrição', () => {
+  const paes = [
+    { id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 3 },
+    { id: 'australia', nome: 'Pão Australiano', estoque: 4, custo: 6 },
+  ];
+  const linha = { nome: '', tipoItem: 'pao', vinc: 'pao:australia', qtd: 2, valor: 3, lucroPct: 40 };
+  const segunda = { ...linha, nome: 'Pão Brioche' };
+  const { grupos, porIndice } = calcular({ itens: [linha, segunda], paes, incluirRascunhosSemNome: true });
+  assert.equal(grupos.length, 1);
+  assert.equal(porIndice[0], porIndice[1]);
+  assert.equal(porIndice[0].catalogoId, 'australia');
+  assert.equal(porIndice[0].custoMedio, 4.5);
+  assert.equal(porIndice[0].preco, 6.3);
+});
+
+test('pão sem destino válido só participa do rateio geral da nota', () => {
+  const paes = [{ id: 'brioche', nome: 'Pão Brioche', estoque: 10, custo: 3 }];
+  for (const vinc of ['', 'pao:inexistente', 'prod:suco']) {
+    const pao = { nome: 'Pão Brioche', tipoItem: 'pao', vinc, qtd: 1, valor: 9.72 };
+    const { grupos, porIndice } = calcular({ itens: [pago, pao], produtos: [produto], paes, descontoNota: 9.72 });
+    assert.equal(porIndice[1], null);
+    assert.equal(grupos.length, 1);
+    perto(porIndice[0].custoMedio, 2.16);
+  }
 });
 
 test('prévia pode calcular a venda antes do nome sem reutilizar vínculo antigo', () => {

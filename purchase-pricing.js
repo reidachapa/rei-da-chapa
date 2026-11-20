@@ -189,14 +189,15 @@
 
     itens.forEach(function (it, indice) {
       if (!itemValido(it, incluirSemNome) || it.tipoItem === 'despesa') return;
-      var nome = nomeNormalizado(it.nomeBase || it.nome), tipo = tipoItem(it), vinc = String(it.vinc || ''), catalogo = null;
-      // A blank/changed name must not keep the previous catalog link alive in
-      // the draft preview. The UI clears it on edits too; this guards stale
-      // drafts and guarantees we only project against a catalog item once a
-      // name is present.
-      if (nome && tipoVinculo(vinc) === tipo) catalogo = porTipoId[tipo].get(vinc.slice(tipo.length + 1)) || null;
+      var nome = nomeNormalizado(it.nomeBase || it.nome), tipo = it.tipoItem === 'pao' ? 'pao' : tipoItem(it);
+      var vinc = String(it.vinc || ''), catalogo = null;
+      // For bread the stock destination is chosen independently of the note description.
+      if ((tipo === 'pao' || nome) && tipoVinculo(vinc) === tipo) {
+        catalogo = porTipoId[tipo].get(vinc.slice(tipo.length + 1)) || null;
+      }
+      if (tipo === 'pao' && !catalogo) return;
       if (!catalogo && nome) catalogo = porTipoNome[tipo].get(nome) || null;
-      var chave = tipo + ':' + (!nome ? 'rascunho:' + indice : catalogo ? 'id:' + String(catalogo.id) : 'nome:' + nome);
+      var chave = tipo + ':' + (catalogo ? 'id:' + String(catalogo.id) : nome ? 'nome:' + nome : 'rascunho:' + indice);
       var grupo = porChave.get(chave);
       if (!grupo) {
         var saldoInicial = catalogo ? (tipo === 'ing' && catalogo.semEstoque ? catalogo.estoqueEstimado : catalogo.estoque) : 0;

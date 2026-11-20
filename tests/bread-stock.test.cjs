@@ -15,6 +15,7 @@ function garantir(initial) {
   return new Function('initial', `
     var paes=initial;
     function salvar(){} function renderPaes(){} function popularSelectPaes(){} function renderVendas(){}
+    ${source('paesPadrao', 'paesParaCompra')}
     ${source('garantirPaesMinimos', 'injetarBotaoNovoPao')}
     garantirPaesMinimos();return paes;
   `)(initial);
@@ -22,7 +23,7 @@ function garantir(initial) {
 
 test('catálogo de pães vazio nasce com saldos zero', () => {
   const defaults = garantir([]);
-  assert.deepEqual(defaults.map(p => [p.id, p.estoque]), [['brioche', 0], ['australia', 0]]);
+  assert.deepEqual(defaults.map(p => [p.id, p.estoque]), [['brioche', 0], ['australia', 0], ['brioche-kids', 0]]);
   assert(defaults.every(p => p.nome && p.icone), 'os cadastros continuam disponíveis para compras e receitas');
 });
 
@@ -71,9 +72,10 @@ test('limpar dados não recria saldos artificiais de pão', () => {
     var callback,paes=[{id:'anterior',estoque:3}],produtos=[],carrinho={},pedidos=[],historico=[],clientes=[],bensEmpresa=[],categoriasBens=[],motoboys=[],proximoNumeroCliente=1,contadores={},ingredientes=[],despesas=[];
     var window={};function souGerente(){return true}function confirm(){return true}function aplicarMotivosPerda(){}function salvarPerdas(){}function salvar(){}function renderTudo(){}function renderClientes(){}function renderPaes(){}function renderIngredientes(){}function toast(){}function mesAtual(){return '2026-11'}
     function $(id){return id==='#btnLimparTudo'?{addEventListener(type,fn){callback=fn}}:{classList:{remove(){}}};}
+    ${source('paesPadrao', 'paesParaCompra')}
     eval(actionSource);callback();return paes;
   `);
-  assert.deepEqual(executar(action).map(p => [p.id, p.estoque]), [['brioche', 0], ['australia', 0]]);
+  assert.deepEqual(executar(action).map(p => [p.id, p.estoque]), [['brioche', 0], ['australia', 0], ['brioche-kids', 0]]);
 });
 
 function movimentos(catalogo) {

@@ -42,10 +42,17 @@
     });
   }
 
+  function vinculoPao(item) {
+    var vinc = String(item.vinc == null ? item.aplicado && item.aplicado.vinc || '' : item.vinc).trim();
+    return vinc.indexOf('pao:') === 0 ? vinc : '';
+  }
+
   function itensSemAplicacao(itens) {
     return (Array.isArray(itens) ? itens : []).map(function (item) {
       var copia = clonar(item);
       if (copia && typeof copia === 'object') {
+        var destinoPao = copia.tipoItem !== 'despesa' && vinculoPao(copia);
+        if (destinoPao) copia.vinc = destinoPao;
         delete copia.aplicado;
         delete copia._indiceOriginalNota;
         delete copia.preservarSaldoContado;
@@ -140,6 +147,7 @@
         nomeBase: texto(item.nomeBase || item.nome),
         marca: texto(item.marca),
         tipoItem: tipo,
+        vinculoPao: tipo === 'pao' ? vinculoPao(item) : undefined,
         unidade: texto(item.unid || 'un'),
         categoria: texto(item.categoria || (tipo === 'prod' ? 'Produtos' : tipo === 'ing' ? 'outro' : '')),
         categoriaNome: texto(item.categoriaNome || item.categoria),
@@ -214,10 +222,9 @@
   function identidadeItem(item) {
     if (!item || typeof item !== 'object') return null;
     if (item.tipoItem === 'despesa') return JSON.stringify(['despesa', normalizar(item.nome)]);
-    return JSON.stringify([
-      String(item.vinc || item.aplicado && item.aplicado.vinc || '').trim(),
-      tipoItem(item), normalizar(item.nomeBase || item.nome), normalizar(item.marca)
-    ]);
+    var tipo = tipoItem(item);
+    var vinc = tipo === 'pao' ? vinculoPao(item) : String(item.vinc || item.aplicado && item.aplicado.vinc || '').trim();
+    return JSON.stringify([vinc, tipo, normalizar(item.nomeBase || item.nome), normalizar(item.marca)]);
   }
 
   function snapshotHistorico(valor) {
