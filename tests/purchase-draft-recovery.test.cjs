@@ -487,6 +487,38 @@ test('ocorrências repetidas equivalentes mantêm referências distintas na mesm
   assert.deepEqual(prepararRegistro(registro, { editId: 'nota', baseNota: base }).itens.map(it => it._indiceOriginalNota), [0, 1]);
 });
 
+test('rascunho da mesma nota reconhece item que já foi convertido para o ingrediente escolhido', () => {
+  const antes = { nome: 'Lacre 4x6', marca: 'Fornecedor', tipoItem: 'prod', vinc: 'prod:lacre', qtd: 480, valor: 0.021875, desconto: 0 };
+  const convertido = { nome: antes.nome, tipoItem: 'ing', vinc: 'ing:lacre', qtd: 480, valor: 0.021875, desconto: 0,
+    aplicado: { vinc: 'ing:lacre', qtdEst: 480 } };
+  const rascunho = congelar({
+    editId: 'nota-unica',
+    baseNota: { id: 'nota-unica', itens: [antes, item] },
+    itens: [{ ...convertido, nome: 'Lacre 4x6 Fornecedor', nomeBase: antes.nome, marca: 'Fornecedor', lucroPct: 83, _indiceOriginalNota: 0 }],
+  });
+  const atual = congelar({ id: 'nota-unica', itens: [item, convertido] });
+  const preparado = prepararRegistro(rascunho, { editId: atual.id, baseNota: atual });
+  assert.equal(preparado.itens[0]._indiceOriginalNota, 1);
+  assert.equal(preparado.itens[0].vinc, 'ing:lacre');
+  assert.equal(preparado.itens[0].lucroPct, 83);
+  assert.equal(preparado.itens[0].aplicado, undefined);
+  assert.equal(rascunho.baseNota.itens[0].vinc, 'prod:lacre');
+
+  for (const itens of [
+    [{ ...convertido, vinc: 'ing:outro' }],
+    [{ ...convertido, qtd: 500 }],
+    [convertido, { ...convertido, vinc: 'ing:outro' }],
+  ]) {
+    assert.throws(() => prepararRegistro(rascunho, { editId: atual.id, baseNota: { ...atual, itens } }),
+      { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+  }
+  assert.throws(() => prepararRegistro(rascunho, { editId: 'outra', baseNota: { ...atual, id: 'outra' } }),
+    { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+  const baseDeOutraNota = { ...rascunho, baseNota: { ...rascunho.baseNota, id: 'outra' } };
+  assert.throws(() => prepararRegistro(baseDeOutraNota, { editId: atual.id, baseNota: atual }),
+    { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+});
+
 test('histórico ambíguo de ingrediente contado interrompe a preparação e preserva o rascunho', () => {
   const registro = congelar({ baseNota: { id: 'antiga', itens: [ingredienteContado, structuredClone(ingredienteContado)] }, itens: [{ ...ingredienteContado, _indiceOriginalNota: 1 }] });
   const atual = congelar({ id: 'refeita', itens: [ingredienteContado] });

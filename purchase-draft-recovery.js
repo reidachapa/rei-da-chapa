@@ -243,7 +243,29 @@
     return erro;
   }
 
-  function remapearIndices(itens, anteriores, atuais, preparados) {
+  function destinoDoItemJaConvertido(item, origem, anteriores, atuais) {
+    var anterior = anteriores[origem];
+    if (tipoItem(anterior) !== 'prod' || tipoItem(item) !== 'ing') return null;
+    var vinculo = String(item.vinc || '').trim();
+    if (!vinculo.startsWith('ing:') || vinculo.length <= 4) return null;
+
+    function nomeDaLinha(linha) { return linha ? normalizar(linha.nomeBase || linha.nome) : ''; }
+    var nome = nomeDaLinha(anterior);
+    if (!nome || nomeDaLinha(item) !== nome ||
+        anteriores.filter(function (linha) { return nomeDaLinha(linha) === nome; }).length !== 1) return null;
+    var indices = atuais.flatMap(function (linha, i) { return nomeDaLinha(linha) === nome ? [i] : []; });
+    if (indices.length !== 1) return null;
+    var atual = atuais[indices[0]];
+    if (tipoItem(atual) !== 'ing' || String(atual.vinc || '').trim() !== vinculo) return null;
+
+    var descontoAnterior = Number(anterior.descontoOriginal ?? anterior.desconto ?? 0);
+    var descontoAtual = Number(atual.descontoOriginal ?? atual.desconto ?? 0);
+    if (Number(anterior.qtd) !== Number(atual.qtd) || Number(anterior.valor) !== Number(atual.valor) ||
+        descontoAnterior !== descontoAtual || (anterior.descontoTipo || 'valor') !== (atual.descontoTipo || 'valor')) return null;
+    return indices[0];
+  }
+
+  function remapearIndices(itens, anteriores, atuais, preparados, mesmaNota) {
     var usados = new Set();
     function indices(lista, chave) {
       var encontrados = [];
@@ -264,7 +286,12 @@
       var chave = identidadeItem(anteriores[origem]);
       var antigas = indices(anteriores, chave), novas = indices(atuais, chave), destino;
       if (antigas.length === 1 && novas.length === 1) destino = novas[0];
-      else {
+      if (mesmaNota && antigas.length === 1 && !novas.length) {
+        // Both versions already point to the same ingredient. Only accept
+        // the conversion for one unambiguous invoice line with unchanged cost.
+        destino = destinoDoItemJaConvertido(item, origem, anteriores, atuais);
+      }
+      if (destino == null) {
         // Repeated identities need equivalent historical snapshots. Equal
         // occurrences retain their order only when both counts still agree.
         var snapshot = JSON.stringify(snapshotHistorico(anteriores[origem]));
@@ -354,6 +381,7 @@
     opcoes = opcoes || {};
     var mesmaNota = registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
       String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId);
+    var baseDaMesmaNota = mesmaNota && registro.baseNota && String(registro.baseNota.id) === String(opcoes.baseNota.id);
     if (mesmaNota) {
       reconciliarCamposPagamento(copia, registro, opcoes.baseNota);
     }
@@ -369,9 +397,9 @@
       registro && Array.isArray(registro.itens) ? registro.itens : [],
       registro && registro.baseNota && Array.isArray(registro.baseNota.itens) ? registro.baseNota.itens : [],
       copia.baseNota && Array.isArray(copia.baseNota.itens) ? copia.baseNota.itens : [],
-      copia.itens
+      copia.itens, baseDaMesmaNota
     );
-    if (mesmaNota && registro.baseNota && String(registro.baseNota.id) === String(opcoes.baseNota.id)) {
+    if (baseDaMesmaNota) {
       reconciliarCategoriasDeDespesas(copia.itens, registro, opcoes.baseNota);
     }
     copia.temRascunho = true;
