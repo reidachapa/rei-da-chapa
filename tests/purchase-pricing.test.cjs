@@ -1,11 +1,69 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
-const { calcular, somarDescontosItens } = require('../purchase-pricing.js');
+const { calcular, somarDescontosItens, gramasPorUnidadeCompra, rendimentoPorGramas, podeContarIngredientePorUnidades } = require('../purchase-pricing.js');
 
 const pago = { nome: 'Suco Goiaba', tipoItem: 'prod', qtd: 6, valor: 3.24, lucroPct: 83 };
 const gratis = { ...pago, desconto: 19.44, descontoTipo: 'valor' };
 const produto = { id: 'suco', nome: 'Suco Goiaba', estoque: 0, custo: 0, preco: 5.93 };
 function perto(valor, esperado) { assert(Math.abs(valor - esperado) < 1e-10, `${valor} deveria ser ${esperado}`); }
+
+test('gramas por unidade calculam a mesma quantidade para quilogramas, gramas e miligramas', () => {
+  assert.equal(gramasPorUnidadeCompra('Quilos'), 1000);
+  assert.equal(gramasPorUnidadeCompra('Gr'), 1);
+  assert.equal(gramasPorUnidadeCompra('miligramas'), 0.001);
+  assert.equal(gramasPorUnidadeCompra('ml'), 0);
+  assert.equal(gramasPorUnidadeCompra('__proto__'), 0);
+  perto(2 * rendimentoPorGramas(50, 'kg'), 40);
+  perto(2000 * rendimentoPorGramas('50,0', 'g'), 40);
+  perto(2000000 * rendimentoPorGramas(50, 'mg'), 40);
+  for (const gramas of [null, '', 'inválido', 0, -50, Infinity, true]) {
+    assert.equal(rendimentoPorGramas(gramas, 'kg'), 0);
+  }
+  assert.equal(rendimentoPorGramas(50, 'L'), 0);
+});
+
+test('ingrediente novo ou contado em unidades aceita tamanho da unidade em gramas', () => {
+  assert.equal(podeContarIngredientePorUnidades(null, []), true);
+  assert.equal(podeContarIngredientePorUnidades({ id: 'a', unidadeEstoque: 'un' }, []), true);
+  assert.equal(podeContarIngredientePorUnidades({ id: 'a', unidadeEstoque: 'porções' }, []), true);
+});
+
+test('um saldo rotulado em gramas só vira unidades quando suas compras aplicadas comprovam a contagem', () => {
+  const vinc = 'ing:ketchup';
+  const ingrediente = { id: 'ketchup', modoCompra: 'flexivel', unidade: 'kg', unidadeEstoque: 'g', rendimento: 20, estoque: 39 };
+  const linha = {
+    vinc, tipoItem: 'ing', qtd: 2, unid: 'kg', rend: 20, unidadeEstoque: 'g',
+    aplicado: { vinc, qtdEst: 40, custoUnitario: 0.8975 },
+  };
+  const nota = (...itens) => ({ tipoRegistro: 'compra', itens });
+  assert.equal(podeContarIngredientePorUnidades(ingrediente, [nota(linha)]), true);
+  assert.equal(podeContarIngredientePorUnidades({ ...ingrediente, estoque: 41 }, [nota(linha)]), false);
+  assert.equal(podeContarIngredientePorUnidades(ingrediente, []), false);
+  assert.equal(podeContarIngredientePorUnidades(ingrediente, [nota({ ...linha, aplicado: undefined })]), false);
+  assert.equal(podeContarIngredientePorUnidades(ingrediente, [nota({ ...linha, aplicado: { vinc, qtdEst: 2000 } })]), false);
+  assert.equal(podeContarIngredientePorUnidades(ingrediente, [nota(linha), nota({ ...linha, rend: 0 })]), false);
+  assert.equal(podeContarIngredientePorUnidades({ ...ingrediente, rendimento: 0 }, [nota(linha)]), false);
+  assert.equal(podeContarIngredientePorUnidades({ ...ingrediente, contagemEstoqueId: 'contagem' }, [nota(linha)]), false);
+  assert.equal(podeContarIngredientePorUnidades({ ...ingrediente, contagensEstoque: [{ id: 'contagem' }] }, [nota(linha)]), false);
+});
+
+test('corrigir a unidade da nota com uma porção já vendida preserva saldo, custo e preço', () => {
+  const vinc = 'ing:ketchup';
+  const item = {
+    nome: 'Ketchup', vinc, tipoItem: 'ing', qtd: 2, unid: 'kg', rend: 20, valor: 17.95,
+    modoCompra: 'flexivel', unidadeEstoque: 'g', modoPreco: 'percentual', lucroPct: 83,
+    aplicado: { vinc, qtdEst: 40, custoAntes: 0, custoUnitario: 0.8975 },
+  };
+  const novoItem = { ...item, rend: rendimentoPorGramas(50, 'kg'), unidadeEstoque: 'un' };
+  const resultado = calcular({
+    itens: [novoItem],
+    notaAnterior: { tipoRegistro: 'compra', itens: [item] },
+    ingredientes: [{ id: 'ketchup', nome: 'Ketchup', estoque: 39, custo: 0.8975 }],
+  }).grupos[0];
+  assert.equal(resultado.estoque, 39);
+  perto(resultado.custoMedio, 0.8975);
+  assert.equal(resultado.preco, 1.64);
+});
 
 test('bonificação de outro fardo compõe uma média única e o preço de todas as linhas', () => {
   const r = calcular({ itens: [pago, gratis], produtos: [] });

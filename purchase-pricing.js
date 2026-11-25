@@ -85,11 +85,66 @@
   function unidadeMedida(valor) {
     var unidade = String(valor || '').trim().toLocaleLowerCase('pt-BR').replace(/\./g, '');
     if (/^(mg|miligramas?)$/.test(unidade)) return 'mg';
-    if (/^(quilo|quilos)$/.test(unidade)) return 'kg';
+    if (/^(quilo|quilos|quilograma|quilogramas)$/.test(unidade)) return 'kg';
     if (/^(gr|grama|gramas)$/.test(unidade)) return 'g';
     if (/^(ml|mililitros?)$/.test(unidade)) return 'ml';
     if (/^(lt|litro|litros)$/.test(unidade)) return 'l';
     return unidade;
+  }
+  function gramasPorUnidadeCompra(unidade) {
+    var medida = unidadeMedida(unidade);
+    if (medida === 'kg') return 1000;
+    if (medida === 'g') return 1;
+    if (medida === 'mg') return 0.001;
+    return 0;
+  }
+  function rendimentoPorGramas(gramasPorUnidade, unidadeCompra) {
+    var tipo = typeof gramasPorUnidade;
+    if (tipo !== 'number' && tipo !== 'string') return 0;
+    var gramas = Number(String(gramasPorUnidade).trim().replace(',', '.'));
+    if (!Number.isFinite(gramas) || gramas <= 0) return 0;
+    var rendimento = gramasPorUnidadeCompra(unidadeCompra) / gramas;
+    return Number.isFinite(rendimento) ? rendimento : 0;
+  }
+  function quantidadesEquivalentes(a, b) {
+    return Number.isFinite(a) && Number.isFinite(b) &&
+      Math.abs(a - b) <= 1e-9 * Math.max(1, Math.abs(a), Math.abs(b));
+  }
+  function podeContarIngredientePorUnidades(ingrediente, notas) {
+    if (!ingrediente) return true;
+    if (ingrediente.consumoMedia) return false;
+    var usaRendimento = ingrediente.modoCompra === 'flexivel' && finito(ingrediente.rendimento) > 0;
+    var unidadeEstoque = unidadeMedida(ingrediente.unidadeEstoque || (usaRendimento ? 'un' : ingrediente.unidade));
+    if (!/^(mg|g|kg|ml|l)$/.test(unidadeEstoque)) return true;
+    if (!usaRendimento || ingrediente.contagemEstoqueId ||
+        Array.isArray(ingrediente.contagensEstoque) && ingrediente.contagensEstoque.length) return false;
+
+    var saldo = finito(ingrediente.semEstoque ? ingrediente.estoqueEstimado : ingrediente.estoque);
+    if (saldo === null || saldo < 0 || ingrediente.id == null) return false;
+    var vinculo = 'ing:' + String(ingrediente.id);
+    var quantidadeConfirmada = 0;
+    for (var nota of Array.isArray(notas) ? notas : []) {
+      if (!nota || nota.tipoRegistro === 'despesa' || !Array.isArray(nota.itens)) continue;
+      for (var item of nota.itens) {
+        if (!item || item.tipoItem === 'despesa') continue;
+        var aplicado = item.aplicado;
+        if (item.vinc !== vinculo && (!aplicado || aplicado.vinc !== vinculo)) continue;
+        var rendimento = finito(item.rend);
+        var quantidade = finito(item.qtd);
+        var quantidadeAplicada = aplicado && finito(aplicado.qtdEst);
+        if (!aplicado || aplicado.vinc !== vinculo || aplicado.preservadoPorContagem ||
+            Boolean(aplicado.semEstoque) !== Boolean(ingrediente.semEstoque) ||
+            item.modoCompra && item.modoCompra !== 'flexivel' ||
+            !gramasPorUnidadeCompra(item.unid || ingrediente.unidade) ||
+            !(rendimento > 0 && quantidade > 0 && quantidadeAplicada > 0) ||
+            !quantidadesEquivalentes(quantidadeAplicada, quantidade * rendimento)) return false;
+        quantidadeConfirmada += quantidadeAplicada;
+      }
+    }
+
+    // O saldo pode ser menor que as entradas se a loja já vendeu unidades.
+    return Number.isFinite(quantidadeConfirmada) && quantidadeConfirmada > 0 &&
+      (saldo <= quantidadeConfirmada || quantidadesEquivalentes(saldo, quantidadeConfirmada));
   }
   function converterQuantidade(qtd, origem, destino) {
     var n = numero(qtd), a = unidadeMedida(origem), b = unidadeMedida(destino);
@@ -210,7 +265,9 @@
       var qtd = Array.isArray(entrada.quantidadesEstoquePorIndice) ? numero(entrada.quantidadesEstoquePorIndice[indice]) : (tipo === 'ing' && it.modoCompra === 'flexivel' && numero(it.rend) > 0 ? numero(it.qtd) * numero(it.rend) : numero(it.qtd));
       if (!(qtd > 0)) return;
       var saldo = grupo.estoque, custo = grupo.custoMedio, novoSaldo = saldo + qtd;
-      grupo.custoMedio = novoSaldo > 0 ? (saldo * custo + liquido) / novoSaldo : liquido / qtd;
+      var saldoParaCusto = tipo === 'ing' ? Math.max(0, saldo) : saldo;
+      var pesoDoCusto = saldoParaCusto + qtd;
+      grupo.custoMedio = pesoDoCusto > 0 ? (saldoParaCusto * custo + liquido) / pesoDoCusto : liquido / qtd;
       grupo.estoque = novoSaldo;
       grupo.indices.push(indice);
       porIndice[indice] = grupo;
@@ -236,6 +293,9 @@
 
   return {
     calcular: calcular,
+    gramasPorUnidadeCompra: gramasPorUnidadeCompra,
+    rendimentoPorGramas: rendimentoPorGramas,
+    podeContarIngredientePorUnidades: podeContarIngredientePorUnidades,
     separarValoresDaCompra: separarValoresDaCompra,
     normalizarNome: nomeNormalizado,
     calcularDescontoItem: descontoItem,
