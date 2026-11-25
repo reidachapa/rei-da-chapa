@@ -646,6 +646,43 @@ test('a edição seguinte retoma a base confirmada depois que um ingrediente mud
     { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
 });
 
+test('rascunho antigo recupera a linha do ingrediente já vinculado na versão atual da mesma nota', () => {
+  const linha = (nome, vinc, categoria, unidadeEstoque) => ({
+    tipoItem: 'ing', nome, nomeBase: nome, marca: 'Vigor', vinc, categoria, unidadeEstoque,
+    unid: 'kg', qtd: 3, valor: 12.9, desconto: 0, modoCompra: 'flexivel', controlaEstoque: true,
+    aplicado: { vinc, qtdEst: 0, custoUnitario: 12.9, semEstoque: true },
+  });
+  const outraLinha = { tipoItem: 'pao', nome: 'Pão Brioche', vinc: 'pao:brioche', qtd: 54, valor: 1.73 };
+  const base = { id: 'nota-iphone', itens: [linha('Maionese antiga', 'ing:a', 'outro', 'un'), outraLinha] };
+  const salva = { ...base, itens: [linha('Maionese cadastrada', 'ing:b', 'molho', 'g'), outraLinha] };
+  const atual = { ...base, itens: [linha('Maionese Vigor', 'ing:c', 'molho', 'un'), outraLinha] };
+  const rascunho = congelar({
+    editId: base.id, savedRecordId: base.id, baseNota: base, savedNote: salva,
+    syncSubmittedAt: 'envio-anterior', updatedAt: 'edicao-iphone',
+    itens: [{ ...atual.itens[0], unidadeEstoque: 'gr', _indiceOriginalNota: 0 },
+      { ...outraLinha, _indiceOriginalNota: 1 }],
+  });
+  const preparar = (nota, draft = rascunho) => prepararRegistro(draft, { editId: nota.id, baseNota: nota });
+  const recuperado = preparar(atual);
+  assert.deepEqual(recuperado.baseNota, atual);
+  assert.equal(recuperado.itens[0]._indiceOriginalNota, 0);
+  assert.equal(recuperado.itens[0].vinc, 'ing:c');
+  assert.equal(recuperado.itens[0].unidadeEstoque, 'gr');
+
+  const ambiguo = {
+    ...atual, itens: [atual.itens[0], linha('Outra maionese', 'ing:d', 'molho', 'un')],
+  };
+  const precoDiferente = { ...atual, itens: [{ ...atual.itens[0], valor: 20 }, outraLinha] };
+  const saldoDiferente = { ...atual, itens: [
+    { ...atual.itens[0], aplicado: { ...atual.itens[0].aplicado, qtdEst: 2 } }, outraLinha,
+  ] };
+  for (const nota of [ambiguo, precoDiferente, saldoDiferente, { ...atual, itens: atual.itens.slice().reverse() }]) {
+    assert.throws(() => preparar(nota), { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+  }
+  assert.throws(() => preparar(atual, { ...rascunho, savedRecordId: 'outra-nota' }),
+    { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+});
+
 test('exclusão remota lê o rascunho e apaga apenas a revisão confirmada com filtros curtos', async () => {
   const envelope = { tipo: 'rei-da-chapa-rascunho-compra', versao: 1,
     registro: { updatedAt: 'rev-1', rascunhoAtualizadoEm: 1795630558000, itens: 'Açaí'.repeat(8000) } };

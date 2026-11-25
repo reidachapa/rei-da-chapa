@@ -265,7 +265,36 @@
     return indices[0];
   }
 
-  function remapearIndices(itens, anteriores, atuais, preparados, mesmaNota) {
+  function historicoIngredienteSemCadastro(item) {
+    if (!item || tipoItem(item) !== 'ing') return null;
+    var historico = snapshotHistorico(item);
+    ['nome', 'nomeBase', 'vinc', 'categoria', 'categoriaNome', 'unidadeEstoque'].forEach(function (campo) {
+      delete historico[campo];
+    });
+    if (historico.aplicado) delete historico.aplicado.vinc;
+    return JSON.stringify(historico);
+  }
+
+  function destinoDoIngredienteJaVinculado(item, origem, anteriores, atuais, enviados) {
+    if (!enviados || anteriores.length !== atuais.length || enviados.length !== atuais.length) return null;
+    var atual = atuais[origem];
+    if (!atual || tipoItem(atual) !== 'ing' || !String(atual.vinc || '').startsWith('ing:')) return null;
+    var identidade = identidadeItem(atual);
+    if (item.vinc !== atual.vinc || identidadeItem(item) !== identidade ||
+        atuais.filter(function (linha) { return identidadeItem(linha) === identidade; }).length !== 1) return null;
+
+    // A linha na posição original precisa ter o mesmo histórico de compra e
+    // estoque nas três versões. O vínculo atual já deve estar no formulário.
+    var historico = historicoIngredienteSemCadastro(atual);
+    if (historicoIngredienteSemCadastro(anteriores[origem]) !== historico ||
+        historicoIngredienteSemCadastro(enviados[origem]) !== historico) return null;
+    var temUnicaLinha = [anteriores, enviados, atuais].every(function (lista) {
+      return lista.filter(function (linha) { return historicoIngredienteSemCadastro(linha) === historico; }).length === 1;
+    });
+    return temUnicaLinha ? origem : null;
+  }
+
+  function remapearIndices(itens, anteriores, atuais, preparados, mesmaNota, enviados) {
     var usados = new Set();
     function indices(lista, chave) {
       var encontrados = [];
@@ -290,6 +319,7 @@
         // Both versions already point to the same ingredient. Only accept
         // the conversion for one unambiguous invoice line with unchanged cost.
         destino = destinoDoItemJaConvertido(item, origem, anteriores, atuais);
+        if (destino == null && origem === indice) destino = destinoDoIngredienteJaVinculado(item, origem, anteriores, atuais, enviados);
       }
       if (destino == null) {
         // Repeated identities need equivalent historical snapshots. Equal
@@ -376,12 +406,9 @@
     });
   }
 
-  function baseConfirmadaComMesmasLinhas(registro, notaServidor) {
-    var salva = registro.savedNote;
-    if (!salva || String(registro.savedRecordId) !== String(notaServidor.id) ||
-        !registro.syncSubmittedAt ||
-        JSON.stringify(snapshotHistorico(salva)) !== JSON.stringify(snapshotHistorico(notaServidor)) ||
-        !Array.isArray(registro.itens) || !Array.isArray(salva.itens) ||
+  function baseConfirmadaComMesmasLinhas(registro, salva, notaServidor) {
+    if (JSON.stringify(snapshotHistorico(salva)) !== JSON.stringify(snapshotHistorico(notaServidor)) ||
+        !Array.isArray(registro.itens) ||
         registro.itens.length !== salva.itens.length) return null;
 
     // A nota gravada pode ter um nome ou vínculo novo. Só migre a base
@@ -400,7 +427,10 @@
     var mesmaNota = registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
       String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId);
     var baseDaMesmaNota = mesmaNota && registro.baseNota && String(registro.baseNota.id) === String(opcoes.baseNota.id);
-    var baseConfirmada = baseDaMesmaNota && baseConfirmadaComMesmasLinhas(registro, opcoes.baseNota);
+    var salva = baseDaMesmaNota && registro.syncSubmittedAt && registro.savedNote &&
+      String(registro.savedRecordId) === String(opcoes.editId) && String(registro.savedNote.id) === String(opcoes.editId) &&
+      Array.isArray(registro.savedNote.itens) ? registro.savedNote : null;
+    var baseConfirmada = salva && baseConfirmadaComMesmasLinhas(registro, salva, opcoes.baseNota);
     if (baseConfirmada) registro = Object.assign({}, registro, { baseNota: baseConfirmada });
     var copia = clonar(registro || {});
     if (mesmaNota) {
@@ -418,7 +448,7 @@
       registro && Array.isArray(registro.itens) ? registro.itens : [],
       registro && registro.baseNota && Array.isArray(registro.baseNota.itens) ? registro.baseNota.itens : [],
       copia.baseNota && Array.isArray(copia.baseNota.itens) ? copia.baseNota.itens : [],
-      copia.itens, baseDaMesmaNota
+      copia.itens, baseDaMesmaNota, salva && salva.itens
     );
     if (baseDaMesmaNota) {
       reconciliarCategoriasDeDespesas(copia.itens, registro, opcoes.baseNota);
