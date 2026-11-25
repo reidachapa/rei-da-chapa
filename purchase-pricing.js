@@ -85,7 +85,7 @@
   function unidadeMedida(valor) {
     var unidade = String(valor || '').trim().toLocaleLowerCase('pt-BR').replace(/\./g, '');
     if (/^(mg|miligramas?)$/.test(unidade)) return 'mg';
-    if (/^(quilo|quilos|quilograma|quilogramas)$/.test(unidade)) return 'kg';
+    if (/^(quilos?|kilos?|quilogramas?)$/.test(unidade)) return 'kg';
     if (/^(gr|grama|gramas)$/.test(unidade)) return 'g';
     if (/^(ml|mililitros?)$/.test(unidade)) return 'ml';
     if (/^(lt|litro|litros)$/.test(unidade)) return 'l';

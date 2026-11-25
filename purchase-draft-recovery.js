@@ -157,6 +157,8 @@
         modoCompra: texto(item.modoCompra),
         rendimento: valorMoedaRascunho(item.rend),
         unidadeEstoque: texto(item.unidadeEstoque),
+        unidadeExibicaoEstoque: texto(item.unidadeExibicaoEstoque),
+        gramasPorUnidade: valorMoedaRascunho(item.gramasPorUnidade),
         descontoOriginal: valorMoedaRascunho(item.descontoOriginal !== undefined ? item.descontoOriginal : item.desconto),
         descontoTipo: texto(item.descontoTipo || 'valor'),
         controlaEstoque: item.controlaEstoque,

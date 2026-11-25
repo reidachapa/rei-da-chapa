@@ -41,7 +41,11 @@ function memoria({ ingredientes = [], produtos = [], paes = [], notas = [], iten
   const window = { despItensTemp: structuredClone(itens), editandoDespesaId: editId, __prepararRevisaoRascunhoCompra: async ({ idOriginal }) => ({ ok: true, nova: false, editId: idOriginal }), PrecosCompra, EstoqueIngredientes, VencimentosCompras, ComprasDuplicadas: require('../purchase-duplicates.js'), _descontoNotaTipo: tipoDesconto, BackupSys: { async salvar() { return true; } } };
   if (itensAoAbrir) {
     const snapshot = structuredClone(itensAoAbrir);
-    window.__itensDaCompraSemEdicao = itensAtuais => isDeepStrictEqual(itensAtuais, snapshot);
+    const inicio = html.indexOf('  window.__itensDaCompraSemEdicao = function(');
+    const fim = html.indexOf('  var lojaRascunho =', inicio);
+    new Function('itensDaNotaAoAbrir', 'window', 'dadosIguais', 'clonar', html.slice(inicio, fim))(
+      snapshot, window, isDeepStrictEqual, structuredClone
+    );
   }
   const messages = [];
   const deps = { ingredientes, produtos, paes, notas, window, document, toast: msg => messages.push(msg), PrecosCompra };
@@ -356,6 +360,22 @@ test('compra com rendimento preserva a unidade de porções cadastrada apesar do
   assert.equal(fixture.app.ingredientes[0].unidadeEstoque, 'porção');
   assert.equal(fixture.app.ingredientes[0].estoque, 25);
   assert.equal(fixture.app.notas[0].itens[0].aplicado.qtdEst, 20);
+});
+
+test('editar só a unidade de exibição mantém o rendimento atual e os valores da nota antiga', async () => {
+  const ing = { ...ingrediente(), unidade: 'kg', unidadeEstoque: 'un', modoCompra: 'flexivel', rendimento: 10, gramasPorUnidade: 100, estoque: 40 };
+  const vinc = 'ing:milho';
+  const linha = item({ vinc, unid: 'kg', rend: 20, modoCompra: 'flexivel', unidadeEstoque: 'un', aplicado: { vinc, qtdEst: 40, custoUnitario: 0.15 } });
+  const nota = { id: 'nota-antiga', tipoRegistro: 'compra', valor: 6, descontoOriginal: 0, descontoTipo: 'valor', itens: [linha] };
+  const aoAbrir = { ...linha, _indiceOriginalNota: 0 };
+  const { app } = memoria({ ingredientes: [ing], notas: [nota], editId: nota.id, itensAoAbrir: [aoAbrir], itens: [{ ...aoAbrir, unidadeExibicaoEstoque: 'g' }] });
+  await app.salvarCompraDaNota();
+  assert.equal(ing.rendimento, 10);
+  assert.equal(ing.estoque, 40);
+  assert.equal(ing.custo, 2);
+  assert.equal(ing.unidadeExibicaoEstoque, 'g');
+  assert.equal(app.notas[0].valor, 6);
+  assert.deepEqual(app.notas[0].itens[0].aplicado, { vinc, qtdEst: 40, custoUnitario: 0.15 });
 });
 
 test('autocomplete reúne marcas de ingredientes, produtos e notas sem duplicar e ordena em português', () => {

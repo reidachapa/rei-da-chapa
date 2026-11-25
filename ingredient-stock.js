@@ -5,14 +5,18 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
   var MASSA = { mg: 0.001, g: 1, kg: 1000 }, VOLUME = { ml: 1, l: 1000 };
-  function unidade(valor) {
+  function normalizarUnidade(valor) {
     var u = String(valor || '').trim().toLocaleLowerCase('pt-BR').replace(/\./g, '');
-    if (/^(quilo|quilos)$/.test(u)) return 'kg';
-    if (/^(gr|grama|gramas)$/.test(u)) return 'g';
-    if (/^(lt|litro|litros)$/.test(u)) return 'l';
+    if (/^(un|und|unds|unidades?)$/.test(u)) return 'un';
+    if (/^(quilos?|kilos?|quilogramas?)$/.test(u)) return 'kg';
+    if (/^(gr|gramas?)$/.test(u)) return 'g';
+    if (/^miligramas?$/.test(u)) return 'mg';
+    if (/^mililitros?$/.test(u)) return 'ml';
+    if (/^(lt|litros?)$/.test(u)) return 'l';
     if (/^(porcao|porcoes|porções)$/.test(u)) return 'porção';
-    return u || 'un';
+    return u;
   }
+  function unidade(valor) { return normalizarUnidade(valor) || 'un'; }
   function numero(valor) {
     if (valor === null || valor === undefined || String(valor).trim() === '') return NaN;
     if (typeof valor === 'number') return valor;
@@ -49,6 +53,29 @@
       if (Number.isFinite(comprada)) return comprada * rendimento;
     }
     return NaN;
+  }
+  function saldoParaExibicao(ing, quantidade) {
+    var interna = unidadeFisicaInterna(ing), qtd = finito(quantidade);
+    var escolhida = normalizarUnidade(ing.unidadeExibicaoEstoque);
+    var medida = Number.isFinite(MASSA[interna]) || Number.isFinite(VOLUME[interna]);
+    var peso = medida ? 0 : Math.max(0, finito(ing.gramasPorUnidade));
+    var rendimento = finito(ing.rendimento);
+    if (!medida && !peso && !ing.consumoMedia && rendimento > 0) {
+      peso = Math.max(0, finito(converter(1, ing.unidade, 'g') / rendimento));
+    }
+    if (escolhida && escolhida !== interna) {
+      var escolhidaEmMedida = Number.isFinite(MASSA[escolhida]) || Number.isFinite(VOLUME[escolhida]);
+      if (!medida && !escolhidaEmMedida) {
+        return { quantidade: qtd, unidade: escolhida, gramasPorUnidade: peso };
+      }
+      var exibida = converter(qtd, interna, escolhida);
+      if (!medida) {
+        if (peso > 0 && Number.isFinite(MASSA[escolhida])) exibida = converter(qtd * peso, 'g', escolhida);
+        else if (rendimento > 0) exibida = converter(qtd / rendimento, ing.unidade, escolhida);
+      }
+      if (Number.isFinite(exibida)) return { quantidade: exibida, unidade: escolhida, gramasPorUnidade: peso };
+    }
+    return { quantidade: qtd, unidade: interna, gramasPorUnidade: peso };
   }
   function copiar(ing) { return Object.assign({}, ing); }
   function analisarContagem(ing, opcoes) {
@@ -145,5 +172,5 @@
     } else novo.estoque = finito(ing.estoque) + Math.max(0, finito(perda.qtdEstoqueBaixada === undefined ? perda.qtdEstoqueInterno : perda.qtdEstoqueBaixada));
     return novo;
   }
-  return { unidadeFisicaInterna: unidadeFisicaInterna, unidadeExibicao: unidadeExibicao, usaMediaPorContagem: usaMediaPorContagem, converter: converter, paraEstoque: paraEstoque, analisarContagem: analisarContagem, consumir: consumir, devolver: devolver, registrarPerda: registrarPerda, restaurarPerda: restaurarPerda, mesmaEpoca: mesmaEpoca, temSaldo: temSaldo };
+  return { normalizarUnidade: normalizarUnidade, saldoParaExibicao: saldoParaExibicao, unidadeFisicaInterna: unidadeFisicaInterna, unidadeExibicao: unidadeExibicao, usaMediaPorContagem: usaMediaPorContagem, converter: converter, paraEstoque: paraEstoque, analisarContagem: analisarContagem, consumir: consumir, devolver: devolver, registrarPerda: registrarPerda, restaurarPerda: restaurarPerda, mesmaEpoca: mesmaEpoca, temSaldo: temSaldo };
 });

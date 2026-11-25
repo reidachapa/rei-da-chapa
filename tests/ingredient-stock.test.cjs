@@ -7,6 +7,39 @@ const stock = fs.existsSync(modulePath) ? require(modulePath) : {};
 const ingredient = extra => ({ id: 'bacon', nome: 'Bacon', semEstoque: true, consumoMedia: true, unidade: 'kg', unidadeEstoque: 'kg', modoCompra: 'flexivel', rendimento: 0, estoqueEstimado: 6, inicioContagemKg: 6, comprasDesdeContagem: 0, perdasDesdeContagem: 0, pesoVendidoDesdeContagem: 10, ...extra });
 const close = (actual, expected) => assert(Math.abs(actual - expected) < 1e-9, `${actual} should be ${expected}`);
 
+test('stock displays the same measurement for each spelling of units, grams and kilograms', () => {
+  for (const [label, unit] of [['un', 'un'], ['und', 'un'], ['unidade', 'un'], ['g', 'g'], ['gr', 'g'], ['kg', 'kg'], ['kilo', 'kg']]) {
+    const ing = ingredient({ semEstoque: false, consumoMedia: false, unidadeEstoque: label });
+    assert.deepEqual(stock.saldoParaExibicao(ing, 12), { quantidade: 12, unidade: unit, gramasPorUnidade: 0 });
+    assert.equal(stock.paraEstoque(1, unit, ing), 1);
+  }
+});
+
+test('a counted portion can display its equivalent weight and still deduct one portion per sale', () => {
+  const ing = ingredient({ semEstoque: false, consumoMedia: false, unidadeEstoque: 'und', rendimento: 20, gramasPorUnidade: 50, estoque: 40 });
+  assert.deepEqual(stock.saldoParaExibicao(ing, 40), { quantidade: 40, unidade: 'un', gramasPorUnidade: 50 });
+  const pesado = { ...ing, unidadeExibicaoEstoque: 'gr' };
+  assert.deepEqual(stock.saldoParaExibicao(pesado, 40), { quantidade: 2000, unidade: 'g', gramasPorUnidade: 50 });
+  assert.equal(stock.saldoParaExibicao(stock.consumir(pesado, 1), 39).quantidade, 1950);
+  assert.deepEqual(stock.saldoParaExibicao({ ...ing, unidadeExibicaoEstoque: 'kilo' }, 40), { quantidade: 2, unidade: 'kg', gramasPorUnidade: 50 });
+});
+
+test('stock kept in grams uses the physical balance without multiplying by the portion weight', () => {
+  const ing = ingredient({ unidadeEstoque: 'gr', semEstoque: false, consumoMedia: false, gramasPorUnidade: 50, estoque: 500 });
+  assert.deepEqual(stock.saldoParaExibicao(ing, 500), { quantidade: 500, unidade: 'g', gramasPorUnidade: 0 });
+  const debited = stock.consumir(ing, stock.paraEstoque(50, 'g', ing));
+  assert.equal(debited.estoque, 450);
+});
+
+test('the cart preserves a fractional kilogram and debits that amount from stock', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+  const inicio = html.indexOf('function serializarIngs(');
+  const fim = html.indexOf('function numeroPedidoExibicao(', inicio);
+  const roundTrip = new Function(html.slice(inicio, fim) + '\nreturn parseChave(chaveItem("hamburguer", null, { bacon: 0.05 })).ings.bacon;');
+  const ing = ingredient({ semEstoque: false, consumoMedia: false, estoque: 1 });
+  close(stock.consumir(ing, roundTrip()).estoque, 0.95);
+});
+
 test('count converts 200 g into 0.2 kg without changing the recipe reference', () => {
   const ing = ingredient();
   const result = stock.analisarContagem(ing, { saldo: 200, unidade: 'g', id: 'count-1', data: '2026-11-14T12:00:00Z' });
