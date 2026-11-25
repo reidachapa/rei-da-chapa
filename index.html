@@ -320,6 +320,7 @@
   .btn-linha .btn-acao{flex:1}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:200;padding:12px;overflow-y:auto}
   .modal.aberto{display:flex;animation:fadeIn .2s}
+  #modalPerda.aberto{background:#101012;animation:none}
   @keyframes fadeIn{from{opacity:0}to{opacity:1}}
   .modal-box{background:linear-gradient(170deg,#232326 0%,#18181a 100%);border:1px solid var(--iron-5);border-radius:16px;padding:18px;width:100%;max-width:600px;max-height:92vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;margin:auto}
   #modalDespesa .modal-box{max-width:560px;padding:16px}
@@ -5248,7 +5249,25 @@ function unidadePerdaItem(item,tipo){return tipo==='ing'?unidadeExibicaoEstoqueI
 function atualizarUnidadePerda(){const tipo=document.getElementById('perdaTipo').value,itemId=document.getElementById('perdaItem').value,input=document.getElementById('perdaQtd'),rotulo=document.getElementById('perdaUnidadeQtd');if(tipo==='ing'){const item=ingredientes.find(i=>i.id===itemId);input.step='any';input.min='0.001';input.inputMode='decimal';rotulo.textContent=item?'('+unidadePerdaItem(item,tipo)+')':'(unidade)'}else{input.step='1';input.min='1';input.inputMode='numeric';rotulo.textContent=tipo==='outro'?'(valor)':'(un.)'}}
 function popularItensPerda(){const tipo = document.getElementById('perdaTipo').value;const sel = document.getElementById('perdaItem');const campo = document.getElementById('campoPerdaItem');sel.innerHTML = '';if(tipo === 'outro'){ campo.style.display = 'none'; atualizarUnidadePerda(); atualizarPreviewPerda(); return; }campo.style.display = 'flex';const lista = tipo === 'pao' ? paes : tipo === 'ing' ? ingredientes : produtos;if(!lista.length){ sel.innerHTML = '<option value="">— Nenhum item cadastrado —</option>'; atualizarUnidadePerda(); atualizarPreviewPerda(); return; }lista.forEach(item => {const opt = document.createElement('option');opt.value = item.id;const icone = tipo === 'pao' ? (item.icone || '🥖') : tipo === 'ing' ? (item.icone || '🍴') : '🍔';opt.textContent = icone + ' ' + item.nome;sel.appendChild(opt);});atualizarUnidadePerda();atualizarPreviewPerda();}
 function atualizarPreviewPerda(){const tipo=document.getElementById('perdaTipo').value,itemId=document.getElementById('perdaItem').value,qtd=parseFloat(document.getElementById('perdaQtd').value)||0;let vu=lerMoeda(document.getElementById('perdaValorUnit').value);if(!vu&&itemId&&tipo!=='outro'){const item=tipo==='pao'?paes.find(p=>p.id===itemId):tipo==='ing'?ingredientes.find(i=>i.id===itemId):produtos.find(p=>p.id===itemId);if(item){vu=tipo==='ing'?(Number(item.custo)||0)*quantidadeFisicaIngrediente(1,unidadePerdaItem(item,tipo),item):(Number(item.custo)||0);if(vu)document.getElementById('perdaValorUnit').value=vu.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:4})}}document.getElementById('perdaPreview').textContent='Total: '+moeda((vu||0)*qtd)}
-function abrirModalPerda(){if(!souGerente()) return toast('🔒 Só o gerente pode registrar perdas');criarModalPerda();document.getElementById('perdaQtd').value = '1';document.getElementById('perdaValorUnit').value = '';document.getElementById('perdaObs').value = '';popularItensPerda();document.getElementById('modalPerda').classList.add('aberto');}
+function abrirModalPerda(){
+  if(!souGerente()){
+    toast('🔒 Só o gerente pode registrar perdas');
+    return false;
+  }
+  criarModalPerda();
+  document.getElementById('perdaQtd').value='1';
+  document.getElementById('perdaValorUnit').value='';
+  document.getElementById('perdaObs').value='';
+  popularItensPerda();
+  const modal=document.getElementById('modalPerda');
+  modal.setAttribute('role','dialog');
+  modal.setAttribute('aria-modal','true');
+  modal.setAttribute('aria-label','Registrar perda');
+  modal.tabIndex=-1;
+  modal.classList.add('aberto');
+  modal.focus({preventScroll:true});
+  return true;
+}
 function fecharModalPerda(){const m = document.getElementById('modalPerda');if(m) m.classList.remove('aberto');}
 async function salvarPerda(){
   if(!souGerente())return toast('🔒 Só o gerente');if(window.__perdaSalvando)return;
@@ -5643,6 +5662,7 @@ setTimeout(function() {
   }
 
   document.querySelectorAll('#modalMaisMenu .tab').forEach(function(btn) {
+    if(btn.id==='menuPerdas')return;
     btn.addEventListener('click', function() {
       document.getElementById('modalMaisMenu').classList.remove('aberto');
       // Isso faz o app mudar de tela quando você clica no botão de dentro da janelinha
@@ -5654,7 +5674,9 @@ setTimeout(function() {
     });
   });
 }, 1000);
-document.getElementById('menuPerdas').addEventListener('click', abrirModalPerda);
+document.getElementById('menuPerdas').addEventListener('click',function(){
+  if(abrirModalPerda())document.getElementById('modalMaisMenu').classList.remove('aberto');
+});
 const kanbanObserver=new MutationObserver(()=>injetarBotoesImprimir());
 kanbanObserver.observe($('#kanban'),{childList:true,subtree:true});
 setTimeout(injetarBotoesImprimir,800);
