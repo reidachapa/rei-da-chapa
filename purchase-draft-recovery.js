@@ -376,12 +376,33 @@
     });
   }
 
+  function baseConfirmadaComMesmasLinhas(registro, notaServidor) {
+    var salva = registro.savedNote;
+    if (!salva || String(registro.savedRecordId) !== String(notaServidor.id) ||
+        !registro.syncSubmittedAt ||
+        JSON.stringify(snapshotHistorico(salva)) !== JSON.stringify(snapshotHistorico(notaServidor)) ||
+        !Array.isArray(registro.itens) || !Array.isArray(salva.itens) ||
+        registro.itens.length !== salva.itens.length) return null;
+
+    // A nota gravada pode ter um nome ou vínculo novo. Só migre a base
+    // quando cada linha do rascunho aponta para a mesma posição e tem
+    // uma identidade única na versão que o servidor confirmou.
+    var identidades = salva.itens.map(identidadeItem);
+    if (identidades.includes(null) || new Set(identidades).size !== identidades.length) return null;
+    var mesmasLinhas = registro.itens.every(function (item, i) {
+      return item && item._indiceOriginalNota === i && identidadeItem(item) === identidades[i];
+    });
+    return mesmasLinhas ? salva : null;
+  }
+
   function prepararRegistro(registro, opcoes) {
-    var copia = clonar(registro || {});
     opcoes = opcoes || {};
     var mesmaNota = registro && registro.editId != null && opcoes.editId != null && opcoes.baseNota &&
       String(registro.editId) === String(opcoes.editId) && String(opcoes.baseNota.id) === String(opcoes.editId);
     var baseDaMesmaNota = mesmaNota && registro.baseNota && String(registro.baseNota.id) === String(opcoes.baseNota.id);
+    var baseConfirmada = baseDaMesmaNota && baseConfirmadaComMesmasLinhas(registro, opcoes.baseNota);
+    if (baseConfirmada) registro = Object.assign({}, registro, { baseNota: baseConfirmada });
+    var copia = clonar(registro || {});
     if (mesmaNota) {
       reconciliarCamposPagamento(copia, registro, opcoes.baseNota);
     }
@@ -407,14 +428,26 @@
     return copia;
   }
 
-  async function excluirRascunhoServidorSeIgual(cliente, id, envelope) {
-    if (!cliente || typeof cliente.from !== 'function' || !id || !envelope) throw new Error('Não foi possível verificar o rascunho antes de removê-lo.');
-    var resposta = await cliente.from('estado')
-      .delete()
-      .eq('id', id)
-      .filter('dados', 'eq', JSON.stringify(envelope))
-      .select('id')
-      .maybeSingle();
+  async function excluirRascunhoServidorSeIgual(cliente, id, envelope, igual) {
+    if (!cliente || typeof cliente.from !== 'function' || !id || !envelope || !envelope.registro ||
+        typeof igual !== 'function') throw new Error('Não foi possível verificar o rascunho antes de removê-lo.');
+    var consulta = await cliente.from('estado').select('id,dados,atualizado_em').eq('id', id).maybeSingle();
+    if (consulta.error) throw consulta.error;
+    var linha = consulta.data;
+    if (!linha || linha.id !== id || !linha.atualizado_em || !igual(linha.dados, envelope)) return false;
+
+    var registro = envelope.registro;
+    var exclusao = cliente.from('estado').delete().eq('id', id).eq('atualizado_em', linha.atualizado_em);
+    if (registro.rascunhoRevisao) {
+      exclusao.eq('dados->registro->>rascunhoRevisao', registro.rascunhoRevisao);
+    } else {
+      // Rascunhos anteriores à revisão por gravação ainda usam os marcadores existentes.
+      if (registro.updatedAt) exclusao.eq('dados->registro->>updatedAt', registro.updatedAt);
+      if (registro.rascunhoAtualizadoEm != null) {
+        exclusao.eq('dados->registro->>rascunhoAtualizadoEm', String(registro.rascunhoAtualizadoEm));
+      }
+    }
+    var resposta = await exclusao.select('id').maybeSingle();
     if (resposta.error) throw resposta.error;
     return !!(resposta.data && String(resposta.data.id) === String(id));
   }

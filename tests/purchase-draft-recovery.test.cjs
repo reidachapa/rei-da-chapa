@@ -615,29 +615,73 @@ test('seletor financeiro reabre a lista sem texto antigo e Enter vazio não esco
   assert(html.includes("if(!String(input.value||'').trim()&&ativo<0)return;"));
 });
 
-test('exclusão remota de rascunho usa comparação exata e só confirma quando retorna a linha apagada', async () => {
-  const envelope = { tipo: 'rei-da-chapa-rascunho-compra', versao: 1, registro: { updatedAt: 'rev-1', fornecedor: 'Açaí' } };
+test('a edição seguinte retoma a base confirmada depois que um ingrediente muda de nome e vínculo', () => {
+  const anterior = { id: 'nota-1', itens: [
+    { tipoItem: 'ing', nome: 'Maionese', vinc: 'ing:antigo', qtd: 3, valor: 10 },
+    { tipoItem: 'pao', nome: 'Pão Brioche', vinc: 'pao:brioche', qtd: 54, valor: 1.73 },
+  ] };
+  const salva = { ...anterior, itens: [
+    { ...anterior.itens[0], nome: 'Maionese Vigor', vinc: 'ing:novo' },
+    anterior.itens[1],
+  ] };
+  const rascunho = congelar({
+    editId: salva.id, savedRecordId: salva.id, baseNota: anterior, savedNote: salva,
+    syncSubmittedAt: 'envio', updatedAt: 'nova-alteracao',
+    itens: salva.itens.map((linha, i) => ({ ...linha, _indiceOriginalNota: i })),
+  });
+  const editando = { ...rascunho, itens: [{ ...rascunho.itens[0], categoria: 'Molhos' }, rascunho.itens[1]] };
+  const resultado = prepararRegistro(editando, { editId: salva.id, baseNota: salva });
+
+  assert.deepEqual(resultado.baseNota, salva);
+  assert.deepEqual(resultado.itens.map(linha => linha._indiceOriginalNota), [0, 1]);
+  assert.equal(resultado.itens[0].vinc, 'ing:novo');
+  assert.equal(resultado.itens[0].categoria, 'Molhos');
+  assert.equal(rascunho.baseNota.itens[0].vinc, 'ing:antigo');
+
+  const diferenteNoServidor = { ...salva, itens: [{ ...salva.itens[0], qtd: 10 }, salva.itens[1]] };
+  assert.throws(() => prepararRegistro(editando, { editId: salva.id, baseNota: diferenteNoServidor }),
+    { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+  const indicesTrocados = { ...editando, itens: [editando.itens[1], editando.itens[0]] };
+  assert.throws(() => prepararRegistro(indicesTrocados, { editId: salva.id, baseNota: salva }),
+    { code: 'RASCUNHO_COMPRA_HISTORICO_INSEGURO' });
+});
+
+test('exclusão remota lê o rascunho e apaga apenas a revisão confirmada com filtros curtos', async () => {
+  const envelope = { tipo: 'rei-da-chapa-rascunho-compra', versao: 1,
+    registro: { updatedAt: 'rev-1', rascunhoAtualizadoEm: 1795630558000, itens: 'Açaí'.repeat(8000) } };
+  const comparar = require('node:util').isDeepStrictEqual;
+  const versao = '2026-11-25T01:14:26.193+00:00';
+  const linha = { id: 'draft-1', dados: structuredClone(envelope), atualizado_em: versao };
   const chamadas = [];
-  function clienteComResposta(resposta) {
-    const query = {
-      delete() { chamadas.push(['delete']); return this; },
-      eq(coluna, valor) { chamadas.push(['eq', coluna, valor]); return this; },
-      filter(coluna, operador, valor) { chamadas.push(['filter', coluna, operador, valor]); return this; },
-      select(colunas) { chamadas.push(['select', colunas]); return this; },
-      maybeSingle() { return Promise.resolve(resposta); },
-    };
-    return { from(tabela) { chamadas.push(['from', tabela]); return query; } };
+  function clienteComResposta(remota, excluida) {
+    return { from(tabela) {
+      chamadas.push(['from', tabela]);
+      let exclusao = false;
+      return {
+        delete() { exclusao = true; chamadas.push(['delete']); return this; },
+        eq(coluna, valor) { chamadas.push(['eq', coluna, valor]); return this; },
+        filter() { throw new Error('O conteúdo do rascunho não deve entrar na URL'); },
+        select(colunas) { chamadas.push(['select', colunas]); return this; },
+        async maybeSingle() { return { data: exclusao ? excluida : remota, error: null }; },
+      };
+    } };
   }
 
-  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: { id: 'draft-1' }, error: null }), 'draft-1', envelope), true);
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta(linha, { id: 'draft-1' }), 'draft-1', envelope, comparar), true);
   assert.deepEqual(chamadas, [
-    ['from', 'estado'], ['delete'], ['eq', 'id', 'draft-1'],
-    ['filter', 'dados', 'eq', JSON.stringify(envelope)], ['select', 'id'],
+    ['from', 'estado'], ['select', 'id,dados,atualizado_em'], ['eq', 'id', 'draft-1'],
+    ['from', 'estado'], ['delete'], ['eq', 'id', 'draft-1'], ['eq', 'atualizado_em', versao],
+    ['eq', 'dados->registro->>updatedAt', 'rev-1'], ['eq', 'dados->registro->>rascunhoAtualizadoEm', '1795630558000'],
+    ['select', 'id'],
   ]);
 
   chamadas.length = 0;
-  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: null, error: null }), 'draft-1', envelope), false);
-  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta({ data: { id: 'other-id' }, error: null }), 'draft-1', envelope), false);
+  const rascunhoNovo = { ...linha, dados: { ...envelope, registro: { ...envelope.registro, itens: 'Alteração nova' } } };
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta(rascunhoNovo, { id: 'draft-1' }), 'draft-1', envelope, comparar), false);
+  assert.equal(chamadas.some(([acao]) => acao === 'delete'), false);
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta(linha, null), 'draft-1', envelope, comparar), false,
+    'mudança concorrente entre a leitura e a exclusão');
+  assert.equal(await excluirRascunhoServidorSeIgual(clienteComResposta(linha, { id: 'other-id' }), 'draft-1', envelope, comparar), false);
 });
 
 test('cópia local só é removida após exclusão remota e preserva uma versão local mais nova', async () => {
