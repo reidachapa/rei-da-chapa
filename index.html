@@ -1045,6 +1045,15 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
   #modalConfirmarExcluirBackup .modal-acoes{width:100%;display:grid;grid-template-columns:1fr 1fr;gap:10px}
   #modalConfirmarExcluirBackup .modal-acoes button{min-width:0;min-height:44px;padding:10px 8px;font-size:11px}
   #modalConfirmarExcluirBackup #btnConfirmarExcluirBackup{border-color:rgba(229,72,77,.42);color:#fff;background:linear-gradient(180deg,#c7444a,#9f2f34)}
+  .backup-selecao-acoes{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin-bottom:9px}
+  .backup-selecao-acoes button{min-height:44px;padding:7px 11px;font-size:11px}
+  .backup-selecao-acoes button[hidden],.backup-selecao[hidden]{display:none}
+  #btnExcluirBackupsSelecionados{border-color:rgba(229,72,77,.5);color:#ffabab}
+  #totalBackupsSelecionados{font-size:11px;color:var(--muted);margin-left:auto}
+  #listaBackupsArquivados.selecionando-backups .backup-item{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:9px;align-items:start;cursor:pointer}
+  #listaBackupsArquivados.selecionando-backups .backup-acoes{display:none!important}
+  #listaBackupsArquivados .backup-selecao{width:22px;height:22px;accent-color:var(--gold-2);cursor:pointer}
+  #listaBackupsArquivados .backup-item.marcado{border-color:var(--gold)!important}
   @media(max-width:380px){#modalConfirmarExcluirBackup .backup-confirm-box{padding:22px 16px 18px}}
 </style>
 </head><body>
@@ -1758,7 +1767,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="dre-periods.js"></script>
 <script src="purchase-draft-recovery.js?v=1.0.79"></script>
 <script src="purchase-duplicates.js"></script>
-<script src="backup-shared.js"></script>
+<script src="backup-shared.js?v=1.0.81"></script>
 <script>const SUPABASE_URL = 'https://etzbidgbyntiidtsarln.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV0emJpZGdieW50aWlkdHNhcmxuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA3Mzc0ODEsImV4cCI6MjEwNjMxMzQ4MX0.HlDpYLJQymY3ELHciWDGbIKHEuztT78SVlByXZrdaC0';
 
@@ -4650,7 +4659,12 @@ document.addEventListener('DOMContentLoaded', function() {
 $('#dreFiltros').addEventListener('click',e=>{const btn=e.target.closest('.dre-filtro');if(!btn)return;dreFiltro=btn.dataset.filtro;$$('#dreFiltros .dre-filtro').forEach(b=>b.classList.toggle('ativo',b===btn));renderDRE()});
 function popularMesesDRE(){var sel=document.getElementById('selMesDre');if(!sel)return;var arr=window.PeriodosDRE.mesesDisponiveis({historico:historico,despesas:despesas,perdas:window.perdas,bensEmpresa:bensEmpresa}),selecionado=String(dreFiltro||'');if(/^custom-\d{4}-(0[1-9]|1[0-2])$/.test(selecionado)&&!arr.includes(selecionado.slice(7)))arr.push(selecionado.slice(7));arr.sort().reverse();sel.innerHTML='<option value="">📅 Escolher mês</option>'+arr.map(function(k){var partes=k.split('-'),nome=new Date(Number(partes[0]),Number(partes[1])-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});nome=nome.charAt(0).toUpperCase()+nome.slice(1);return '<option value="custom-'+k+'">'+esc(nome)+'</option>'}).join('');sel.value=selecionado.startsWith('custom-')?selecionado:''}
 document.addEventListener('change',function(e){if(e.target&&e.target.id==='selMesDre'){if(!e.target.value)return;dreFiltro=e.target.value;$$('#dreFiltros .dre-filtro').forEach(function(b){b.classList.remove('ativo')});renderDRE()}});
-$('#fabBackup').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só gerente');$('#modalBackup').classList.add('aberto');requestAnimationFrame(()=>{injetarListaNoModalBackup();renderListaBackupsArquivados()})});
+$('#fabBackup').addEventListener('click',()=>{
+  if(!souGerente())return toast('🔒 Só gerente');
+  injetarListaNoModalBackup();
+  $('#modalBackup').classList.add('aberto');
+  renderListaBackupsArquivados();
+});
 $('#btnFecharBackup').addEventListener('click',()=>{$('#modalBackup').classList.remove('aberto');$('#textareaBackup').style.display='none';$('#acoesBackupExport').style.display='none'});
 $('#btnFecharBackupExp').addEventListener('click',()=>{$('#modalBackup').classList.remove('aberto');$('#textareaBackup').style.display='none';$('#acoesBackupExport').style.display='none'});
 $('#btnExportar').addEventListener('click',()=>{if(!souGerente())return toast('🔒 Só o gerente pode exportar backup');const dados=criarDadosBackup('manual'),baixou=BackupSys.baixarDados(dados,'backup-'+new Date().toISOString().slice(0,10)+'.json');if(baixou)toast('📤 Backup JSON exportado!');else{$('#textareaBackup').value=JSON.stringify(dados,null,2);$('#textareaBackup').style.display='block';$('#acoesBackupExport').style.display='flex';toast('📋 Copie o texto do backup')}});
@@ -5555,19 +5569,105 @@ const BackupSys = {
   async listar(){const cliente=this.clienteSupabase();if(!cliente||!window.BackupCompartilhado)throw new Error('Supabase indisponível. Os backups não foram carregados.');return window.BackupCompartilhado.listar(cliente,1000)},
   async get(id){const cliente=this.clienteSupabase();if(!cliente||!window.BackupCompartilhado)throw new Error('Supabase indisponível.');return window.BackupCompartilhado.buscar(cliente,id)},
   async excluir(id){if(!souGerente())return false;const cliente=this.clienteSupabase();if(!cliente||!window.BackupCompartilhado)return false;try{const resposta=await window.BackupCompartilhado.excluir(cliente,id);return !!(resposta&&resposta.ok)}catch(e){console.warn('Backup: falha ao excluir no Supabase',e);return false}},
+  async excluirVarios(ids){
+    const cliente=this.clienteSupabase();
+    if(!souGerente()||!cliente||!window.BackupCompartilhado?.excluirVarios)return {excluidos:[],pendentes:ids};
+    try{
+      return await window.BackupCompartilhado.excluirVarios(cliente,ids,()=>souGerente()&&this.clienteSupabase()===cliente);
+    }catch(e){
+      console.warn('Backup: falha ao confirmar exclusões no Supabase',e);
+      return {excluidos:[],pendentes:ids};
+    }
+  },
   async baixar(id){if(!souGerente()){toast('🔒 Só o gerente');return null}let b;try{b=await this.get(id)}catch(e){toast('⚠️ Não consegui consultar o backup no Supabase. Confira a conexão.');return null}if(!b){toast('❌ Backup não encontrado no Supabase');return}const nome='backup-rei-da-chapa-'+b.data.slice(0,10)+'.json';if(this.baixarDados(b.dados,nome))toast('📥 Backup baixado: '+nome);else toast('❌ Erro ao baixar')},
   async compartilhar(id){if(!souGerente()){toast('🔒 Só o gerente');return null}let b;try{b=await this.get(id)}catch(e){toast('⚠️ Não consegui consultar o backup no Supabase. Confira a conexão.');return null}if(!b){toast('❌ Backup não encontrado no Supabase');return}try{const nome='backup-rei-da-chapa-'+b.data.slice(0,10)+'.json',file=new File([JSON.stringify(b.dados,null,2)],nome,{type:'application/json'});if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:'Backup de '+b.dataFmt,text:'Backup do Rei da Chapa'});toast('📤 Compartilhado!')}else if(this.baixarDados(b.dados,nome))toast('📥 Backup baixado: '+nome)}catch(e){if(e.name!=='AbortError')toast('⚠️ Não consegui abrir o compartilhamento deste backup.')}},
   async verificarAutoBackup(){const lista=await this.listar(),ultimo=lista.filter(b=>b.tipo==='auto'&&!b.origem).map(b=>Date.parse(b.data)||0).sort((a,b)=>b-a)[0]||0,agora=Date.now(),intervalo=this.DIAS_AUTO_BACKUP*24*60*60*1000;if(!ultimo||agora-ultimo>intervalo){const backup=await this.salvar('auto');return backup||{erro:true}}return{jaAtualizado:true}},
   formatarTamanho(bytes){if(bytes<1024)return bytes+' B';if(bytes<1024*1024)return(bytes/1024).toFixed(1)+' KB';return(bytes/1024/1024).toFixed(2)+' MB'}
 };
+const backupsSelecionados=new Set();
+let selecionandoBackups=false,buscandoBackups=false,excluindoBackups=false,versaoBuscaBackups=0;
+
+function atualizarSelecaoBackups(){
+  const lista=document.getElementById('listaBackupsArquivados');
+  const selecionar=document.getElementById('btnSelecionarBackups');
+  const excluir=document.getElementById('btnExcluirBackupsSelecionados');
+  const total=document.getElementById('totalBackupsSelecionados');
+  if(!lista||!selecionar||!excluir||!total)return;
+  const indisponivel=!souGerente()||buscandoBackups||excluindoBackups;
+  const quantidade=backupsSelecionados.size;
+  const itens=lista.querySelectorAll('.backup-selecao');
+  lista.classList.toggle('selecionando-backups',selecionandoBackups);
+  selecionar.textContent=selecionandoBackups?'Cancelar seleção':'Selecionar';
+  selecionar.setAttribute('aria-pressed',String(selecionandoBackups));
+  selecionar.disabled=indisponivel||(!selecionandoBackups&&!itens.length);
+  excluir.hidden=!selecionandoBackups;
+  excluir.disabled=indisponivel||!quantidade;
+  total.hidden=!selecionandoBackups;
+  total.textContent=quantidade+(quantidade===1?' selecionado':' selecionados');
+  itens.forEach(function(campo){
+    campo.hidden=!selecionandoBackups;
+    campo.disabled=indisponivel;
+    campo.checked=backupsSelecionados.has(campo.dataset.id);
+    campo.closest('.backup-item').classList.toggle('marcado',selecionandoBackups&&campo.checked);
+  });
+}
+
+async function excluirBackupsEscolhidos(ids){
+  if(excluindoBackups||!ids.length||!souGerente())return;
+  excluindoBackups=true;
+  atualizarSelecaoBackups();
+  try{
+    if(!await confirmarExcluirBackup(ids.length)||!souGerente()||
+      !document.getElementById('modalBackup')?.classList.contains('aberto'))return;
+    const resultado=await BackupSys.excluirVarios(ids);
+    const removidos=new Set(resultado.excluidos);
+    const naoConfirmados=resultado.pendentes.length;
+    removidos.forEach(id=>backupsSelecionados.delete(id));
+    document.querySelectorAll('#listaBackupsArquivados .backup-item').forEach(function(card){
+      if(removidos.has(card.dataset.idBackup))card.remove();
+    });
+    if(selecionandoBackups&&!backupsSelecionados.size)selecionandoBackups=false;
+    const mensagem=removidos.size===1?'1 backup excluído.':removidos.size+' backups excluídos.';
+    toast(naoConfirmados
+      ? '⚠️ '+mensagem+' '+(naoConfirmados===1?'1 exclusão não confirmada.':naoConfirmados+' exclusões não confirmadas.')
+      : '🗑️ '+mensagem);
+    if(document.getElementById('modalBackup')?.classList.contains('aberto'))await renderListaBackupsArquivados();
+  }finally{
+    excluindoBackups=false;
+    atualizarSelecaoBackups();
+  }
+}
+
 async function renderListaBackupsArquivados(){
   const cont=document.getElementById('listaBackupsArquivados');if(!cont)return;
-  cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:8px">Carregando...</p>';
-  let lista;try{lista=await BackupSys.listar()}catch(e){cont.innerHTML='<p style="text-align:center;color:#e88787;font-size:12px;padding:12px">Não consegui consultar os backups no Supabase. Confira a conexão e tente novamente.</p>';return}
-  if(!lista.length){cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:12px">Nenhum backup confirmado no Supabase.<br>Toque em <b>📸 Fazer backup agora</b> para criar um.</p>';return}
+  const versao=++versaoBuscaBackups;
+  const temLista=!!cont.querySelector('.backup-item');
+  buscandoBackups=true;
+  atualizarSelecaoBackups();
+  if(!temLista)cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:8px">Carregando...</p>';
+  let lista;
+  try{lista=await BackupSys.listar()}catch(e){
+    if(versao!==versaoBuscaBackups)return;
+    buscandoBackups=false;
+    if(!temLista)cont.innerHTML='<p style="text-align:center;color:#e88787;font-size:12px;padding:12px">Não consegui consultar os backups no Supabase. Confira a conexão e tente novamente.</p>';
+    atualizarSelecaoBackups();
+    return;
+  }
+  if(versao!==versaoBuscaBackups)return;
+  buscandoBackups=false;
+  const disponiveis=new Set(lista.map(backup=>backup.id));
+  backupsSelecionados.forEach(id=>{if(!disponiveis.has(id))backupsSelecionados.delete(id)});
+  if(!lista.length){
+    selecionandoBackups=false;
+    cont.innerHTML='<p style="text-align:center;color:#96908a;font-size:12px;padding:12px">Nenhum backup confirmado no Supabase.<br>Toque em <b>📸 Fazer backup agora</b> para criar um.</p>';
+    atualizarSelecaoBackups();
+    return;
+  }
   cont.innerHTML='';
   lista.forEach(function(b){
     const card=document.createElement('div');
+    card.className='backup-item';
+    card.dataset.idBackup=b.id;
     card.style.cssText='background:linear-gradient(180deg,#1e1e21,#171719);border:1px solid #3a3a3f;border-radius:10px;padding:10px;margin-bottom:6px';
     const autoCompra=b.tipo==='auto'&&b.origem==='compra';
     const badgeTexto=autoCompra?'AUTO · COMPRA':b.tipo==='auto'?'AUTO · SEMANAL':'MANUAL';
@@ -5578,6 +5678,24 @@ async function renderListaBackupsArquivados(){
     const nf=autoCompra&&b.notaNF?'<div style="font-size:10px;color:#96908a;margin-top:2px">NF '+esc(b.notaNF)+'</div>':'';
     const estadoBackup='<span style="background:rgba(63,185,114,.13);color:#3fb972;font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:5px">☁️ NO SUPABASE</span>';
     card.innerHTML='<div style="margin-bottom:6px"><div style="font-size:12px;font-weight:800;color:#f0ece8">'+esc(b.dataFmt||'')+'<span style="'+badgeStyle+';font-size:9px;padding:2px 6px;border-radius:4px;font-weight:800;margin-left:6px">'+badgeTexto+'</span>'+estadoBackup+'</div><div style="font-size:10px;color:#96908a;margin-top:4px">'+detalhe+'</div>'+nf+'</div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn-mini azul" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="baixar" data-id="'+esc(b.id)+'">📥 Baixar</button><button type="button" class="btn-mini roxo" style="flex:1;min-width:70px;padding:5px 8px;font-size:10px" data-acao="compartilhar" data-id="'+esc(b.id)+'">📤 Enviar</button><button type="button" class="btn-mini vermelho" style="flex:0 0 auto;min-width:40px;padding:5px 8px;font-size:10px" data-acao="excluir" data-id="'+esc(b.id)+'">🗑️</button></div>';
+    card.lastElementChild.classList.add('backup-acoes');
+    const conteudo=document.createElement('div');
+    conteudo.append(...card.childNodes);
+    const campo=document.createElement('input');
+    campo.type='checkbox';
+    campo.className='backup-selecao';
+    campo.dataset.id=b.id;
+    campo.hidden=true;
+    campo.setAttribute('aria-label','Selecionar backup '+badgeTexto.toLowerCase()+' de '+(b.dataFmt||b.id));
+    campo.addEventListener('change',function(){
+      if(!souGerente()||!selecionandoBackups||buscandoBackups||excluindoBackups)return;
+      if(campo.checked)backupsSelecionados.add(b.id);else backupsSelecionados.delete(b.id);
+      atualizarSelecaoBackups();
+    });
+    card.addEventListener('click',function(e){
+      if(selecionandoBackups&&!campo.disabled&&!e.target.closest('button,input'))campo.click();
+    });
+    card.append(campo,conteudo);
     cont.appendChild(card);
   });
   cont.querySelectorAll('button[data-acao]').forEach(function(btn){btn.addEventListener('click',async function(){
@@ -5585,20 +5703,52 @@ async function renderListaBackupsArquivados(){
     const acao=btn.dataset.acao,id=btn.dataset.id;
     if(acao==='baixar')await BackupSys.baixar(id);
     else if(acao==='compartilhar')await BackupSys.compartilhar(id);
-    else if(acao==='excluir'){
-      const confirmou=await confirmarExcluirBackup();if(!confirmou)return;
-      const excluido=await BackupSys.excluir(id);if(!excluido){toast('❌ Não foi possível confirmar a exclusão no Supabase');return}
-      toast('🗑️ Backup excluído');await renderListaBackupsArquivados();
-    }
+    else if(acao==='excluir')await excluirBackupsEscolhidos([id]);
   })});
+  atualizarSelecaoBackups();
 }
-function injetarListaNoModalBackup(){const modal=document.getElementById('modalBackup');if(!modal)return;if(modal.querySelector('#listaBackupsArquivados'))return;const box=modal.querySelector('.modal-box');if(!box)return;const secao=document.createElement('div');secao.innerHTML=`<div style="border-top:1px solid #3a3a3f;margin:4px 0 12px;padding-top:12px"><div style="font-size:12px;font-weight:800;color:#f0c862;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">📦 Backups compartilhados</div><div style="background:rgba(63,185,114,.08);border-left:3px solid #3fb972;padding:8px 10px;border-radius:6px;font-size:11px;color:#3fb972;margin-bottom:10px;line-height:1.4">✅ Cópias de segurança. <b>Não apagam nada do app.</b></div><div style="font-size:11px;color:#96908a;margin:0 0 10px">Cada compra confirmada e o backup semanal ficam no Supabase e aparecem nos aparelhos conectados. Se a conexão cair, o backup não é criado e o app avisa que o Supabase não confirmou.</div><button type="button" id="btnFazerBackupAgora" style="width:100%;background:linear-gradient(180deg,#4d9de5,#2871b8);color:#fff;border:0;border-radius:10px;padding:11px;font-weight:800;font-family:inherit;font-size:12px;cursor:pointer;text-transform:uppercase;margin-bottom:10px">📸 Fazer backup agora</button><div id="listaBackupsArquivados" style="max-height:280px;overflow-y:auto"></div></div>`;const acoes=box.querySelector('.modal-acoes');if(acoes)box.insertBefore(secao,acoes);else box.appendChild(secao);document.getElementById('btnFazerBackupAgora').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');toast('⏳ Criando backup...');const reg=await BackupSys.salvar('manual');if(reg&&reg.compartilhado){toast('✅ Backup salvo no Supabase: '+reg.dataFmt);renderListaBackupsArquivados()}else{toast('❌ O Supabase não confirmou o backup. Nenhuma cópia local foi criada.')}})}
-const _obsBackupModal = new MutationObserver(() => {const modal = document.getElementById('modalBackup');if(modal && modal.classList.contains('aberto')){injetarListaNoModalBackup();setTimeout(renderListaBackupsArquivados, 50);}});
-(async () => {setTimeout(() => {const modal = document.getElementById('modalBackup');if(modal) _obsBackupModal.observe(modal, { attributes: true, attributeFilter: ['class'] });}, 1000);})();
+function injetarListaNoModalBackup(){const modal=document.getElementById('modalBackup');if(!modal)return;if(modal.querySelector('#listaBackupsArquivados'))return;const box=modal.querySelector('.modal-box');if(!box)return;const secao=document.createElement('div');secao.innerHTML=`<div style="border-top:1px solid #3a3a3f;margin:4px 0 12px;padding-top:12px"><div style="font-size:12px;font-weight:800;color:#f0c862;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:6px">📦 Backups compartilhados</div><div style="background:rgba(63,185,114,.08);border-left:3px solid #3fb972;padding:8px 10px;border-radius:6px;font-size:11px;color:#3fb972;margin-bottom:10px;line-height:1.4">✅ Cópias de segurança. <b>Não apagam nada do app.</b></div><div style="font-size:11px;color:#96908a;margin:0 0 10px">Cada compra confirmada e o backup semanal ficam no Supabase e aparecem nos aparelhos conectados. Se a conexão cair, o backup não é criado e o app avisa que o Supabase não confirmou.</div><button type="button" id="btnFazerBackupAgora" style="width:100%;background:linear-gradient(180deg,#4d9de5,#2871b8);color:#fff;border:0;border-radius:10px;padding:11px;font-weight:800;font-family:inherit;font-size:12px;cursor:pointer;text-transform:uppercase;margin-bottom:10px">📸 Fazer backup agora</button><div class="backup-selecao-acoes"><button type="button" id="btnSelecionarBackups" class="btn-fantasma" aria-pressed="false" disabled>Selecionar</button><button type="button" id="btnExcluirBackupsSelecionados" class="btn-fantasma" hidden disabled>Excluir selecionados</button><span id="totalBackupsSelecionados" role="status" hidden></span></div><div id="listaBackupsArquivados" style="max-height:280px;overflow-y:auto"></div></div>`;const acoes=box.querySelector('.modal-acoes');if(acoes)box.insertBefore(secao,acoes);else box.appendChild(secao);instalarSelecaoBackups();document.getElementById('btnFazerBackupAgora').addEventListener('click',async()=>{if(!souGerente())return toast('🔒 Só o gerente');toast('⏳ Criando backup...');const reg=await BackupSys.salvar('manual');if(reg&&reg.compartilhado){toast('✅ Backup salvo no Supabase: '+reg.dataFmt);renderListaBackupsArquivados()}else{toast('❌ O Supabase não confirmou o backup. Nenhuma cópia local foi criada.')}})}
+function instalarSelecaoBackups(){
+  document.getElementById('btnSelecionarBackups').addEventListener('click',function(){
+    if(!souGerente()||buscandoBackups||excluindoBackups)return;
+    selecionandoBackups=!selecionandoBackups;
+    if(!selecionandoBackups)backupsSelecionados.clear();
+    atualizarSelecaoBackups();
+  });
+  document.getElementById('btnExcluirBackupsSelecionados').addEventListener('click',function(){
+    if(selecionandoBackups)excluirBackupsEscolhidos(Array.from(backupsSelecionados));
+  });
+}
+const _obsBackupModal=new MutationObserver(function(){
+  if(document.getElementById('modalBackup').classList.contains('aberto'))return;
+  ++versaoBuscaBackups;
+  buscandoBackups=false;
+  selecionandoBackups=false;
+  backupsSelecionados.clear();
+  if(resolverConfirmacaoExcluirBackup)concluirConfirmacaoExcluirBackup(false);
+  atualizarSelecaoBackups();
+});
+_obsBackupModal.observe(document.getElementById('modalBackup'),{attributes:true,attributeFilter:['class']});
 window.BackupSys = BackupSys;
 var resolverConfirmacaoExcluirBackup=null;
 function concluirConfirmacaoExcluirBackup(confirmar){var modal=document.getElementById('modalConfirmarExcluirBackup'),resolver=resolverConfirmacaoExcluirBackup;resolverConfirmacaoExcluirBackup=null;if(modal)modal.classList.remove('aberto');if(resolver)resolver(!!confirmar)}
-function confirmarExcluirBackup(){var modal=document.getElementById('modalConfirmarExcluirBackup');if(!modal)return Promise.resolve(false);return new Promise(function(resolve){if(resolverConfirmacaoExcluirBackup)concluirConfirmacaoExcluirBackup(false);resolverConfirmacaoExcluirBackup=resolve;modal.classList.add('aberto');setTimeout(function(){var botao=document.getElementById('btnCancelarExcluirBackup');if(botao)botao.focus()},0)})}
+function confirmarExcluirBackup(quantidade){
+  const modal=document.getElementById('modalConfirmarExcluirBackup');
+  if(!modal)return Promise.resolve(false);
+  const multiplos=quantidade>1;
+  document.getElementById('tituloExcluirBackup').textContent=multiplos?'Excluir '+quantidade+' backups?':'Excluir este backup?';
+  document.getElementById('descricaoExcluirBackup').textContent=multiplos
+    ? 'Você vai apagar as '+quantidade+' cópias selecionadas do Supabase.'
+    : 'Você vai apagar esta cópia de segurança do Supabase.';
+  document.getElementById('btnCancelarExcluirBackup').textContent=multiplos?'Manter backups':'Manter backup';
+  document.getElementById('btnConfirmarExcluirBackup').textContent=multiplos?'Excluir '+quantidade+' cópias':'Excluir cópia';
+  return new Promise(function(resolve){
+    if(resolverConfirmacaoExcluirBackup)concluirConfirmacaoExcluirBackup(false);
+    resolverConfirmacaoExcluirBackup=resolve;
+    modal.classList.add('aberto');
+    document.getElementById('btnCancelarExcluirBackup').focus();
+  });
+}
 (function instalarConfirmacaoExcluirBackup(){var modal=document.getElementById('modalConfirmarExcluirBackup');if(!modal||modal.dataset.handlers==='1')return;modal.dataset.handlers='1';modal.addEventListener('click',function(e){if(e.target===modal)concluirConfirmacaoExcluirBackup(false)});var cancelar=document.getElementById('btnCancelarExcluirBackup'),confirmar=document.getElementById('btnConfirmarExcluirBackup');if(cancelar)cancelar.addEventListener('click',function(){concluirConfirmacaoExcluirBackup(false)});if(confirmar)confirmar.addEventListener('click',function(){concluirConfirmacaoExcluirBackup(true)});document.addEventListener('keydown',function(e){if(e.key==='Escape'&&modal.classList.contains('aberto')){e.preventDefault();e.stopImmediatePropagation();concluirConfirmacaoExcluirBackup(false)}},true);var obs=new MutationObserver(function(){if(!modal.classList.contains('aberto')&&resolverConfirmacaoExcluirBackup)concluirConfirmacaoExcluirBackup(false)});obs.observe(modal,{attributes:true,attributeFilter:['class']})})();
 
 window.Notificacoes = {

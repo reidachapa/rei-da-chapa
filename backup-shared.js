@@ -7,6 +7,7 @@
 
   var MARCADOR = 1;
   var PREFIXO = 'backup_';
+  var LIMITE_EXCLUSAO = 25;
 
   function ehIdBackup(id) {
     return typeof id === 'string' && id.indexOf(PREFIXO) === 0 && id !== 'atual';
@@ -41,6 +42,26 @@
   }
   async function resultado(query) {
     try { return await query; } catch (error) { return { data: null, error: error }; }
+  }
+
+  async function excluirVarios(cliente, ids, podeExcluir) {
+    var pendentes = Array.isArray(ids) ? Array.from(new Set(ids)) : [];
+    if (!cliente || !cliente.from || !pendentes.every(ehIdBackup)) return { excluidos: [], pendentes: pendentes };
+    var confirmados = new Set();
+    for (var i = 0; i < pendentes.length; i += LIMITE_EXCLUSAO) {
+      if (podeExcluir && !podeExcluir()) break;
+      var lote = pendentes.slice(i, i + LIMITE_EXCLUSAO);
+      var resposta = await resultado(cliente.from('estado').delete()
+        .in('id', lote).eq('dados->>_reiDaChapaBackup', String(MARCADOR)).select('id'));
+      if (!resposta || resposta.error || !Array.isArray(resposta.data)) break;
+      resposta.data.forEach(function (linha) {
+        if (linha && lote.includes(linha.id)) confirmados.add(linha.id);
+      });
+    }
+    return {
+      excluidos: pendentes.filter(function (id) { return confirmados.has(id); }),
+      pendentes: pendentes.filter(function (id) { return !confirmados.has(id); })
+    };
   }
 
   return {
@@ -85,9 +106,10 @@
     },
     excluir: async function(cliente, id) {
       if (!cliente || !cliente.from || !ehIdBackup(id)) return { ok: false, error: 'ID de backup inválido.' };
-      var resposta = await resultado(cliente.from('estado').delete().eq('id', id));
-      return resposta.error ? { ok: false, error: resposta.error } : { ok: true };
+      var removidos = await excluirVarios(cliente, [id]);
+      return removidos.excluidos.length === 1 ? { ok: true } : { ok: false, error: 'Exclusão não confirmada.' };
     },
+    excluirVarios: excluirVarios,
     limitarCompras: async function(cliente, limite) {
       if (!cliente || !cliente.from) return { ok: false };
       limite = Math.max(1, Math.min(1000, Number(limite) || 50));
