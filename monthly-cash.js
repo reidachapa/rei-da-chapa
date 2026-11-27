@@ -104,8 +104,8 @@
   function calcular(loja, mes, valorDevido) {
     const resultado = {
       recebido: 0, comprado: 0, comprasPagas: 0, comprasAPagar: 0,
-      despesasPagas: 0, despesasAPagar: 0,
-      saldo: 0, quantidadeVendas: 0, quantidadeCompras: 0, quantidadeDespesas: 0,
+      despesasDoMes: 0, despesasPagas: 0, despesasAPagar: 0,
+      saldo: 0, saldoFechamento: 0, quantidadeVendas: 0, quantidadeCompras: 0, quantidadeDespesas: 0,
       porOrigem: {
         dinheiro: { recebido: 0, pago: 0, saldo: 0 },
         banco: { recebido: 0, pago: 0, saldo: 0 },
@@ -118,7 +118,7 @@
       return dia.slice(0, 7) === mes ? Number(dia.slice(8)) : 0;
     }
     function movimentoDia(dia) {
-      return resultado.porDia[dia] ||= { recebido: 0, comprado: 0, despesasPagas: 0 };
+      return resultado.porDia[dia] ||= { recebido: 0, comprado: 0, despesasDoDia: 0, despesasPagas: 0 };
     }
     const vistos = new Set();
     for (const pedido of loja.historico) {
@@ -149,32 +149,39 @@
       if (avulsa && nota.notaCompraId != null) continue;
       if (!avulsa && nota.tipoRegistro !== 'compra' && !temItens) continue;
       const pendente = nota.status === 'pendente';
-      const pagoEm = avulsa && !pendente ? diaBrasil(nota.pagoEm) : '';
-      const dia = diaNoMes(pagoEm || nota.data);
-      if (!dia) continue;
+      const dia = diaNoMes(nota.data);
       const valor = centavos(nota.valor);
       if (avulsa) {
-        resultado.quantidadeDespesas++;
-        if (pendente) resultado.despesasAPagar += valor;
-        else {
-          resultado.despesasPagas += valor;
-          movimentoDia(dia).despesasPagas += valor;
+        if (dia) {
+          resultado.despesasDoMes += valor;
+          resultado.quantidadeDespesas++;
+          movimentoDia(dia).despesasDoDia += valor;
+          if (pendente) resultado.despesasAPagar += valor;
         }
+        if (pendente) continue;
+        const diaPagamento = diaNoMes(diaBrasil(nota.pagoEm) || nota.data);
+        if (!diaPagamento) continue;
+        resultado.despesasPagas += valor;
+        movimentoDia(diaPagamento).despesasPagas += valor;
       } else {
+        if (!dia) continue;
         resultado.comprado += valor;
         resultado.quantidadeCompras++;
         movimentoDia(dia).comprado += valor;
-        if (pendente) resultado.comprasAPagar += valor;
-        else resultado.comprasPagas += valor;
+        if (pendente) {
+          resultado.comprasAPagar += valor;
+          continue;
+        }
+        resultado.comprasPagas += valor;
       }
-      if (!pendente) {
-        const origem = ['dinheiro', 'banco'].includes(nota.origemPagamento) ? nota.origemPagamento : 'semOrigem';
-        resultado.porOrigem[origem].pago += valor;
-      }
+      const origem = ['dinheiro', 'banco'].includes(nota.origemPagamento) ? nota.origemPagamento : 'semOrigem';
+      resultado.porOrigem[origem].pago += valor;
     }
     for (const total of Object.values(resultado.porOrigem)) total.saldo = total.recebido - total.pago;
     resultado.saldo = resultado.recebido - resultado.comprasPagas - resultado.despesasPagas;
-    resultado.temMovimento = resultado.quantidadeVendas > 0 || resultado.quantidadeCompras > 0 || resultado.quantidadeDespesas > 0;
+    resultado.saldoFechamento = resultado.recebido - resultado.comprasPagas - resultado.despesasDoMes;
+    resultado.temMovimento = resultado.quantidadeVendas > 0 || resultado.quantidadeCompras > 0 ||
+      resultado.quantidadeDespesas > 0 || resultado.despesasPagas > 0;
     return resultado;
   }
 

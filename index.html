@@ -1767,7 +1767,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="ingredient-stock.js?v=1.0.79"></script>
 <script src="purchase-pricing.js?v=1.0.79"></script>
 <script src="order-adjustments.js"></script>
-<script src="monthly-cash.js?v=1.0.82"></script>
+<script src="monthly-cash.js?v=1.0.83"></script>
 <script src="purchase-payables.js"></script>
 <script src="patrimonio.js"></script>
 <script src="dre-periods.js"></script>
@@ -2080,7 +2080,10 @@ async function carregarCaixaMensal() {
 function renderCaixaMensal(destino, caixa) {
   const emReais = centavos => moeda(centavos / 100);
   const sinal = saldo => saldo > 0 ? 'verde' : saldo < 0 ? 'vermelho' : '';
-  const situacao = caixa.saldo > 0 ? 'Positivo' : caixa.saldo < 0 ? 'Negativo' : 'Zerado';
+  const fechamento = caixa.saldoFechamento;
+  const situacao = fechamento > 0 ? 'Positivo' : fechamento < 0 ? 'Negativo' : 'Zerado';
+  const detalheFechamento = situacao + ' · inclui as despesas do mês' +
+    (caixa.saldo !== fechamento ? ' · Saldo movimentado ' + emReais(caixa.saldo) : '');
   const ticket = caixa.quantidadeVendas ? Math.round(caixa.recebido / caixa.quantidadeVendas) : 0;
   const card = (titulo, valor, detalhe, classe = '') =>
     '<div class="dre-card ' + classe + '"><div class="titulo">' + titulo + '</div><div class="valor">' +
@@ -2098,24 +2101,25 @@ function renderCaixaMensal(destino, caixa) {
     return linha(data + ' · Recebido', valores.recebido) +
       '<progress aria-label="Recebido no dia ' + dia + '" value="' + valores.recebido + '" max="' + maxDia + '"></progress>' +
       linha(data + ' · Compras', valores.comprado) +
-      (valores.despesasPagas ? linha(data + ' · Despesas pagas', valores.despesasPagas) : '');
+      (valores.despesasDoDia ? linha(data + ' · Despesas lançadas', valores.despesasDoDia) : '') +
+      (valores.despesasPagas ? linha(data + ' · Pagamentos de despesas', valores.despesasPagas) : '');
   }).join('');
   destino.innerHTML = '<div class="dre-cards dre-kpis caixa-saldos">' +
-    card('Saldo total do mês', caixa.saldo, situacao + ' · entradas menos saídas pagas', sinal(caixa.saldo)) +
+    card('Fechamento do mês', fechamento, detalheFechamento, sinal(fechamento)) +
     card('Dinheiro em caixa', dinheiro.saldo, detalheSaldo(dinheiro), sinal(dinheiro.saldo)) +
     card('Banco', banco.saldo, detalheSaldo(banco), sinal(banco.saldo)) + '</div>' +
     '<div class="dre-cards dre-kpis caixa-indicadores">' +
     card('Vendas recebidas', caixa.recebido, caixa.quantidadeVendas + ' pedido(s) · média ' + emReais(ticket), 'verde') +
     card('Compras do mês', caixa.comprado, caixa.quantidadeCompras + ' nota(s) · pagas ' + emReais(caixa.comprasPagas)) +
     card('Compras a pagar', caixa.comprasAPagar, 'Notas pendentes') +
-    card('Despesas avulsas pagas', caixa.despesasPagas, emReais(caixa.despesasAPagar) + ' a pagar') + '</div>' +
+    card('Despesas avulsas do mês', caixa.despesasDoMes, 'Pela data do lançamento') + '</div>' +
     (semOrigem.recebido || semOrigem.pago ? '<div class="dre-secao"><h3>Sem origem informada</h3>' +
       linha('Vendas recebidas', semOrigem.recebido) + linha('Saídas pagas', semOrigem.pago) +
-      linha('Saldo incluído no total', semOrigem.saldo) + '</div>' : '') +
-    '<p class="dre-vazio">Banco inclui Pix e cartões registrados. Compras pela data da nota. Despesas avulsas pela data do pagamento, quando informada. Vendas sem o repasse do motoboy.</p>' +
+      linha('Saldo movimentado', semOrigem.saldo) + '</div>' : '') +
+    '<p class="dre-vazio">O fechamento desconta as compras pagas e todas as despesas avulsas lançadas no mês. Dinheiro em caixa e Banco mostram o que entrou e saiu no mês.</p>' +
     (caixa.recebido ? '<div class="dre-secao"><h3>Por forma de pagamento</h3>' +
       Object.entries(caixa.porPagamento).map(([metodo, valor]) => linha(formas[metodo], valor)).join('') + '</div>' : '') +
-    (dias.length ? '<details class="dre-secao caixa-dias"><summary>Movimento por dia</summary>' + porDia + '</details>' : '');
+    (dias.length ? '<details class="dre-secao caixa-dias"><summary>Resumo por dia</summary>' + porDia + '</details>' : '');
 }
 
 $('#caixaMes').addEventListener('change', function () {
