@@ -64,13 +64,15 @@ assert.equal(ehCompraExcel({ tipoRegistro: 'despesa', itens: [{ nome: 'Material'
 assert.equal(ehCompraExcel({ tipoRegistro: 'compra', itens: [{ nome: 'Refrigerante', qtd: 1, valor: 10 }] }), true, 'compra itemizada continua na aba Compras do Excel');
 assert.match(html, /gastos\.filter\(despesaEhCompraExcel\)\.forEach\(function\(d\)/, 'a planilha Itens de compras ignora itens de despesas avulsas');
 
-function salvarCom({ itens = [], valor = '0,00', existente = null } = {}) {
+function salvarCom({ itens = [], valor = '0,00', existente = null, status = 'pago', pagoEm = '', origemPagamento = '' } = {}) {
   const campos = {
     despAvulsaData: { value: '2026-11-13' },
     despAvulsaCategoria: { value: 'manutencao' },
     despAvulsaDescricao: { value: 'Conserto do freezer' },
     despAvulsaValor: { value: valor },
-    despAvulsaStatus: { value: 'pago' },
+    despAvulsaStatus: { value: status },
+    despAvulsaPagoEm: { value: pagoEm },
+    despAvulsaOrigemPagamento: { value: origemPagamento },
     despAvulsaObs: { value: '' },
     modalDespesaAvulsa: { classList: { remove() {} } },
   };
@@ -122,6 +124,14 @@ const legado = salvarCom({
 });
 assert.equal(legado.valor, 42.5, 'editar despesa antiga sem itens preserva o valor manual');
 assert.deepEqual(legado.itens, [], 'editar despesa antiga não inventa itens');
+
+const paga = salvarCom({ valor: '42,50', pagoEm: '2026-12-02', origemPagamento: 'banco' });
+assert.equal(paga.data, '2026-11-13', 'a data da despesa continua disponível no histórico');
+assert.equal(paga.pagoEm, '2026-12-02', 'o Caixa pode atribuir a saída ao mês do pagamento');
+assert.equal(paga.origemPagamento, 'banco', 'a origem informada é salva para o Caixa');
+const reaberta = salvarCom({ valor: '42,50', existente: paga, status: 'pendente', pagoEm: paga.pagoEm, origemPagamento: paga.origemPagamento });
+assert.equal(reaberta.pagoEm, null, 'a despesa pendente perde a data de pagamento');
+assert.equal(reaberta.origemPagamento, null, 'a despesa pendente perde a origem do pagamento');
 
 const modal = html.slice(html.indexOf('<div id="modalDespesaAvulsa"'), html.indexOf('<div id="modalPersonalizar"'));
 assert.match(modal, /despAvulsaItensLista/, 'o formulário contém a lista de itens');

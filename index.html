@@ -440,7 +440,9 @@
   .caixa-dias progress{width:100%;height:6px;accent-color:var(--blue)}
   .caixa-dias summary{cursor:pointer;font-weight:800;padding:6px 0}
   .caixa-dias .dre-linha{flex-wrap:wrap;gap:4px 12px}
-  .dre-cards.caixa-saldos,.dre-cards.caixa-indicadores{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .dre-cards.caixa-saldos{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .dre-cards.caixa-indicadores{grid-template-columns:repeat(4,minmax(0,1fr))}
+  #despAvulsaPagamentoCampos[hidden]{display:none}
   .compras-prazos-atalhos{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
   #campoVencimentoCompra[hidden],#campoOrigemPagamentoCompra[hidden],#btnProximoVencimentoCompra[hidden]{display:none!important}
   .compra-vencimento-campos{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
@@ -1651,6 +1653,10 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <div id="modalDespesaAvulsa" class="modal"><form class="modal-box" id="formDespesaAvulsa" style="max-width:520px">
   <h3 id="tituloDespesaAvulsa">💸 Lançar despesa</h3>
   <div class="dupla"><div class="campo"><label>Data *</label><input id="despAvulsaData" type="date" required></div><div class="campo"><label>Status</label><select id="despAvulsaStatus"><option value="pago">✅ Pago</option><option value="pendente">⏳ A pagar</option></select></div></div>
+  <div class="dupla" id="despAvulsaPagamentoCampos">
+    <div class="campo"><label for="despAvulsaPagoEm">Data do pagamento</label><input id="despAvulsaPagoEm" type="date" aria-describedby="despAvulsaPagoEmAjuda"><small id="despAvulsaPagoEmAjuda">Em branco, usa a data da despesa.</small></div>
+    <div class="campo"><label for="despAvulsaOrigemPagamento">Saiu de</label><select id="despAvulsaOrigemPagamento"><option value="">Não informado</option><option value="dinheiro">Dinheiro em caixa</option><option value="banco">Banco</option></select></div>
+  </div>
   <div class="campo"><label>Categoria *</label><select id="despAvulsaCategoria" required></select></div>
   <div class="campo"><label>Descrição *</label><input id="despAvulsaDescricao" required maxlength="100" placeholder="Ex.: conta de luz de novembro"></div>
   <div class="campo"><label>Nº da nota fiscal</label><input id="despAvulsaNF" maxlength="80" placeholder="Opcional"></div>
@@ -1761,7 +1767,7 @@ main, .vendas-wrap, .estoque-wrap, .clientes-wrap {
 <script src="ingredient-stock.js?v=1.0.79"></script>
 <script src="purchase-pricing.js?v=1.0.79"></script>
 <script src="order-adjustments.js"></script>
-<script src="monthly-cash.js"></script>
+<script src="monthly-cash.js?v=1.0.82"></script>
 <script src="purchase-payables.js"></script>
 <script src="patrimonio.js"></script>
 <script src="dre-periods.js"></script>
@@ -2058,7 +2064,7 @@ async function carregarCaixaMensal() {
     }
     const resultado = window.CaixaMensal.calcular(data, mes, window.AjustesPedido.valorDevido);
     status.hidden = resultado.temMovimento;
-    status.textContent = resultado.temMovimento ? '' : 'Nenhuma venda recebida ou compra registrada neste mês.';
+    status.textContent = resultado.temMovimento ? '' : 'Nenhuma venda recebida, compra ou despesa neste mês.';
     if (resultado.temMovimento) renderCaixaMensal(resumo, resultado);
   } catch (erro) {
     if (!aindaAtiva()) return;
@@ -2091,23 +2097,25 @@ function renderCaixaMensal(destino, caixa) {
     const data = 'Dia ' + dia;
     return linha(data + ' · Recebido', valores.recebido) +
       '<progress aria-label="Recebido no dia ' + dia + '" value="' + valores.recebido + '" max="' + maxDia + '"></progress>' +
-      linha(data + ' · Compras', valores.comprado);
+      linha(data + ' · Compras', valores.comprado) +
+      (valores.despesasPagas ? linha(data + ' · Despesas pagas', valores.despesasPagas) : '');
   }).join('');
   destino.innerHTML = '<div class="dre-cards dre-kpis caixa-saldos">' +
-    card('Saldo total do mês', caixa.saldo, situacao + ' · vendas recebidas menos compras pagas', sinal(caixa.saldo)) +
+    card('Saldo total do mês', caixa.saldo, situacao + ' · entradas menos saídas pagas', sinal(caixa.saldo)) +
     card('Dinheiro em caixa', dinheiro.saldo, detalheSaldo(dinheiro), sinal(dinheiro.saldo)) +
     card('Banco', banco.saldo, detalheSaldo(banco), sinal(banco.saldo)) + '</div>' +
     '<div class="dre-cards dre-kpis caixa-indicadores">' +
     card('Vendas recebidas', caixa.recebido, caixa.quantidadeVendas + ' pedido(s) · média ' + emReais(ticket), 'verde') +
     card('Compras do mês', caixa.comprado, caixa.quantidadeCompras + ' nota(s) · pagas ' + emReais(caixa.comprasPagas)) +
-    card('Compras a pagar', caixa.comprasAPagar, 'Notas pendentes') + '</div>' +
+    card('Compras a pagar', caixa.comprasAPagar, 'Notas pendentes') +
+    card('Despesas avulsas pagas', caixa.despesasPagas, emReais(caixa.despesasAPagar) + ' a pagar') + '</div>' +
     (semOrigem.recebido || semOrigem.pago ? '<div class="dre-secao"><h3>Sem origem informada</h3>' +
-      linha('Vendas recebidas', semOrigem.recebido) + linha('Compras pagas', semOrigem.pago) +
+      linha('Vendas recebidas', semOrigem.recebido) + linha('Saídas pagas', semOrigem.pago) +
       linha('Saldo incluído no total', semOrigem.saldo) + '</div>' : '') +
-    '<p class="dre-vazio">Saldos do mês pelos lançamentos do app. Banco inclui Pix e cartões registrados. Compras pela data da nota. Vendas sem o repasse do motoboy.</p>' +
+    '<p class="dre-vazio">Banco inclui Pix e cartões registrados. Compras pela data da nota. Despesas avulsas pela data do pagamento, quando informada. Vendas sem o repasse do motoboy.</p>' +
     (caixa.recebido ? '<div class="dre-secao"><h3>Por forma de pagamento</h3>' +
       Object.entries(caixa.porPagamento).map(([metodo, valor]) => linha(formas[metodo], valor)).join('') + '</div>' : '') +
-    '<details class="dre-secao caixa-dias"><summary>Movimento por dia</summary>' + porDia + '</details>';
+    (dias.length ? '<details class="dre-secao caixa-dias"><summary>Movimento por dia</summary>' + porDia + '</details>' : '');
 }
 
 $('#caixaMes').addEventListener('change', function () {
@@ -6138,6 +6146,9 @@ function renderCompras(){
 var despesaAvulsaEditandoId=null,despesasAvulsasMes='',despesaAvulsaItensTemp=[],despesaAvulsaValorManual='';
 function popularCategoriasDespesaAvulsa(preservarCategoria){var sel=document.getElementById('despAvulsaCategoria'),orig=document.getElementById('despCategoria');if(!sel||!orig)return;var atual=sel.value||preservarCategoria;sel.innerHTML='';var cats=ordenarCategoriasFinanceiras(Array.prototype.filter.call(orig.options,function(op){return op.value&&op.value!=='insumo'&&String(op.value).indexOf('__')!==0&&(!op.disabled||op.value===preservarCategoria||op.value===atual)}));cats.forEach(function(op){var n=document.createElement('option');n.value=op.value;n.textContent=op.textContent;n.disabled=!!op.disabled;sel.appendChild(n)});if(!sel.options.length){[['aluguel','🏠 Aluguel'],['luz','💡 Luz'],['agua','💧 Água'],['gas','🔥 Gás'],['internet','📶 Internet/Telefone'],['funcionario','👤 Salário/Diária'],['motoboy','🛵 Motoboy'],['marketing','📣 Marketing'],['manutencao','🔧 Manutenção'],['outro','🍴 Outro']].forEach(function(x){var o=document.createElement('option');o.value=x[0];o.textContent=x[1];sel.appendChild(o)})}if(Array.prototype.some.call(sel.options,function(o){return o.value===preservarCategoria}))sel.value=preservarCategoria;else if(Array.prototype.some.call(sel.options,function(o){return o.value===atual}))sel.value=atual;instalarCampoCategoriaFinanceira('despAvulsaCategoria');atualizarCampoCategoriaFinanceira('despAvulsaCategoria')}
 function atualizarCamposAbastecimento(){var categoria=document.getElementById('despAvulsaCategoria'),box=document.getElementById('despAvulsaAbastecimentoCampos');if(!categoria||!box)return;var op=categoria.options[categoria.selectedIndex],registro=despesaAvulsaEditandoId&&(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}),mostrar=categoriaEhAbastecimentoDespesa(categoria.value,op&&op.textContent,registro);box.hidden=!mostrar;return mostrar}
+function atualizarCamposPagamentoDespesaAvulsa(){
+  $('#despAvulsaPagamentoCampos').hidden=$('#despAvulsaStatus').value!=='pago';
+}
 function abrirModalDespesaAvulsa(id){
   if(!souGerente())return toast('🔒 Só o gerente pode lançar despesas');
   var d=id?(despesas||[]).find(function(x){return String(x.id)===String(id)&&ehDespesaAvulsa(x)}):null;
@@ -6156,10 +6167,13 @@ function abrirModalDespesaAvulsa(id){
   despesaAvulsaValorManual=d?Number(d.valor||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}):'';
   document.getElementById('despAvulsaValor').value=despesaAvulsaValorManual;
   document.getElementById('despAvulsaStatus').value=d?(d.status||'pago'):'pago';
+  document.getElementById('despAvulsaPagoEm').value=d?.pagoEm?window.CaixaMensal.diaBrasil(d.pagoEm):'';
+  document.getElementById('despAvulsaOrigemPagamento').value=d?.origemPagamento||'';
   document.getElementById('despAvulsaObs').value=d?(d.obs||''):'';
   despesaAvulsaItensTemp=d&&Array.isArray(d.itens)?d.itens.filter(function(it){return it&&String(it.nome||'').trim()}).map(function(it){return{nome:String(it.nome||''),qtd:Number(it.qtd)||1,valor:Number(it.valor)||0,unid:it.unid||'un'}}):[];
   atualizarCampoCategoriaFinanceira('despAvulsaCategoria');
   atualizarCamposAbastecimento();
+  atualizarCamposPagamentoDespesaAvulsa();
   renderItensDespesaAvulsa();
   document.getElementById('modalDespesaAvulsa').classList.add('aberto');
 }
@@ -6199,7 +6213,11 @@ function salvarDespesaAvulsa(e){
   var ant=despesaAvulsaEditandoId?(despesas||[]).find(function(x){return String(x.id)===String(despesaAvulsaEditandoId)}):null,categoriaNome=categoriaLabelSelecionada(cat),ehCombustivel=categoriaEhAbastecimentoDespesa(cat,categoriaNome,ant),nf=(document.getElementById('despAvulsaNF')||{}).value||'',placa=ehCombustivel?String((document.getElementById('despAvulsaPlaca')||{}).value||'').trim().toLocaleUpperCase('pt-BR'):'',litrosTexto=ehCombustivel?(document.getElementById('despAvulsaLitros')||{}).value||'':'',precoTexto=ehCombustivel?(document.getElementById('despAvulsaPrecoLitro')||{}).value||'':'',litros=interpretarNumeroFinanceiroBR(litrosTexto),precoPorLitro=interpretarNumeroFinanceiroBR(precoTexto),valor=calcularTotalDespesaAvulsa(itens,litrosTexto,precoTexto,(document.getElementById('despAvulsaValor')||{}).value);
   if(!data||!cat||!desc||!Number.isFinite(valor)||valor<0)return toast('⚠️ Preencha data, categoria e descrição. O valor pode ficar em branco ou ser zero.');
   var abastecimento=ehCombustivel&&(litros!==null||precoPorLitro!==null||placa)?{litros:litros,precoPorLitro:precoPorLitro,placa:placa}:null;
-  var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,categoriaNome:ant&&ant.categoria===cat&&ant.categoriaNome||categoriaNome,fornecedor:'',nf:String(nf).trim(),abastecimento:abastecimento,status:document.getElementById('despAvulsaStatus').value||'pago',obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:itens,valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};
+  const status=document.getElementById('despAvulsaStatus').value||'pago';
+  const pagoEm=status==='pago'?(document.getElementById('despAvulsaPagoEm').value||null):null;
+  const origem=document.getElementById('despAvulsaOrigemPagamento').value;
+  const origemPagamento=status==='pago'&&['dinheiro','banco'].includes(origem)?origem:null;
+  var d={id:ant?ant.id:'gasto_'+(typeof uid==='function'?uid():Date.now()),tipoRegistro:'despesa',descricao:desc,subcategoria:desc,categoria:cat,categoriaNome:ant&&ant.categoria===cat&&ant.categoriaNome||categoriaNome,fornecedor:'',nf:String(nf).trim(),abastecimento:abastecimento,status:status,pagoEm:pagoEm,origemPagamento:origemPagamento,obs:document.getElementById('despAvulsaObs').value.trim(),desconto:0,itens:itens,valor:valor,data:data,criadoEm:ant&&ant.criadoEm||new Date().toISOString()};
   if(ant)Object.assign(ant,d);else despesas.push(d);
   salvar();
   document.getElementById('modalDespesaAvulsa').classList.remove('aberto');
@@ -6258,6 +6276,7 @@ document.getElementById('btnAddItemDespesaAvulsa').addEventListener('click',func
 document.getElementById('despAvulsaItensLista').addEventListener('click',function(e){var b=e.target.closest('button.ic-del[data-idx]');if(!b)return;despesaAvulsaItensTemp.splice(Number(b.dataset.idx),1);renderItensDespesaAvulsa()});
 ['despAvulsaLitros','despAvulsaPrecoLitro'].forEach(function(id){document.getElementById(id).addEventListener('input',atualizarResumoItensDespesaAvulsa)});
 document.getElementById('despAvulsaCategoria').addEventListener('change',function(){atualizarCampoCategoriaFinanceira('despAvulsaCategoria');atualizarCamposAbastecimento();atualizarResumoItensDespesaAvulsa()});
+document.getElementById('despAvulsaStatus').addEventListener('change',atualizarCamposPagamentoDespesaAvulsa);
 (function(){var $i=function(id){return document.getElementById(id)};
 $i('comprasMes').addEventListener('change',function(e){comprasMes=e.target.value;renderCompras()});
 $i('comprasCat').addEventListener('change',function(e){comprasCat=e.target.value;renderCompras()});

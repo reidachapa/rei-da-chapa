@@ -110,6 +110,8 @@ function salvarCom({ categoria = 'c_posto', label = '⛽ Posto Avenida', nf = '0
     despAvulsaPrecoLitro: { value: preco },
     despAvulsaValor: { value: valor },
     despAvulsaStatus: { value: 'pago' },
+    despAvulsaPagoEm: { value: '' },
+    despAvulsaOrigemPagamento: { value: '' },
     despAvulsaObs: { value: '' },
     modalDespesaAvulsa: { classList: { remove() {} } },
     despCategoria: { options: [{ value: categoria, textContent: label }] },

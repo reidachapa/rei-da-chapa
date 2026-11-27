@@ -29,17 +29,51 @@ test('Caixa considera o mês de Brasília e separa compras pagas e a pagar', () 
   ];
   const dados = { historico: [...pedidos, pedidos[1]], despesas: compras };
   const mes = calcular(dados, '2026-11', valorDevido);
-  assert.deepEqual([mes.recebido, mes.comprado, mes.comprasPagas, mes.comprasAPagar, mes.saldo], [10010, 10800, 10300, 500, -290]);
+  assert.deepEqual([mes.recebido, mes.comprado, mes.comprasPagas, mes.comprasAPagar, mes.despesasPagas, mes.saldo], [10010, 10800, 10300, 500, 10000, -10290]);
   assert.deepEqual(mes.porPagamento, { pix: 5000, credito: 5000, semForma: 10 });
   assert.deepEqual(mes.porOrigem, {
     dinheiro: { recebido: 0, pago: 0, saldo: 0 },
     banco: { recebido: 10000, pago: 0, saldo: 10000 },
-    semOrigem: { recebido: 10, pago: 10300, saldo: -10290 },
+    semOrigem: { recebido: 10, pago: 20300, saldo: -20290 },
   });
   assert.equal(mes.quantidadeVendas, 2);
   assert.equal(mes.porDia[30].recebido, 10);
   assert.equal(calcular(dados, '2027-01', valorDevido).temMovimento, false);
-  assert.equal(calcular(dados, '2026-11', valorDevido).saldo, -290);
+  assert.equal(calcular(dados, '2026-11', valorDevido).saldo, -10290);
+});
+
+test('Caixa desconta despesas avulsas pela data e origem do pagamento', () => {
+  const { calcular } = caixa();
+  const dados = { historico: [], despesas: [
+    { tipoRegistro: 'despesa', data: '2026-10-25', pagoEm: '2026-11-01', status: 'pago', origemPagamento: 'banco', valor: 30.05 },
+    { tipoRegistro: 'despesa', data: '2026-11-03', status: 'pago', origemPagamento: 'dinheiro', valor: 20 },
+    { categoria: 'luz', data: '2026-11-04', valor: 7 },
+    { tipoRegistro: 'despesa', notaCompraId: 'mista', data: '2026-11-04', status: 'pago', valor: 5 },
+    { id: 'mista', tipoRegistro: 'compra', data: '2026-11-04', status: 'pago', valor: 12 },
+  ] };
+  const mes = calcular(dados, '2026-11', valorDevido);
+  assert.equal(calcular(dados, '2026-10', valorDevido).saldo, 0);
+  assert.equal(mes.despesasPagas, 5705);
+  assert.equal(mes.comprasPagas, 1200);
+  assert.equal(mes.saldo, -6905);
+  assert.equal(mes.porOrigem.banco.pago, 3005);
+  assert.equal(mes.porOrigem.dinheiro.pago, 2000);
+  assert.equal(mes.porOrigem.semOrigem.pago, 1900);
+  assert.equal(mes.porDia[1].despesasPagas, 3005);
+  assert.equal(mes.temMovimento, true);
+});
+
+test('despesa avulsa a pagar aparece no mês do lançamento sem baixar o saldo', () => {
+  const { calcular } = caixa();
+  const dados = { historico: [], despesas: [
+    { tipoRegistro: 'despesa', data: '2026-11-24', status: 'pendente', valor: 60 },
+  ] };
+  const mes = calcular(dados, '2026-11', valorDevido);
+  assert.equal(mes.temMovimento, true);
+  assert.equal(mes.despesasAPagar, 6000);
+  assert.equal(mes.despesasPagas, 0);
+  assert.equal(mes.saldo, 0);
+  assert.equal(calcular(dados, '2026-12', valorDevido).temMovimento, false);
 });
 
 test('Caixa separa pagamentos de meses distintos quando o histórico informa o valor recebido depois', () => {
